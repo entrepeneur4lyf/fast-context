@@ -141,7 +141,7 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -154,7 +154,7 @@ impl RubyExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Ruby,
                 documentation,
                 modifiers,
@@ -163,7 +163,7 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_singleton_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_singleton_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -177,7 +177,7 @@ impl RubyExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Ruby,
                 documentation,
                 modifiers,
@@ -186,7 +186,7 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_call(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_call(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Check for require/require_relative/include/extend calls
         if let Some(method_node) = node.child_by_field_name("method") {
             let method_name = self.get_node_text(&method_node, source);
@@ -209,7 +209,7 @@ impl RubyExtractor {
                                 name: import_name,
                                 kind,
                                 location,
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::Ruby,
                                 documentation: None,
                                 modifiers: vec![method_name.clone()],
@@ -254,7 +254,7 @@ impl RubyExtractor {
                                 name: clean_name,
                                 kind: SymbolKind::Field,
                                 location,
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::Ruby,
                                 documentation: None,
                                 modifiers,
@@ -267,7 +267,7 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_constant(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_constant(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -275,7 +275,7 @@ impl RubyExtractor {
             name,
             kind: SymbolKind::Constant,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Ruby,
             documentation: None,
             modifiers: vec!["constant".to_string()],
@@ -283,7 +283,7 @@ impl RubyExtractor {
         });
     }
 
-    fn extract_instance_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_instance_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -291,7 +291,7 @@ impl RubyExtractor {
             name,
             kind: SymbolKind::Field,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Ruby,
             documentation: None,
             modifiers: vec!["instance_variable".to_string()],
@@ -299,7 +299,7 @@ impl RubyExtractor {
         });
     }
 
-    fn extract_class_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_class_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -307,7 +307,7 @@ impl RubyExtractor {
             name,
             kind: SymbolKind::Field,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Ruby,
             documentation: None,
             modifiers: vec!["class_variable".to_string()],
@@ -315,7 +315,7 @@ impl RubyExtractor {
         });
     }
 
-    fn extract_assignment(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_assignment(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract variable assignments
         if let Some(left) = node.child_by_field_name("left") {
             if left.kind() == "identifier" {
@@ -326,7 +326,7 @@ impl RubyExtractor {
                     name,
                     kind: SymbolKind::Variable,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Ruby,
                     documentation: None,
                     modifiers: vec!["variable".to_string()],
@@ -336,7 +336,7 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_symbol(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_symbol(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Ruby symbols like :symbol_name
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
@@ -352,7 +352,7 @@ impl RubyExtractor {
             name: clean_name,
             kind: SymbolKind::Constant,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Ruby,
             documentation: None,
             modifiers: vec!["symbol".to_string()],

@@ -141,7 +141,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_function_call(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_function_call(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Check for require() and dofile() calls
         if let Some(name_node) = node.child_by_field_name("name") {
             let function_name = self.get_node_text(&name_node, source);
@@ -166,7 +166,7 @@ impl LuaExtractor {
                                 name: module_name,
                                 kind: SymbolKind::Import,
                                 location,
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::Lua,
                                 documentation: None,
                                 modifiers,
@@ -180,7 +180,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract variable names from variable declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -192,7 +192,7 @@ impl LuaExtractor {
                     name,
                     kind: SymbolKind::Variable,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Lua,
                     documentation: self.extract_lua_doc(node, source),
                     modifiers: vec!["variable".to_string(), "global".to_string()],
@@ -202,7 +202,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_local_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_local_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract local variable names
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -217,7 +217,7 @@ impl LuaExtractor {
                             name,
                             kind: SymbolKind::Variable,
                             location,
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::Lua,
                             documentation: self.extract_lua_doc(node, source),
                             modifiers: vec!["variable".to_string(), "local".to_string()],
@@ -229,7 +229,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_assignment(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_assignment(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract variables from assignment statements
         if let Some(left) = node.child_by_field_name("left") {
             let mut cursor = left.walk();
@@ -269,7 +269,7 @@ impl LuaExtractor {
                         name,
                         kind: SymbolKind::Variable,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::Lua,
                         documentation: self.extract_lua_doc(node, source),
                         modifiers,
@@ -285,7 +285,7 @@ impl LuaExtractor {
                             name: field_name,
                             kind: SymbolKind::Field,
                             location,
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::Lua,
                             documentation: self.extract_lua_doc(node, source),
                             modifiers: vec!["field".to_string(), "table".to_string()],
@@ -297,7 +297,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_table(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_table(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract field names from table constructors
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -325,7 +325,7 @@ impl LuaExtractor {
                         name,
                         kind: if modifiers.contains(&"method".to_string()) { SymbolKind::Method } else { SymbolKind::Field },
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::Lua,
                         documentation: None,
                         modifiers,
@@ -336,7 +336,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_for_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_for_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract loop variables from for statements
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -351,7 +351,7 @@ impl LuaExtractor {
                             name,
                             kind: SymbolKind::Variable,
                             location,
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::Lua,
                             documentation: None,
                             modifiers: vec!["variable".to_string(), "loop".to_string()],
@@ -363,7 +363,7 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_anonymous_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_anonymous_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract anonymous functions (closures) - these don't have names but are important for scope
         let location = Location::from_node(node, file_path);
         let signature = self.extract_anonymous_function_signature(node, source);
@@ -375,7 +375,7 @@ impl LuaExtractor {
             name,
             kind: SymbolKind::Function,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Lua,
             documentation: self.extract_lua_doc(node, source),
             modifiers: vec!["function".to_string(), "anonymous".to_string(), "closure".to_string()],

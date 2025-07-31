@@ -219,7 +219,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -232,7 +232,7 @@ impl DartExtractor {
                 name,
                 kind: SymbolKind::Function,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -241,7 +241,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -254,7 +254,7 @@ impl DartExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -263,7 +263,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_constructor(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_constructor(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let name = if let Some(name_node) = node.child_by_field_name("name") {
             self.get_node_text(&name_node, source)
         } else {
@@ -280,7 +280,7 @@ impl DartExtractor {
             name,
             kind: SymbolKind::Method, // Treat constructors as methods
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Dart,
             documentation,
             modifiers,
@@ -288,7 +288,7 @@ impl DartExtractor {
         });
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract variable names from variable declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -304,7 +304,7 @@ impl DartExtractor {
                         name,
                         kind: SymbolKind::Variable,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::Dart,
                         documentation: self.extract_dart_doc(node, source),
                         modifiers,
@@ -315,7 +315,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_field(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_field(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract field names from field declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -331,7 +331,7 @@ impl DartExtractor {
                         name,
                         kind: SymbolKind::Field,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::Dart,
                         documentation: self.extract_dart_doc(node, source),
                         modifiers,
@@ -342,7 +342,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(uri_node) = node.child_by_field_name("uri") {
             let import_path = self.clean_string_literal(&self.get_node_text(&uri_node, source));
             let location = Location::from_node(&uri_node, file_path);
@@ -369,7 +369,7 @@ impl DartExtractor {
                 name: import_path,
                 kind: SymbolKind::Import,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation: None,
                 modifiers,
@@ -378,7 +378,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_export(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_export(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(uri_node) = node.child_by_field_name("uri") {
             let export_path = self.clean_string_literal(&self.get_node_text(&uri_node, source));
             let location = Location::from_node(&uri_node, file_path);
@@ -399,7 +399,7 @@ impl DartExtractor {
                 name: export_path,
                 kind: SymbolKind::Import, // Treat exports as imports
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation: None,
                 modifiers,
@@ -408,7 +408,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_typedef(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_typedef(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -417,7 +417,7 @@ impl DartExtractor {
                 name,
                 kind: SymbolKind::Type,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation: self.extract_dart_doc(node, source),
                 modifiers: vec!["typedef".to_string()],
@@ -426,7 +426,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_getter(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_getter(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -440,7 +440,7 @@ impl DartExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -449,7 +449,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_setter(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_setter(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -463,7 +463,7 @@ impl DartExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -472,7 +472,7 @@ impl DartExtractor {
         }
     }
 
-    fn extract_enum_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_enum_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -483,7 +483,7 @@ impl DartExtractor {
                 name,
                 kind: SymbolKind::Constant,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers: vec!["enum_value".to_string()],

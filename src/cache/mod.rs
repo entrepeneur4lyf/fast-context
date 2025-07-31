@@ -57,12 +57,22 @@ pub struct CacheEntry<T> {
     pub dependencies: Vec<String>, // Files this cache entry depends on
 }
 
+/// Get current timestamp in seconds since UNIX epoch, with fallback for system clock issues
+fn get_current_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_else(|_| {
+            // Fallback: if system clock is before UNIX epoch, use a reasonable default
+            // This can happen on embedded systems or during system clock adjustments
+            eprintln!("Warning: System clock appears to be before UNIX epoch, using fallback timestamp");
+            0
+        })
+}
+
 impl<T> CacheEntry<T> {
     pub fn new(data: T, file_size: u64, dependencies: Vec<String>) -> Self {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        let now = get_current_timestamp();
 
         Self {
             data,
@@ -75,28 +85,29 @@ impl<T> CacheEntry<T> {
     }
 
     pub fn access(&mut self) -> &T {
-        self.last_accessed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
+        self.last_accessed = get_current_timestamp();
         self.access_count += 1;
         &self.data
     }
 
     pub fn age(&self) -> Duration {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        Duration::from_secs(now - self.created_at)
+        let now = get_current_timestamp();
+        // Handle potential clock adjustments where current time might be before creation time
+        if now >= self.created_at {
+            Duration::from_secs(now - self.created_at)
+        } else {
+            Duration::from_secs(0)
+        }
     }
 
     pub fn last_access_age(&self) -> Duration {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        Duration::from_secs(now - self.last_accessed)
+        let now = get_current_timestamp();
+        // Handle potential clock adjustments where current time might be before last access
+        if now >= self.last_accessed {
+            Duration::from_secs(now - self.last_accessed)
+        } else {
+            Duration::from_secs(0)
+        }
     }
 }
 

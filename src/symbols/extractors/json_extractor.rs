@@ -71,7 +71,7 @@ impl JsonExtractor {
         }
     }
 
-    fn extract_object(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>, path_stack: &Vec<String>) {
+    fn extract_object(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>, path_stack: &[String]) {
         let location = Location::from_node(node, file_path);
         
         // Create object path
@@ -136,7 +136,7 @@ impl JsonExtractor {
         });
     }
 
-    fn extract_array(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>, path_stack: &Vec<String>) {
+    fn extract_array(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>, path_stack: &[String]) {
         let location = Location::from_node(node, file_path);
         
         // Create array path
@@ -186,7 +186,7 @@ impl JsonExtractor {
         });
     }
 
-    fn extract_pair(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>, path_stack: &mut Vec<String>) {
+    fn extract_pair(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], path_stack: &mut Vec<String>) {
         // Extract key-value pair
         if let Some(key_node) = node.child_by_field_name("key") {
             if let Some(value_node) = node.child_by_field_name("value") {
@@ -278,7 +278,7 @@ impl JsonExtractor {
                     name: property_path,
                     kind: SymbolKind::Field,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::JSON,
                     documentation: None,
                     modifiers,
@@ -286,7 +286,8 @@ impl JsonExtractor {
                 });
                 
                 // Process the value
-                self.extract_from_node(value_node, source, file_path, symbols, &mut scope_stack.clone(), path_stack);
+                let mut cloned_scope_stack = scope_stack.to_vec();
+                self.extract_from_node(value_node, source, file_path, symbols, &mut cloned_scope_stack, path_stack);
                 
                 // Pop key from path stack
                 path_stack.pop();
@@ -294,7 +295,7 @@ impl JsonExtractor {
         }
     }
 
-    fn extract_string_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>, path_stack: &Vec<String>) {
+    fn extract_string_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], path_stack: &[String]) {
         // Only extract strings that might be significant (URLs, file paths, etc.)
         let string_value = self.clean_json_string(&self.get_node_text(node, source));
         
@@ -326,7 +327,7 @@ impl JsonExtractor {
                 name: value_path,
                 kind: SymbolKind::Constant,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::JSON,
                 documentation: None,
                 modifiers,
@@ -335,7 +336,7 @@ impl JsonExtractor {
         }
     }
 
-    fn extract_number_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>, path_stack: &Vec<String>) {
+    fn extract_number_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], path_stack: &[String]) {
         let number_value = self.get_node_text(node, source);
         
         // Only extract significant numbers (versions, ports, etc.)
@@ -368,7 +369,7 @@ impl JsonExtractor {
                 name: value_path,
                 kind: SymbolKind::Constant,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::JSON,
                 documentation: None,
                 modifiers,

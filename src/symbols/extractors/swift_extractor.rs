@@ -83,7 +83,7 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Swift import: import Foundation, import UIKit.UIView
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -95,7 +95,7 @@ impl SwiftExtractor {
                     name: import_name,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_vec(),
                     language: LanguageId::Swift,
                     documentation: None,
                     modifiers: vec!["import".to_string()],
@@ -187,7 +187,7 @@ impl SwiftExtractor {
         false
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             let location = Location::from_node(node, file_path);
@@ -207,7 +207,7 @@ impl SwiftExtractor {
                 name,
                 kind,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_vec(),
                 language: LanguageId::Swift,
                 documentation,
                 modifiers,
@@ -216,7 +216,7 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_initializer(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_initializer(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Swift initializers don't have names, but we'll use "init"
         let location = Location::from_node(node, file_path);
         
@@ -227,7 +227,7 @@ impl SwiftExtractor {
             name: "init".to_string(),
             kind: SymbolKind::Method,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_vec(),
             language: LanguageId::Swift,
             documentation: None,
             modifiers,
@@ -235,7 +235,7 @@ impl SwiftExtractor {
         });
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             let location = Location::from_node(node, file_path);
@@ -248,7 +248,7 @@ impl SwiftExtractor {
                 name,
                 kind: SymbolKind::Field,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_vec(),
                 language: LanguageId::Swift,
                 documentation,
                 modifiers,
@@ -257,7 +257,7 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Swift variable declarations can contain multiple bindings
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -276,7 +276,7 @@ impl SwiftExtractor {
                             name,
                             kind: SymbolKind::Variable,
                             location,
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_vec(),
                             language: LanguageId::Swift,
                             documentation: None,
                             modifiers,

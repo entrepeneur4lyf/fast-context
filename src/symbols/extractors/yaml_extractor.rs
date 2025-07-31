@@ -149,7 +149,7 @@ impl YamlExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Flow mapping pair: {key: value}
         if let Some(key_node) = node.child_by_field_name("key") {
@@ -167,7 +167,7 @@ impl YamlExtractor {
                     name: key_text.clone(),
                     kind: SymbolKind::Field,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::YAML,
                     documentation: None,
                     modifiers: vec!["flow_key".to_string()],
@@ -183,7 +183,7 @@ impl YamlExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // YAML anchor: &anchor_name
         let anchor_text = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
@@ -195,7 +195,7 @@ impl YamlExtractor {
                 name: clean_name.to_string(),
                 kind: SymbolKind::Constant,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::YAML,
                 documentation: None,
                 modifiers: vec!["anchor".to_string()],
@@ -210,7 +210,7 @@ impl YamlExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // YAML alias: *anchor_name
         let alias_text = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
@@ -222,7 +222,7 @@ impl YamlExtractor {
                 name: clean_name.to_string(),
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::YAML,
                 documentation: None,
                 modifiers: vec!["alias".to_string()],
@@ -237,7 +237,7 @@ impl YamlExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // YAML sequence item: - item
         let item_text = self.extract_node_text(node, source);
@@ -261,7 +261,7 @@ impl YamlExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::YAML,
                 documentation: None,
                 modifiers: vec!["sequence_item".to_string()],
@@ -276,7 +276,7 @@ impl YamlExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Flow sequence: [item1, item2, item3]
         let sequence_text = self.extract_node_text(node, source);
@@ -288,7 +288,7 @@ impl YamlExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::YAML,
                 documentation: None,
                 modifiers: vec!["flow_sequence".to_string()],
@@ -303,7 +303,7 @@ impl YamlExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // YAML comment: # comment text
         let comment_text = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
@@ -317,7 +317,7 @@ impl YamlExtractor {
                     name,
                     kind: SymbolKind::Variable,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::YAML,
                     documentation: Some(clean_comment.to_string()),
                     modifiers: vec!["comment".to_string()],

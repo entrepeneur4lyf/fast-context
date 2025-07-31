@@ -630,7 +630,7 @@ mod tests {
             name: name.to_string(),
             qualified_name: format!("test::{}", name),
             kind: kind.to_string(),
-            file_path: format!("test/{}.rs", name),
+            file_path: format!("src/{}.rs", name),
             language: "Rust".to_string(),
             location: crate::export::ExportLocation {
                 start_line: 1,

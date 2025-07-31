@@ -1,7 +1,7 @@
 {
   "name": "fast-context",
   "version": "0.1.0",
-  "description": "High-performance graph library for Node.js, powered by Rust",
+  "description": "Intelligent codebase analysis engine for coding assistants with graph-powered code comprehension",
   "main": "index.js",
   "types": "index.d.ts",
   "napi": {
@@ -21,55 +21,46 @@
     "@napi-rs/cli": "^2.18.0",
     "ava": "^6.0.0"
   },
-  "optionalDependencies": {
-    "rustworkx-nodejs-win32-x64-msvc": "0.1.0",
-    "rustworkx-nodejs-darwin-x64": "0.1.0",
-    "rustworkx-nodejs-linux-x64-gnu": "0.1.0",
-    "rustworkx-nodejs-darwin-arm64": "0.1.0",
-    "rustworkx-nodejs-linux-x64-musl": "0.1.0",
-    "rustworkx-nodejs-linux-arm64-musl": "0.1.0",
-    "rustworkx-nodejs-linux-arm64-gnu": "0.1.0",
-    "rustworkx-nodejs-win32-arm64-msvc": "0.1.0"
-  },
   "engines": {
     "node": ">= 10"
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "bench": "node -r @swc-node/register benchmark/bench.ts",
     "build": "cargo test generate_typescript_types && node scripts/update-types.js && napi build --platform --release",
     "build:debug": "cargo test generate_typescript_types && node scripts/update-types.js && napi build --platform",
     "generate-types": "cargo test generate_typescript_types && node scripts/update-types.js",
     "prepublishOnly": "napi prepublish -t npm",
-    "test": "node manual_test.mjs",
-    "test:ava": "ava",
+    "test": "ava",
+    "test:integration": "cargo test --test api_integration_tests",
+    "test:bench": "cargo bench",
     "universal": "napi universal",
     "version": "napi version"
   },
   "ava": {
-    "match": [
+    "files": [
       "tests/**/*.test.mjs"
-    ]
+    ],
+    "timeout": "30s",
+    "serial": true
   },
   "packageManager": "npm@10.8.2",
   "keywords": [
+    "codebase-analysis",
+    "tree-sitter",
+    "code-intelligence",
     "graph",
-    "graph-theory",
-    "algorithms",
-    "shortest-path",
-    "centrality",
-    "network",
+    "ai-assistant",
     "rust",
     "napi-rs",
     "performance"
   ],
-  "author": "RustWorkX Contributors",
+  "author": "Shawn McAllister x.com/entrepeneur4lyf",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Qiskit/rustworkx-nodejs.git"
+    "url": "https://github.com/entrepensur4lyf/fast-context.git"
   },
-  "homepage": "https://github.com/Qiskit/rustworkx-nodejs#readme",
+  "homepage": "https://github.com/entrepensur4lyf/fast-context#readme",
   "bugs": {
-    "url": "https://github.com/Qiskit/rustworkx-nodejs/issues"
+    "url": "https://github.com/entrepensur4lyf/fast-context/issues"
   }
 }

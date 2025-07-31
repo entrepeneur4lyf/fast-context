@@ -10,6 +10,89 @@ use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
+/// Configurable thresholds for architectural analysis
+#[derive(Debug, Clone)]
+pub struct ArchitecturalThresholds {
+    pub high_coupling_threshold: usize,
+    pub high_complexity_threshold: u32,
+    pub high_dependency_threshold: usize,
+    pub critical_impact_threshold: f32,
+    pub high_impact_threshold: f32,
+    pub medium_impact_threshold: f32,
+    pub max_files_for_critical: usize,
+    pub max_files_for_high: usize,
+    pub large_result_threshold: usize,
+}
+
+impl Default for ArchitecturalThresholds {
+    fn default() -> Self {
+        Self {
+            high_coupling_threshold: 10,      // Industry standard for high coupling
+            high_complexity_threshold: 20,    // McCabe complexity threshold
+            high_dependency_threshold: 15,    // High dependency count
+            critical_impact_threshold: 20.0, // Critical cycle impact
+            high_impact_threshold: 10.0,     // High cycle impact
+            medium_impact_threshold: 5.0,    // Medium cycle impact
+            max_files_for_critical: 5,       // Files involved for critical severity
+            max_files_for_high: 2,           // Files involved for high severity
+            large_result_threshold: 10,      // Large result set threshold
+        }
+    }
+}
+
+impl ArchitecturalThresholds {
+    /// Create thresholds optimized for large codebases
+    pub fn for_large_codebase() -> Self {
+        Self {
+            high_coupling_threshold: 15,      // Higher threshold for large codebases
+            high_complexity_threshold: 25,    // Higher complexity tolerance
+            high_dependency_threshold: 20,    // More dependencies expected
+            critical_impact_threshold: 30.0, // Higher impact threshold
+            high_impact_threshold: 15.0,     // Higher impact threshold
+            large_result_threshold: 20,      // Larger result sets expected
+            ..Default::default()
+        }
+    }
+
+    /// Create thresholds optimized for small/medium codebases
+    pub fn for_small_codebase() -> Self {
+        Self {
+            high_coupling_threshold: 7,       // Lower threshold for small codebases
+            high_complexity_threshold: 15,    // Lower complexity tolerance
+            high_dependency_threshold: 10,    // Fewer dependencies expected
+            critical_impact_threshold: 15.0, // Lower impact threshold
+            high_impact_threshold: 8.0,      // Lower impact threshold
+            large_result_threshold: 5,       // Smaller result sets expected
+            ..Default::default()
+        }
+    }
+
+    /// Load thresholds from environment variables with fallback to defaults
+    pub fn from_environment() -> Self {
+        let mut thresholds = Self::default();
+
+        if let Ok(val) = std::env::var("RUSTWORKX_COUPLING_THRESHOLD") {
+            if let Ok(threshold) = val.parse::<usize>() {
+                thresholds.high_coupling_threshold = threshold.clamp(5, 50);
+            }
+        }
+
+        if let Ok(val) = std::env::var("RUSTWORKX_COMPLEXITY_THRESHOLD") {
+            if let Ok(threshold) = val.parse::<u32>() {
+                thresholds.high_complexity_threshold = threshold.clamp(10, 100);
+            }
+        }
+
+        if let Ok(val) = std::env::var("RUSTWORKX_DEPENDENCY_THRESHOLD") {
+            if let Ok(threshold) = val.parse::<usize>() {
+                thresholds.high_dependency_threshold = threshold.clamp(5, 100);
+            }
+        }
+
+        thresholds
+    }
+}
+
 /// Query result containing requested information
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueryResult {
@@ -50,11 +133,51 @@ pub struct ContextInfo {
     pub potential_issues: Vec<String>,
 }
 
+/// Circular dependency analysis result
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CircularDependencyInfo {
+    /// The symbols involved in the cycle
+    pub cycle: Vec<String>,
+    /// Severity level of the cycle
+    pub severity: CycleSeverity,
+    /// File paths involved in the cycle
+    pub files_involved: Vec<String>,
+    /// Suggestions for breaking the cycle
+    pub breaking_suggestions: Vec<String>,
+    /// Impact score (higher = more problematic)
+    pub impact_score: f32,
+}
+
+/// Severity classification for circular dependencies
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum CycleSeverity {
+    /// Low impact cycles (e.g., utility functions)
+    Low,
+    /// Medium impact cycles (e.g., related classes)
+    Medium,
+    /// High impact cycles (e.g., core architecture components)
+    High,
+    /// Critical cycles (e.g., fundamental system dependencies)
+    Critical,
+}
+
+impl std::fmt::Display for CycleSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CycleSeverity::Low => write!(f, "LOW"),
+            CycleSeverity::Medium => write!(f, "MEDIUM"),
+            CycleSeverity::High => write!(f, "HIGH"),
+            CycleSeverity::Critical => write!(f, "CRITICAL"),
+        }
+    }
+}
+
 /// Query interface for code analysis results
 pub struct CodeQueryEngine {
     analysis: AnalysisResult,
     symbol_index: HashMap<String, NodeIndex>,
     file_index: HashMap<String, Vec<NodeIndex>>,
+    thresholds: ArchitecturalThresholds,
 }
 
 impl CodeQueryEngine {
@@ -80,6 +203,7 @@ impl CodeQueryEngine {
             analysis,
             symbol_index,
             file_index,
+            thresholds: ArchitecturalThresholds::from_environment(),
         }
     }
 
@@ -257,7 +381,7 @@ impl CodeQueryEngine {
                     .edges_directed(node_idx, petgraph::Outgoing)
                     .count();
 
-                if outgoing_edges > 10 {
+                if outgoing_edges > self.thresholds.high_coupling_threshold {
                     issues.push(format!(
                         "Symbol '{}' has high coupling with {} dependencies",
                         node.symbol.name, outgoing_edges
@@ -270,10 +394,19 @@ impl CodeQueryEngine {
             }
         }
 
-        // Find circular dependencies (simplified check)
-        if let Some(cycles) = self.find_cycles() {
-            for cycle in cycles {
-                issues.push(format!("Circular dependency detected: {}", cycle.join(" -> ")));
+        // Find circular dependencies with comprehensive analysis
+        let cycle_analysis = self.analyze_circular_dependencies();
+        for cycle_info in cycle_analysis {
+            issues.push(format!(
+                "Circular dependency detected ({}): {} -> {}",
+                cycle_info.severity,
+                cycle_info.cycle.join(" -> "),
+                cycle_info.cycle[0]
+            ));
+
+            // Add cycle breaking suggestions
+            for suggestion in &cycle_info.breaking_suggestions {
+                issues.push(format!("  Suggestion: {suggestion}"));
             }
         }
 
@@ -405,7 +538,7 @@ impl CodeQueryEngine {
         } else {
             suggestions.push(format!("Found {} symbols matching '{}'", symbols.len(), pattern));
             
-            if symbols.len() > 10 {
+            if symbols.len() > self.thresholds.large_result_threshold {
                 suggestions.push("Consider narrowing your search".to_string());
             }
 
@@ -463,28 +596,262 @@ impl CodeQueryEngine {
         }
     }
 
-    /// Detect architectural patterns in the codebase
+    /// Comprehensive architectural pattern detection using structural analysis
     fn detect_patterns(&self) -> Vec<String> {
         let mut patterns = Vec::new();
 
-        // Simple pattern detection based on symbol names and relationships
-        let symbol_names: Vec<&str> = self.symbol_index.keys()
-            .map(|s| s.as_str())
-            .collect();
+        // Analyze the graph structure for patterns
+        patterns.extend(self.detect_factory_pattern());
+        patterns.extend(self.detect_singleton_pattern());
+        patterns.extend(self.detect_builder_pattern());
+        patterns.extend(self.detect_observer_pattern());
+        patterns.extend(self.detect_strategy_pattern());
+        patterns.extend(self.detect_decorator_pattern());
+        patterns.extend(self.detect_adapter_pattern());
+        patterns.extend(self.detect_mvc_pattern());
+        patterns.extend(self.detect_repository_pattern());
+        patterns.extend(self.detect_dependency_injection_pattern());
 
-        // Factory pattern detection
-        if symbol_names.iter().any(|name| name.contains("Factory")) {
-            patterns.push("Factory Pattern".to_string());
+        patterns
+    }
+
+    /// Detect Factory pattern using structural analysis
+    fn detect_factory_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                // Check for factory naming patterns
+                if name.contains("factory") || name.ends_with("factory") {
+                    // Verify it creates other objects (has outgoing relationships to classes)
+                    let creates_objects = self.analysis.graph
+                        .edges_directed(node_idx, petgraph::Outgoing)
+                        .any(|edge| {
+                            if let Some(target) = self.analysis.graph.node_weight(edge.target()) {
+                                target.symbol.kind == SymbolKind::Class &&
+                                edge.weight().kind == crate::analysis::RelationshipKind::Calls
+                            } else {
+                                false
+                            }
+                        });
+
+                    if creates_objects {
+                        patterns.push(format!("Factory Pattern ({})", node.symbol.name));
+                    }
+                }
+
+                // Check for factory methods (static methods that return instances)
+                if node.symbol.kind == SymbolKind::Method {
+                    if let Some(signature) = &node.symbol.signature {
+                        if signature.contains("static") &&
+                           (name.contains("create") || name.contains("make") || name.contains("build")) {
+                            patterns.push(format!("Factory Method Pattern ({})", node.symbol.name));
+                        }
+                    }
+                }
+            }
         }
 
-        // Singleton pattern detection
-        if symbol_names.iter().any(|name| name.contains("Singleton")) {
-            patterns.push("Singleton Pattern".to_string());
+        patterns
+    }
+
+    /// Detect Singleton pattern using structural analysis
+    fn detect_singleton_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                if node.symbol.kind == SymbolKind::Class {
+                    let name = &node.symbol.name.to_lowercase();
+
+                    // Check for singleton naming
+                    if name.contains("singleton") {
+                        patterns.push(format!("Singleton Pattern ({})", node.symbol.name));
+                        continue;
+                    }
+
+                    // Check for singleton structural patterns
+                    let has_private_constructor = self.has_private_constructor(node_idx);
+                    let has_static_instance_method = self.has_static_instance_method(node_idx);
+                    let has_static_field = self.has_static_instance_field(node_idx);
+
+                    if has_private_constructor && (has_static_instance_method || has_static_field) {
+                        patterns.push(format!("Singleton Pattern ({})", node.symbol.name));
+                    }
+                }
+            }
         }
 
-        // Builder pattern detection
-        if symbol_names.iter().any(|name| name.contains("Builder")) {
-            patterns.push("Builder Pattern".to_string());
+        patterns
+    }
+
+    /// Detect Builder pattern using structural analysis
+    fn detect_builder_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if name.contains("builder") && node.symbol.kind == SymbolKind::Class {
+                    // Check for fluent interface (methods returning self)
+                    let has_fluent_methods = self.has_fluent_interface(node_idx);
+                    let has_build_method = self.has_build_method(node_idx);
+
+                    if has_fluent_methods && has_build_method {
+                        patterns.push(format!("Builder Pattern ({})", node.symbol.name));
+                    }
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Detect Observer pattern
+    fn detect_observer_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        // Look for observer/listener interfaces and implementations
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if (name.contains("observer") || name.contains("listener") || name.contains("subscriber")) &&
+                   (node.symbol.kind == SymbolKind::Interface || node.symbol.kind == SymbolKind::Class) {
+
+                    // Check for notify/update methods
+                    if self.has_notification_methods(node_idx) {
+                        patterns.push(format!("Observer Pattern ({})", node.symbol.name));
+                    }
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Detect Strategy pattern
+    fn detect_strategy_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if name.contains("strategy") && node.symbol.kind == SymbolKind::Interface {
+                    // Check for multiple implementations
+                    let implementations = self.count_implementations(node_idx);
+                    if implementations > 1 {
+                        patterns.push(format!("Strategy Pattern ({} with {} implementations)",
+                                            node.symbol.name, implementations));
+                    }
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Detect Decorator pattern
+    fn detect_decorator_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if name.contains("decorator") || name.contains("wrapper") {
+                    // Check if it implements the same interface as what it wraps
+                    if self.implements_wrapped_interface(node_idx) {
+                        patterns.push(format!("Decorator Pattern ({})", node.symbol.name));
+                    }
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Detect Adapter pattern
+    fn detect_adapter_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if name.contains("adapter") || name.contains("wrapper") {
+                    // Check if it adapts between different interfaces
+                    if self.adapts_interfaces(node_idx) {
+                        patterns.push(format!("Adapter Pattern ({})", node.symbol.name));
+                    }
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Detect MVC pattern
+    fn detect_mvc_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        let has_controllers = self.symbol_index.keys().any(|name| name.to_lowercase().contains("controller"));
+        let has_models = self.symbol_index.keys().any(|name| name.to_lowercase().contains("model"));
+        let has_views = self.symbol_index.keys().any(|name| name.to_lowercase().contains("view"));
+
+        if has_controllers && has_models && has_views {
+            patterns.push("MVC Pattern".to_string());
+        }
+
+        patterns
+    }
+
+    /// Detect Repository pattern
+    fn detect_repository_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if name.contains("repository") &&
+                   (node.symbol.kind == SymbolKind::Class || node.symbol.kind == SymbolKind::Interface) {
+
+                    // Check for CRUD methods
+                    if self.has_crud_methods(node_idx) {
+                        patterns.push(format!("Repository Pattern ({})", node.symbol.name));
+                    }
+                }
+            }
+        }
+
+        patterns
+    }
+
+    /// Detect Dependency Injection pattern
+    fn detect_dependency_injection_pattern(&self) -> Vec<String> {
+        let mut patterns = Vec::new();
+
+        // Look for constructor injection patterns
+        let constructor_injection_count = self.count_constructor_injection();
+        if constructor_injection_count > 3 {
+            patterns.push(format!("Dependency Injection Pattern ({constructor_injection_count} classes)"));
+        }
+
+        // Look for DI containers
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+
+                if (name.contains("container") || name.contains("injector") || name.contains("ioc")) &&
+                   node.symbol.kind == SymbolKind::Class {
+                    patterns.push(format!("DI Container Pattern ({})", node.symbol.name));
+                }
+            }
         }
 
         patterns
@@ -495,11 +862,11 @@ impl CodeQueryEngine {
         let mut issues = Vec::new();
 
         for symbol in symbols {
-            if symbol.complexity > 20 {
+            if symbol.complexity > self.thresholds.high_complexity_threshold {
                 issues.push(format!("High complexity in '{}'", symbol.symbol.name));
             }
             
-            if symbol.dependencies.len() > 15 {
+            if symbol.dependencies.len() > self.thresholds.high_dependency_threshold {
                 issues.push(format!("High coupling in '{}'", symbol.symbol.name));
             }
         }
@@ -507,33 +874,171 @@ impl CodeQueryEngine {
         issues
     }
 
-    /// Find circular dependencies using strongly connected components
-    fn find_cycles(&self) -> Option<Vec<Vec<String>>> {
+    /// Comprehensive circular dependency analysis with severity classification
+    fn analyze_circular_dependencies(&self) -> Vec<CircularDependencyInfo> {
         use petgraph::algo::kosaraju_scc;
-        
-        // Get strongly connected components from the dependency graph
+
         let dependency_graph = &self.analysis.graph;
         let sccs = kosaraju_scc(dependency_graph);
-        
-        // Filter out single-node SCCs (not cycles) and collect cycles with more than one node
-        let cycles: Vec<Vec<String>> = sccs.into_iter()
-            .filter(|scc| scc.len() > 1)
-            .map(|scc| {
-                scc.into_iter()
-                    .map(|node_idx| {
-                        dependency_graph.node_weight(node_idx)
-                            .map(|node| node.symbol.name.clone())
-                            .unwrap_or_else(|| format!("node_{}", node_idx.index()))
-                    })
-                    .collect()
+
+        let mut cycle_infos = Vec::new();
+
+        // Analyze each strongly connected component with more than one node
+        for scc in sccs.into_iter().filter(|scc| scc.len() > 1) {
+            let cycle_symbols: Vec<String> = scc.iter()
+                .filter_map(|&node_idx| {
+                    dependency_graph.node_weight(node_idx)
+                        .map(|node| node.symbol.name.clone())
+                })
+                .collect();
+
+            if cycle_symbols.is_empty() {
+                continue;
+            }
+
+            // Get files involved in the cycle
+            let files_involved: Vec<String> = scc.iter()
+                .filter_map(|&node_idx| {
+                    dependency_graph.node_weight(node_idx)
+                        .map(|node| node.file_path.clone())
+                })
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            // Calculate impact score based on various factors
+            let impact_score = self.calculate_cycle_impact(&scc);
+
+            // Determine severity based on impact score and cycle characteristics
+            let severity = self.classify_cycle_severity(impact_score, &scc, &files_involved);
+
+            // Generate cycle breaking suggestions
+            let breaking_suggestions = self.generate_cycle_breaking_suggestions(&scc, &cycle_symbols);
+
+            cycle_infos.push(CircularDependencyInfo {
+                cycle: cycle_symbols,
+                severity,
+                files_involved,
+                breaking_suggestions,
+                impact_score,
+            });
+        }
+
+        // Sort by impact score (highest first)
+        cycle_infos.sort_by(|a, b| b.impact_score.partial_cmp(&a.impact_score).unwrap_or(std::cmp::Ordering::Equal));
+
+        cycle_infos
+    }
+
+    /// Calculate impact score for a cycle
+    fn calculate_cycle_impact(&self, scc: &[NodeIndex]) -> f32 {
+        let dependency_graph = &self.analysis.graph;
+        let mut impact_score = 0.0;
+
+        for &node_idx in scc {
+            if let Some(node) = dependency_graph.node_weight(node_idx) {
+                // Factor in complexity
+                impact_score += node.metrics.cyclomatic_complexity as f32 * 0.1;
+
+                // Factor in fan-in/fan-out (more connections = higher impact)
+                impact_score += (node.metrics.fan_in + node.metrics.fan_out) as f32 * 0.2;
+
+                // Factor in symbol type (classes and modules have higher impact)
+                match node.symbol.kind {
+                    SymbolKind::Class => impact_score += 2.0,
+                    SymbolKind::Module => impact_score += 1.5,
+                    SymbolKind::Function => impact_score += 1.0,
+                    _ => impact_score += 0.5,
+                }
+            }
+        }
+
+        // Factor in cycle size (larger cycles are more problematic)
+        impact_score += scc.len() as f32 * 0.5;
+
+        impact_score
+    }
+
+    /// Classify cycle severity based on impact and characteristics
+    fn classify_cycle_severity(&self, impact_score: f32, scc: &[NodeIndex], files_involved: &[String]) -> CycleSeverity {
+        // Critical: High impact, many files, or core system components
+        if impact_score > self.thresholds.critical_impact_threshold ||
+           files_involved.len() > self.thresholds.max_files_for_critical ||
+           self.involves_core_components(scc) {
+            CycleSeverity::Critical
+        }
+        // High: Significant impact or cross-file dependencies
+        else if impact_score > self.thresholds.high_impact_threshold ||
+                files_involved.len() > self.thresholds.max_files_for_high {
+            CycleSeverity::High
+        }
+        // Medium: Moderate impact
+        else if impact_score > self.thresholds.medium_impact_threshold {
+            CycleSeverity::Medium
+        }
+        // Low: Minor impact, likely utility functions
+        else {
+            CycleSeverity::Low
+        }
+    }
+
+    /// Check if cycle involves core system components
+    fn involves_core_components(&self, scc: &[NodeIndex]) -> bool {
+        let dependency_graph = &self.analysis.graph;
+
+        for &node_idx in scc {
+            if let Some(node) = dependency_graph.node_weight(node_idx) {
+                let name = &node.symbol.name.to_lowercase();
+                // Check for common core component patterns
+                if name.contains("main") || name.contains("core") || name.contains("system")
+                   || name.contains("manager") || name.contains("controller") {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Generate suggestions for breaking circular dependencies
+    fn generate_cycle_breaking_suggestions(&self, scc: &[NodeIndex], _cycle_symbols: &[String]) -> Vec<String> {
+        let mut suggestions = Vec::new();
+
+        // Generic suggestions based on cycle characteristics
+        if scc.len() > 3 {
+            suggestions.push("Consider breaking this large cycle into smaller, more focused components".to_string());
+        }
+
+        suggestions.push("Introduce an interface or abstract class to break direct dependencies".to_string());
+        suggestions.push("Use dependency injection to invert control flow".to_string());
+        suggestions.push("Extract common functionality into a separate module".to_string());
+
+        // Specific suggestions based on symbol types
+        let dependency_graph = &self.analysis.graph;
+        let has_classes = scc.iter().any(|&node_idx| {
+            dependency_graph.node_weight(node_idx)
+                .map(|node| node.symbol.kind == SymbolKind::Class)
+                .unwrap_or(false)
+        });
+
+        if has_classes {
+            suggestions.push("Apply the Dependency Inversion Principle - depend on abstractions, not concretions".to_string());
+            suggestions.push("Consider using the Observer pattern to decouple components".to_string());
+        }
+
+        // File-based suggestions
+        let files_involved: HashSet<String> = scc.iter()
+            .filter_map(|&node_idx| {
+                dependency_graph.node_weight(node_idx)
+                    .map(|node| node.file_path.clone())
             })
             .collect();
-        
-        if cycles.is_empty() {
-            None
-        } else {
-            Some(cycles)
+
+        if files_involved.len() > 1 {
+            suggestions.push("Consider reorganizing code to reduce cross-file dependencies".to_string());
+            suggestions.push("Move related functionality into the same module or package".to_string());
         }
+
+        suggestions
     }
 
     /// Calculate overall complexity score for the codebase
@@ -544,6 +1049,196 @@ impl CodeQueryEngine {
             .sum();
 
         total_complexity as f32 / self.analysis.symbol_count as f32
+    }
+
+    // Helper methods for pattern detection
+
+    /// Check if a class has a private constructor
+    fn has_private_constructor(&self, node_idx: NodeIndex) -> bool {
+        // Look for constructor methods with private modifiers
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Method &&
+                   (target_node.symbol.name == "constructor" || target_node.symbol.name == "__init__") {
+                    return target_node.symbol.modifiers.contains(&"private".to_string());
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a class has static instance methods
+    fn has_static_instance_method(&self, node_idx: NodeIndex) -> bool {
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Method {
+                    let name = &target_node.symbol.name.to_lowercase();
+                    if (name.contains("instance") || name.contains("getinstance")) &&
+                       target_node.symbol.modifiers.contains(&"static".to_string()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a class has static instance fields
+    fn has_static_instance_field(&self, node_idx: NodeIndex) -> bool {
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Field {
+                    let name = &target_node.symbol.name.to_lowercase();
+                    if name.contains("instance") &&
+                       target_node.symbol.modifiers.contains(&"static".to_string()) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a class has fluent interface methods
+    fn has_fluent_interface(&self, node_idx: NodeIndex) -> bool {
+        let mut fluent_methods = 0;
+
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Method {
+                    // Check if method signature suggests it returns self
+                    if let Some(signature) = &target_node.symbol.signature {
+                        if signature.contains("return this") || signature.contains("-> Self") ||
+                           signature.contains("return self") {
+                            fluent_methods += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        fluent_methods >= 2 // At least 2 fluent methods
+    }
+
+    /// Check if a class has a build method
+    fn has_build_method(&self, node_idx: NodeIndex) -> bool {
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Method {
+                    let name = &target_node.symbol.name.to_lowercase();
+                    if name == "build" || name == "create" || name == "construct" {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Check if a class has notification methods (for Observer pattern)
+    fn has_notification_methods(&self, node_idx: NodeIndex) -> bool {
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Method {
+                    let name = &target_node.symbol.name.to_lowercase();
+                    if name.contains("notify") || name.contains("update") ||
+                       name.contains("onchange") || name.contains("handle") {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Count implementations of an interface
+    fn count_implementations(&self, interface_idx: NodeIndex) -> usize {
+        let mut count = 0;
+
+        for edge in self.analysis.graph.edges_directed(interface_idx, petgraph::Incoming) {
+            if edge.weight().kind == crate::analysis::RelationshipKind::Implements {
+                count += 1;
+            }
+        }
+
+        count
+    }
+
+    /// Check if a decorator implements the same interface as what it wraps
+    fn implements_wrapped_interface(&self, node_idx: NodeIndex) -> bool {
+        // This is a simplified check - in a full implementation, we'd analyze
+        // the composition relationship and interface implementation
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if edge.weight().kind == crate::analysis::RelationshipKind::Implements ||
+               edge.weight().kind == crate::analysis::RelationshipKind::DependsOn {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check if an adapter adapts between different interfaces
+    fn adapts_interfaces(&self, node_idx: NodeIndex) -> bool {
+        let mut implements_count = 0;
+        let mut depends_count = 0;
+
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            match edge.weight().kind {
+                crate::analysis::RelationshipKind::Implements => implements_count += 1,
+                crate::analysis::RelationshipKind::DependsOn => depends_count += 1,
+                _ => {}
+            }
+        }
+
+        implements_count >= 1 && depends_count >= 1
+    }
+
+    /// Check if a repository has CRUD methods
+    fn has_crud_methods(&self, node_idx: NodeIndex) -> bool {
+        let mut crud_methods = 0;
+        let crud_patterns = ["create", "read", "update", "delete", "find", "save", "get", "remove"];
+
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                if target_node.symbol.kind == SymbolKind::Method {
+                    let name = &target_node.symbol.name.to_lowercase();
+                    if crud_patterns.iter().any(|pattern| name.contains(pattern)) {
+                        crud_methods += 1;
+                    }
+                }
+            }
+        }
+
+        crud_methods >= 2 // At least 2 CRUD operations
+    }
+
+    /// Count classes using constructor injection
+    fn count_constructor_injection(&self) -> usize {
+        let mut count = 0;
+
+        for node_idx in self.analysis.graph.node_indices() {
+            if let Some(node) = self.analysis.graph.node_weight(node_idx) {
+                if node.symbol.kind == SymbolKind::Class {
+                    // Check if constructor has dependencies injected
+                    for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+                        if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
+                            if target_node.symbol.kind == SymbolKind::Method &&
+                               (target_node.symbol.name == "constructor" || target_node.symbol.name == "__init__") {
+                                // Check if constructor has parameters (simplified check)
+                                if let Some(signature) = &target_node.symbol.signature {
+                                    if signature.contains("(") && signature.contains(",") {
+                                        count += 1;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        count
     }
 }
 

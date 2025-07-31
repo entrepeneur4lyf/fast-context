@@ -108,7 +108,7 @@ impl BashExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -137,7 +137,7 @@ impl BashExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Bash,
                 documentation: self.extract_bash_doc(node, source),
                 modifiers,
@@ -146,7 +146,7 @@ impl BashExtractor {
         }
     }
 
-    fn extract_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Handle declare, local, export, readonly commands
         let mut cursor = node.walk();
         let mut command_name = String::new();
@@ -186,7 +186,7 @@ impl BashExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Bash,
                 documentation: self.extract_bash_doc(node, source),
                 modifiers,
@@ -195,7 +195,7 @@ impl BashExtractor {
         }
     }
 
-    fn extract_command(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_command(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Check for source, ., include commands
         let mut cursor = node.walk();
         let mut command_parts = Vec::new();
@@ -221,7 +221,7 @@ impl BashExtractor {
                         name: import_path,
                         kind: SymbolKind::Import,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::Bash,
                         documentation: None,
                         modifiers,
@@ -239,7 +239,7 @@ impl BashExtractor {
                             name: alias_name.to_string(),
                             kind: SymbolKind::Function, // Treat aliases as functions
                             location,
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::Bash,
                             documentation: self.extract_bash_doc(node, source),
                             modifiers: vec!["alias".to_string()],
@@ -251,7 +251,7 @@ impl BashExtractor {
         }
     }
 
-    fn extract_for_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_for_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract loop variables from for statements
         if let Some(variable) = node.child_by_field_name("variable") {
             let name = self.get_node_text(&variable, source);
@@ -261,7 +261,7 @@ impl BashExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Bash,
                 documentation: None,
                 modifiers: vec!["variable".to_string(), "loop".to_string()],
@@ -270,7 +270,7 @@ impl BashExtractor {
         }
     }
 
-    fn extract_case_patterns(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_case_patterns(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract patterns from case statements - these can be useful for understanding script logic
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -287,7 +287,7 @@ impl BashExtractor {
                                 name: clean_pattern.to_string(),
                                 kind: SymbolKind::Constant,
                                 location: location.clone(),
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::Bash,
                                 documentation: None,
                                 modifiers: vec!["pattern".to_string(), "case".to_string()],
@@ -300,7 +300,7 @@ impl BashExtractor {
         }
     }
 
-    fn extract_command_substitution(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_command_substitution(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract command substitutions like $(command) or `command`
         let substitution_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
@@ -312,7 +312,7 @@ impl BashExtractor {
             name,
             kind: SymbolKind::Function,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Bash,
             documentation: None,
             modifiers: vec!["command_substitution".to_string()],

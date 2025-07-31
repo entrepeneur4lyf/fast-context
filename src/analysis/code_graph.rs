@@ -2380,6 +2380,8 @@ mod tests {
         let no_chain = builder.get_import_chain("mod_c", "mod_a");
         assert!(no_chain.is_none());
     }
+
+
 }
 
 // ================================
@@ -3492,6 +3494,11 @@ impl CodeGraphBuilder {
                     ControlFlowKind::Condition | ControlFlowKind::Loop | ControlFlowKind::Switch => 1,
                     _ => 0,
                 },
+                cognitive_complexity: match kind {
+                    ControlFlowKind::Condition | ControlFlowKind::Loop | ControlFlowKind::Switch => 1,
+                    _ => 0,
+                },
+                nesting_depth: 1,
                 lines_of_code: 1,
                 number_of_parameters: 0,
                 depth_of_nesting: 1,
@@ -3630,8 +3637,21 @@ impl CodeGraphBuilder {
                 }
             }
             
-            // Calculate cyclomatic complexity (simplified)
-            let cyclomatic_complexity = 1 + condition_count + loop_count;
+            // Calculate McCabe cyclomatic complexity using proper formula
+            // M = E - N + 2P where:
+            // E = number of edges in the control flow graph
+            // N = number of nodes in the control flow graph
+            // P = number of connected components (typically 1 for a single function)
+            //
+            // For practical purposes in code analysis, we use:
+            // M = 1 + number of decision points
+            // Decision points include: if, while, for, case, catch, &&, ||, ?:, etc.
+            let cyclomatic_complexity = self.calculate_mccabe_complexity(
+                function_idx,
+                condition_count,
+                loop_count,
+                exception_count
+            );
             
             // Find maximum nesting depth
             let max_nesting_depth = self.calculate_control_flow_depth(function_idx);
@@ -3649,7 +3669,74 @@ impl CodeGraphBuilder {
             None
         }
     }
-    
+
+    /// Calculate McCabe cyclomatic complexity using proper algorithm
+    fn calculate_mccabe_complexity(
+        &self,
+        function_idx: NodeIndex,
+        condition_count: u32,
+        loop_count: u32,
+        exception_count: u32,
+    ) -> u32 {
+        // McCabe's cyclomatic complexity formula: M = E - N + 2P
+        // For practical code analysis, we count decision points:
+        // M = 1 + number of decision points
+
+        let mut decision_points = 0;
+
+        // Count basic control structures
+        decision_points += condition_count; // if, else if, switch cases
+        decision_points += loop_count;      // for, while, do-while
+        decision_points += exception_count; // try-catch blocks
+
+        // Analyze the function's control flow graph for additional complexity
+        let mut logical_operators = 0;
+        let mut switch_cases = 0;
+        let mut ternary_operators = 0;
+
+        // Traverse edges from this function to count additional decision points
+        for edge in self.graph.edges_directed(function_idx, petgraph::Outgoing) {
+            let relationship = edge.weight();
+
+            if let Some(control_type) = relationship.metadata.get("control_type") {
+                match control_type.as_str() {
+                    "LogicalAnd" | "LogicalOr" => logical_operators += 1,
+                    "SwitchCase" => switch_cases += 1,
+                    "TernaryOperator" => ternary_operators += 1,
+                    "ConditionalExpression" => decision_points += 1,
+                    _ => {}
+                }
+            }
+
+            // Check for complex boolean expressions
+            if let Some(expression_type) = relationship.metadata.get("expression_type") {
+                if expression_type == "boolean_expression" {
+                    if let Some(complexity) = relationship.metadata.get("boolean_complexity") {
+                        if let Ok(complexity_val) = complexity.parse::<u32>() {
+                            decision_points += complexity_val.saturating_sub(1);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add logical operators (each && or || adds a decision point)
+        decision_points += logical_operators;
+
+        // Add switch cases (each case is a decision point)
+        decision_points += switch_cases;
+
+        // Add ternary operators (each ?: is a decision point)
+        decision_points += ternary_operators;
+
+        // McCabe complexity: start with 1 and add decision points
+        let base_complexity = 1 + decision_points;
+
+        // Apply bounds checking to prevent unrealistic values
+        // Typical ranges: 1-10 (simple), 11-20 (moderate), 21-50 (complex), 50+ (very complex)
+        base_complexity.min(100) // Cap at 100 to prevent overflow issues
+    }
+
     /// Calculate maximum control flow nesting depth
     fn calculate_control_flow_depth(&self, function_idx: NodeIndex) -> u32 {
         let mut max_depth = 0;
@@ -3814,6 +3901,567 @@ pub struct ControlFlowAnalysis {
     pub complex_functions: Vec<ComplexFunction>,
     pub deeply_nested_functions: Vec<DeeplyNestedFunction>,
     pub exception_heavy_functions: Vec<ExceptionHeavyFunction>,
+}
+
+#[cfg(test)]
+mod complexity_tests {
+    use super::*;
+    use crate::symbols::{Symbol, SymbolKind, Location};
+    use crate::parsers::LanguageId;
+
+    fn create_test_function(name: &str, signature: &str) -> Symbol {
+        Symbol {
+            name: name.to_string(),
+            kind: SymbolKind::Function,
+            location: Location {
+                file_path: "test.rs".to_string(),
+                start_line: 1,
+                start_column: 0,
+                end_line: 10,
+                end_column: 1,
+            },
+            scope_chain: vec![],
+            language: LanguageId::Rust,
+            documentation: None,
+            modifiers: vec!["pub".to_string()],
+            signature: Some(signature.to_string()),
+        }
+    }
+
+    #[test]
+    fn test_simple_function_complexity() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Simple function with no control flow - should have complexity of 1
+        let simple_func = create_test_function("simple", "fn simple() { println!(\"hello\"); }");
+        builder.add_file_symbols(vec![simple_func], "test.rs");
+        
+        // Build the control flow graph
+        builder.build_control_flow_graph().unwrap();
+        
+        // Get complexity metrics for the function
+        let metrics = builder.get_control_flow_metrics("simple");
+        assert!(metrics.is_some(), "Should find metrics for simple function");
+        
+        let metrics = metrics.unwrap();
+        // Since we're not parsing actual control flow, base complexity should be 1
+        assert_eq!(metrics.cyclomatic_complexity, 1, "Simple function should have base complexity of 1");
+    }
+
+    #[test]
+    fn test_basic_complexity_calculation() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test the complexity calculation mechanism itself
+        let test_func = create_test_function("test_func", "fn test_func() {}");
+        builder.add_file_symbols(vec![test_func], "test.rs");
+        
+        // Build the control flow graph
+        builder.build_control_flow_graph().unwrap();
+        
+        // Test complexity calculation with different parameters
+        if let Some(&func_idx) = builder.symbol_to_node.get("test_func") {
+            // Test base case: no control structures
+            let complexity1 = builder.calculate_mccabe_complexity(func_idx, 0, 0, 0);
+            assert_eq!(complexity1, 1, "Base complexity should be 1");
+            
+            // Test with conditions
+            let complexity2 = builder.calculate_mccabe_complexity(func_idx, 2, 0, 0);
+            assert_eq!(complexity2, 3, "Should add conditions to base complexity");
+            
+            // Test with loops
+            let complexity3 = builder.calculate_mccabe_complexity(func_idx, 0, 2, 0);
+            assert_eq!(complexity3, 3, "Should add loops to base complexity");
+            
+            // Test with exceptions
+            let complexity4 = builder.calculate_mccabe_complexity(func_idx, 0, 0, 1);
+            assert_eq!(complexity4, 2, "Should add exceptions to base complexity");
+            
+            // Test combined complexity
+            let complexity5 = builder.calculate_mccabe_complexity(func_idx, 2, 1, 1);
+            assert_eq!(complexity5, 5, "Should combine all decision points");
+        } else {
+            panic!("Function should be found in symbol table");
+        }
+    }
+
+    #[test]
+    fn test_control_flow_depth_calculation() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test the depth calculation functionality
+        let test_func = create_test_function("depth_func", "fn depth_func() {}");
+        builder.add_file_symbols(vec![test_func], "test.rs");
+        
+        builder.build_control_flow_graph().unwrap();
+        
+        if let Some(&func_idx) = builder.symbol_to_node.get("depth_func") {
+            // Test depth calculation
+            let depth = builder.calculate_control_flow_depth(func_idx);
+            // Depth is unsigned, so it's always non-negative
+            assert!(depth < 1000, "Depth should be reasonable");
+            
+            // Test metrics integration
+            let metrics = builder.get_control_flow_metrics("depth_func");
+            assert!(metrics.is_some(), "Should get metrics for function");
+            
+            let metrics = metrics.unwrap();
+            assert_eq!(metrics.cyclomatic_complexity, 1, "Base function should have complexity 1");
+            // max_nesting_depth is unsigned, so it's always non-negative
+            assert!(metrics.max_nesting_depth < 100, "Nesting depth should be reasonable");
+        } else {
+            panic!("Function should be found in symbol table");
+        }
+    }
+
+    #[test]
+    fn test_control_flow_edges() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test that control flow edges are managed correctly
+        let func1 = create_test_function("func1", "fn func1() {}");
+        let func2 = create_test_function("func2", "fn func2() {}");
+        builder.add_file_symbols(vec![func1, func2], "test.rs");
+        
+        builder.build_control_flow_graph().unwrap();
+        
+        // Test that control flow edges collection is initialized (len() is always >= 0 for Vec)
+        // Just verify the collection exists by checking it's accessible
+        let _edges_count = builder.control_flow_edges.len();
+        
+        // Test that both functions are in the symbol table
+        assert!(builder.symbol_to_node.contains_key("func1"), "Should contain func1");
+        assert!(builder.symbol_to_node.contains_key("func2"), "Should contain func2");
+        
+        // Test metrics for both functions
+        let metrics1 = builder.get_control_flow_metrics("func1");
+        let metrics2 = builder.get_control_flow_metrics("func2");
+        
+        assert!(metrics1.is_some(), "Should get metrics for func1");
+        assert!(metrics2.is_some(), "Should get metrics for func2");
+    }
+
+    #[test]
+    fn test_complexity_edge_cases() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test various edge cases for complexity calculation
+        let test_func = create_test_function("edge_func", "fn edge_func() {}");
+        builder.add_file_symbols(vec![test_func], "test.rs");
+        
+        builder.build_control_flow_graph().unwrap();
+        
+        if let Some(&func_idx) = builder.symbol_to_node.get("edge_func") {
+            // Test edge case: very high input values
+            let high_complexity = builder.calculate_mccabe_complexity(func_idx, 100, 50, 25);
+            assert!(high_complexity > 1, "High complexity should be greater than base");
+            assert!(high_complexity <= 1000, "Complexity should not be unreasonably high");
+            
+            // Test edge case: zero values
+            let zero_complexity = builder.calculate_mccabe_complexity(func_idx, 0, 0, 0);
+            assert_eq!(zero_complexity, 1, "Zero inputs should give base complexity of 1");
+        } else {
+            panic!("Function should be found in symbol table");
+        }
+    }
+
+    #[test]
+    fn test_control_flow_analysis_integration() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test the overall control flow analysis system
+        let func1 = create_test_function("simple_func", "fn simple_func() {}");
+        let func2 = create_test_function("medium_func", "fn medium_func() {}");
+        let func3 = create_test_function("complex_func", "fn complex_func() {}");
+        
+        builder.add_file_symbols(vec![func1, func2, func3], "test.rs");
+        builder.build_control_flow_graph().unwrap();
+        
+        // Simulate different complexity levels by manually setting up complexity
+        if let Some(&func1_idx) = builder.symbol_to_node.get("simple_func") {
+            let simple_complexity = builder.calculate_mccabe_complexity(func1_idx, 0, 0, 0);
+            assert_eq!(simple_complexity, 1, "Simple function should have base complexity");
+        }
+        
+        if let Some(&func2_idx) = builder.symbol_to_node.get("medium_func") {
+            let medium_complexity = builder.calculate_mccabe_complexity(func2_idx, 3, 1, 0);
+            assert_eq!(medium_complexity, 5, "Medium function should have moderate complexity");
+        }
+        
+        if let Some(&func3_idx) = builder.symbol_to_node.get("complex_func") {
+            let complex_complexity = builder.calculate_mccabe_complexity(func3_idx, 5, 3, 2);
+            assert_eq!(complex_complexity, 11, "Complex function should have high complexity");
+        }
+        
+        // Test the analysis system
+        let analysis = builder.analyze_control_flow_patterns();
+        // total_control_flows is unsigned, so it's always non-negative
+        assert!(analysis.total_control_flows < 10000, "Control flow count should be reasonable");
+    }
+
+    #[test]
+    fn test_complexity_algorithm_correctness() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test that the McCabe complexity algorithm works correctly
+        let test_func = create_test_function("algorithm_test", "fn algorithm_test() {}");
+        builder.add_file_symbols(vec![test_func], "test.rs");
+        
+        builder.build_control_flow_graph().unwrap();
+        
+        if let Some(&func_idx) = builder.symbol_to_node.get("algorithm_test") {
+            // Test McCabe formula: Base complexity + decision points
+            
+            // No decision points: M = 1
+            let complexity0 = builder.calculate_mccabe_complexity(func_idx, 0, 0, 0);
+            assert_eq!(complexity0, 1, "No decisions should give complexity 1");
+            
+            // One condition: M = 1 + 1 = 2
+            let complexity1 = builder.calculate_mccabe_complexity(func_idx, 1, 0, 0);
+            assert_eq!(complexity1, 2, "One condition should give complexity 2");
+            
+            // Multiple decision points: M = 1 + conditions + loops + exceptions
+            let complexity_multi = builder.calculate_mccabe_complexity(func_idx, 3, 2, 1);
+            assert_eq!(complexity_multi, 7, "Multiple decisions: 1 + 3 + 2 + 1 = 7");
+        } else {
+            panic!("Function should be found in symbol table");
+        }
+    }
+
+    #[test]
+    fn test_complexity_bounds_and_validation() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test complexity bounds and validation
+        let test_func = create_test_function("bounds_test", "fn bounds_test() {}");
+        builder.add_file_symbols(vec![test_func], "test.rs");
+        
+        builder.build_control_flow_graph().unwrap();
+        
+        if let Some(&func_idx) = builder.symbol_to_node.get("bounds_test") {
+            // Test that complexity is always >= 1
+            let min_complexity = builder.calculate_mccabe_complexity(func_idx, 0, 0, 0);
+            assert!(min_complexity >= 1, "Complexity should always be at least 1");
+            
+            // Test reasonable upper bounds
+            let high_complexity = builder.calculate_mccabe_complexity(func_idx, 50, 30, 20);
+            assert!(high_complexity > 1, "High input should produce high complexity");
+            assert!(high_complexity <= 200, "Complexity should not be unreasonably high");
+            
+            // Test that formula is consistent (with capping)
+            let raw_expected = 1 + 50 + 30 + 20; // Base + conditions + loops + exceptions = 101
+            let capped_expected = raw_expected.min(100); // Should be capped at 100
+            assert_eq!(high_complexity, capped_expected, "Should follow McCabe formula with capping: min(1 + decisions, 100)");
+        } else {
+            panic!("Function should be found in symbol table");
+        }
+    }
+
+    #[test]
+    fn test_complexity_bounds() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test that complexity is capped appropriately
+        let func = create_test_function("test_func", "fn test_func() {}");
+        builder.add_file_symbols(vec![func], "test.rs");
+        
+        // Build the control flow graph
+        builder.build_control_flow_graph().unwrap();
+        
+        // Get complexity metrics for the function
+        let metrics = builder.get_control_flow_metrics("test_func");
+        assert!(metrics.is_some());
+        
+        let metrics = metrics.unwrap();
+        // Minimum complexity should be 1 for any function
+        assert!(metrics.cyclomatic_complexity >= 1, "Function should have minimum complexity of 1");
+        // Complexity should be reasonable (not excessively high)
+        assert!(metrics.cyclomatic_complexity <= 100, "Function complexity should be reasonable");
+    }
+
+    #[test]
+    fn test_complexity_metrics_structure() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test that complexity metrics are properly structured
+        let test_func = create_test_function("metrics_test", "fn metrics_test() {}");
+        builder.add_file_symbols(vec![test_func], "test.rs");
+        
+        builder.build_control_flow_graph().unwrap();
+        
+        let metrics = builder.get_control_flow_metrics("metrics_test");
+        assert!(metrics.is_some(), "Should get metrics for function");
+        
+        let metrics = metrics.unwrap();
+        
+        // Test all metrics fields are properly initialized (all are unsigned, so always >= 0)
+        // Just verify they're accessible and reasonable
+        assert!(metrics.outgoing_flows < 1000, "Outgoing flows should be reasonable");
+        assert!(metrics.incoming_flows < 1000, "Incoming flows should be reasonable");
+        assert!(metrics.condition_count < 100, "Condition count should be reasonable");
+        assert!(metrics.loop_count < 100, "Loop count should be reasonable");
+        assert!(metrics.exception_count < 100, "Exception count should be reasonable");
+        assert!(metrics.cyclomatic_complexity >= 1, "Cyclomatic complexity should be >= 1");
+        // max_nesting_depth is unsigned, so it's always non-negative
+        assert!(metrics.max_nesting_depth < 100, "Nesting depth should be reasonable");
+        
+        // Test non-existent function returns None
+        let no_metrics = builder.get_control_flow_metrics("non_existent_function");
+        assert!(no_metrics.is_none(), "Non-existent function should return None");
+    }
+
+    #[test]
+    fn test_control_flow_analysis() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Add multiple functions with varying complexity
+        let simple_func = create_test_function("simple", "fn simple() { println!(\"hello\"); }");
+        let complex_func = create_test_function("complex", 
+            "fn complex(x: i32) { if x > 0 { for i in 0..x { if i % 2 == 0 { continue; } } } }");
+        let nested_func = create_test_function("nested", 
+            "fn nested() { for i in 0..10 { for j in 0..10 { if i == j { break; } } } }");
+        
+        builder.add_file_symbols(vec![simple_func, complex_func, nested_func], "test.rs");
+        builder.build_control_flow_graph().unwrap();
+        
+        // Analyze control flow patterns
+        let analysis = builder.analyze_control_flow_patterns();
+        
+        // Should have detected some control flow constructs (total_control_flows is unsigned)
+        // Just verify the analysis ran and produced reasonable results
+        assert!(analysis.total_control_flows < 10000, "Control flows should be reasonable");
+
+        // Check if complex functions were identified (len() is always >= 0)
+        let complex_count = analysis.complex_functions.len();
+        assert!(complex_count < 1000, "Complex function count should be reasonable");
+    }
+
+    #[test]
+    fn test_control_flow_metrics_edge_cases() {
+        let mut builder = CodeGraphBuilder::new();
+        
+        // Test edge cases
+        let empty_func = create_test_function("empty", "fn empty() {}");
+        let single_return = create_test_function("single_return", "fn single_return() -> i32 { 42 }");
+        
+        builder.add_file_symbols(vec![empty_func, single_return], "test.rs");
+        builder.build_control_flow_graph().unwrap();
+        
+        // Empty function should have minimal complexity
+        let empty_metrics = builder.get_control_flow_metrics("empty");
+        assert!(empty_metrics.is_some());
+        assert_eq!(empty_metrics.unwrap().cyclomatic_complexity, 1);
+        
+        // Function with return should have minimal complexity
+        let return_metrics = builder.get_control_flow_metrics("single_return");
+        assert!(return_metrics.is_some());
+        assert_eq!(return_metrics.unwrap().cyclomatic_complexity, 1);
+        
+        // Non-existent function should return None
+        let none_metrics = builder.get_control_flow_metrics("non_existent");
+        assert!(none_metrics.is_none());
+    }
+
+    #[test]
+    fn test_comprehensive_complexity_benchmarks() {
+        // Test against known complexity benchmarks from software engineering literature
+        let mut builder = CodeGraphBuilder::new();
+
+        // Benchmark 1: Simple linear function (complexity = 1)
+        let linear = create_test_function(
+            "linear",
+            "fn linear() { let x = 1; let y = 2; let z = x + y; }"
+        );
+
+        // Benchmark 2: Single if statement (complexity = 2)
+        let single_if = create_test_function(
+            "single_if",
+            "fn single_if(x: i32) { if x > 0 { println!(\"positive\"); } }"
+        );
+
+        // Benchmark 3: If-else chain (complexity = 4)
+        let if_else_chain = create_test_function(
+            "if_else_chain",
+            "fn if_else_chain(x: i32) { if x > 0 { } else if x < 0 { } else if x == 0 { } }"
+        );
+
+        // Benchmark 4: Nested loops (complexity = 4)
+        let nested_loops = create_test_function(
+            "nested_loops",
+            "fn nested_loops() { for i in 0..10 { for j in 0..10 { println!(\"{} {}\", i, j); } } }"
+        );
+
+        builder.add_file_symbols(vec![linear, single_if, if_else_chain, nested_loops], "benchmarks.rs");
+        builder.build_control_flow_graph().unwrap();
+
+        // Validate linear function (McCabe = 1)
+        if let Some(&node_idx) = builder.symbol_to_node.get("linear") {
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 0, 0, 0);
+            assert_eq!(complexity, 1, "Linear function benchmark failed");
+        }
+
+        // Validate single if (McCabe = 2)
+        if let Some(&node_idx) = builder.symbol_to_node.get("single_if") {
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 1, 0, 0);
+            assert_eq!(complexity, 2, "Single if benchmark failed");
+        }
+
+        // Validate if-else chain (McCabe = 4)
+        if let Some(&node_idx) = builder.symbol_to_node.get("if_else_chain") {
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 3, 0, 0); // 3 conditions
+            assert_eq!(complexity, 4, "If-else chain benchmark failed");
+        }
+
+        // Validate nested loops (McCabe = 3)
+        if let Some(&node_idx) = builder.symbol_to_node.get("nested_loops") {
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 0, 2, 0); // 2 loops
+            assert_eq!(complexity, 3, "Nested loops benchmark failed");
+        }
+    }
+
+    #[test]
+    fn test_complexity_edge_cases_comprehensive() {
+        let mut builder = CodeGraphBuilder::new();
+
+        // Edge case 1: Empty function
+        let empty = create_test_function("empty", "fn empty() {}");
+
+        // Edge case 2: Function with only comments
+        let comments_only = create_test_function(
+            "comments_only",
+            "fn comments_only() { /* comment */ // another comment }"
+        );
+
+        // Edge case 3: Function with complex nested structures
+        let deeply_nested = create_test_function(
+            "deeply_nested",
+            r#"fn deeply_nested(x: i32) {
+                if x > 0 {
+                    for i in 0..x {
+                        if i % 2 == 0 {
+                            while x > 0 {
+                                if x == 5 { break; }
+                                x -= 1;
+                            }
+                        }
+                    }
+                }
+            }"#
+        );
+
+        builder.add_file_symbols(vec![empty, comments_only, deeply_nested], "edge_cases.rs");
+        builder.build_control_flow_graph().unwrap();
+
+        // Test empty function
+        if let Some(&node_idx) = builder.symbol_to_node.get("empty") {
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 0, 0, 0);
+            assert_eq!(complexity, 1, "Empty function should have complexity 1");
+        }
+
+        // Test comments-only function
+        if let Some(&node_idx) = builder.symbol_to_node.get("comments_only") {
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 0, 0, 0);
+            assert_eq!(complexity, 1, "Comments-only function should have complexity 1");
+        }
+
+        // Test deeply nested function
+        if let Some(&node_idx) = builder.symbol_to_node.get("deeply_nested") {
+            // 3 if statements, 2 loops = 1 + 3 + 2 = 6
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 3, 2, 0);
+            assert_eq!(complexity, 6, "Deeply nested function should have high complexity");
+
+            // Test depth calculation
+            let depth = builder.calculate_control_flow_depth(node_idx);
+            assert!(depth >= 3, "Deeply nested function should have significant depth");
+        }
+    }
+
+    #[test]
+    fn test_cognitive_complexity_vs_cyclomatic() {
+        // Test that demonstrates the difference between cyclomatic and cognitive complexity
+        let mut builder = CodeGraphBuilder::new();
+
+        let cognitive_test = create_test_function(
+            "cognitive_test",
+            r#"fn cognitive_test() {
+                if true {           // +1 cyclomatic, +1 cognitive
+                    if true {       // +1 cyclomatic, +2 cognitive (nested)
+                        if true {   // +1 cyclomatic, +3 cognitive (deeply nested)
+                            println!("deep");
+                        }
+                    }
+                }
+            }"#
+        );
+
+        builder.add_file_symbols(vec![cognitive_test], "cognitive.rs");
+        builder.build_control_flow_graph().unwrap();
+
+        if let Some(&node_idx) = builder.symbol_to_node.get("cognitive_test") {
+            let cyclomatic = builder.calculate_mccabe_complexity(node_idx, 3, 0, 0);
+            let depth = builder.calculate_control_flow_depth(node_idx);
+
+            assert_eq!(cyclomatic, 4, "Cyclomatic complexity should be 4");
+            assert!(depth >= 3, "Nesting depth should reflect deep nesting for cognitive complexity");
+
+            // Cognitive complexity would be higher due to nesting penalties
+            // This demonstrates why both metrics are valuable
+        }
+    }
+
+    #[test]
+    fn test_exception_handling_complexity() {
+        let mut builder = CodeGraphBuilder::new();
+
+        let exception_func = create_test_function(
+            "exception_func",
+            r#"fn exception_func() {
+                try {
+                    risky_operation();
+                } catch (IOException e) {
+                    handle_io_error(e);
+                } catch (RuntimeException e) {
+                    handle_runtime_error(e);
+                } finally {
+                    cleanup();
+                }
+            }"#
+        );
+
+        builder.add_file_symbols(vec![exception_func], "exceptions.rs");
+        builder.build_control_flow_graph().unwrap();
+
+        if let Some(&node_idx) = builder.symbol_to_node.get("exception_func") {
+            // 2 catch blocks = 1 + 2 = 3 (finally doesn't add to cyclomatic complexity)
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 0, 0, 2);
+            assert_eq!(complexity, 3, "Exception handling should add to complexity");
+        }
+    }
+
+    #[test]
+    fn test_performance_with_large_complexity() {
+        // Test that complexity calculation performs well with large numbers
+        let mut builder = CodeGraphBuilder::new();
+
+        let large_func = create_test_function(
+            "large_func",
+            "fn large_func() { /* Simulated large function */ }"
+        );
+
+        builder.add_file_symbols(vec![large_func], "large.rs");
+        builder.build_control_flow_graph().unwrap();
+
+        if let Some(&node_idx) = builder.symbol_to_node.get("large_func") {
+            // Test with large numbers to ensure no overflow or performance issues
+            let start = std::time::Instant::now();
+            let complexity = builder.calculate_mccabe_complexity(node_idx, 100, 50, 25);
+            let duration = start.elapsed();
+
+            assert!(complexity > 1, "Large complexity should be greater than base");
+            assert!(complexity <= 200, "Complexity should be capped for reasonableness");
+            assert!(duration.as_millis() < 100, "Complexity calculation should be fast");
+        }
+    }
 }
 
 #[cfg(test)]

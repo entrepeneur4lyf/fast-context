@@ -192,8 +192,11 @@ impl UniversalExporter {
                 format_version: "1.0.0".to_string(),
                 exported_at: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
+                    .map(|d| d.as_secs())
+                    .unwrap_or_else(|_| {
+                        eprintln!("Warning: System clock issue detected during export, using fallback timestamp");
+                        0
+                    }),
                 exporter_version: env!("CARGO_PKG_VERSION").to_string(),
                 export_options: options.clone(),
                 total_size_bytes: None, // Will be filled in by specific exporters

@@ -99,7 +99,7 @@ impl PhpExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Look for string literal in include statement
         let mut cursor = node.walk();
@@ -112,7 +112,7 @@ impl PhpExtractor {
                         name: clean_path.to_string(),
                         kind: SymbolKind::Import,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec![node.kind().to_string()],
@@ -156,7 +156,7 @@ impl PhpExtractor {
                         name: function_name.to_string(),
                         kind: SymbolKind::Function,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation,
                         modifiers,
@@ -207,7 +207,7 @@ impl PhpExtractor {
                         name: class_name.to_string(),
                         kind: SymbolKind::Class,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation,
                         modifiers,
@@ -244,7 +244,7 @@ impl PhpExtractor {
                         name: interface_name.to_string(),
                         kind: SymbolKind::Interface,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["interface".to_string()],
@@ -281,7 +281,7 @@ impl PhpExtractor {
                         name: trait_name.to_string(),
                         kind: SymbolKind::Trait,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["trait".to_string()],
@@ -307,7 +307,7 @@ impl PhpExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Look for method name
         let mut cursor = node.walk();
@@ -335,7 +335,7 @@ impl PhpExtractor {
                         name: method_name.to_string(),
                         kind: SymbolKind::Method,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation,
                         modifiers,
@@ -354,7 +354,7 @@ impl PhpExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Look for property variables
         let mut cursor = node.walk();
@@ -382,7 +382,7 @@ impl PhpExtractor {
                                 name: clean_name.to_string(),
                                 kind: SymbolKind::Field,
                                 location: self.node_to_location(&prop_child, file_path),
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers,
@@ -402,7 +402,7 @@ impl PhpExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Look for constant name
         let mut cursor = node.walk();
@@ -416,7 +416,7 @@ impl PhpExtractor {
                                 name: const_name.to_string(),
                                 kind: SymbolKind::Constant,
                                 location: self.node_to_location(&const_child, file_path),
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers: vec!["const".to_string()],
@@ -436,7 +436,7 @@ impl PhpExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Look for variable assignments at top level or class level
         let mut cursor = node.walk();
@@ -449,7 +449,7 @@ impl PhpExtractor {
                         name: clean_name.to_string(),
                         kind: SymbolKind::Variable,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["variable".to_string()],
@@ -479,7 +479,7 @@ impl PhpExtractor {
                         name: namespace_name.to_string(),
                         kind: SymbolKind::Module,
                         location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["namespace".to_string()],
@@ -505,7 +505,7 @@ impl PhpExtractor {
         source: &str,
         file_path: &str,
         symbols: &mut Vec<Symbol>,
-        scope_stack: &Vec<Scope>,
+        scope_stack: &[Scope],
     ) {
         // Look for namespace_use_clause in namespace_use_declaration
         let mut cursor = node.walk();
@@ -520,7 +520,7 @@ impl PhpExtractor {
                                 name: use_name.to_string(),
                                 kind: SymbolKind::Import,
                                 location: self.node_to_location(&clause_child, file_path),
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers: vec!["use".to_string()],

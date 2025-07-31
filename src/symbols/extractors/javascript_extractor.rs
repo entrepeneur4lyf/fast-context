@@ -29,6 +29,16 @@ impl SymbolExtractor for JavaScriptExtractor {
     }
 }
 
+/// Context for import extraction operations
+struct ImportExtractionContext<'a> {
+    source: &'a str,
+    file_path: &'a str,
+    symbols: &'a mut Vec<Symbol>,
+    scope_stack: &'a [Scope],
+    language: LanguageId,
+    module_path: &'a str,
+}
+
 impl JavaScriptExtractor {
     fn extract_from_node(
         &self,
@@ -616,7 +626,15 @@ impl JavaScriptExtractor {
         for child in node.children(&mut cursor) {
             match child.kind() {
                 "import_clause" => {
-                    self.extract_import_specifiers(&child, source, file_path, symbols, scope_stack, language, &module_path);
+                    let mut ctx = ImportExtractionContext {
+                        source,
+                        file_path,
+                        symbols,
+                        scope_stack,
+                        language,
+                        module_path: &module_path,
+                    };
+                    self.extract_import_specifiers(&child, &mut ctx);
                 }
                 "identifier" => {
                     // Simple import like: import './module';
@@ -639,24 +657,24 @@ impl JavaScriptExtractor {
         }
     }
 
-    fn extract_import_specifiers(&self, clause: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], language: LanguageId, module_path: &str) {
+    fn extract_import_specifiers(&self, clause: &Node, ctx: &mut ImportExtractionContext) {
         let mut cursor = clause.walk();
         for child in clause.children(&mut cursor) {
             match child.kind() {
                 "identifier" => {
                     // Default import: import Foo from './foo'
-                    let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
-                    let location = Location::from_node(&child, file_path);
+                    let name = child.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string();
+                    let location = Location::from_node(&child, ctx.file_path);
                     
-                    symbols.push(Symbol {
+                    ctx.symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Import,
                         location,
-                        scope_chain: scope_stack.to_vec(),
-                        language,
+                        scope_chain: ctx.scope_stack.to_vec(),
+                        language: ctx.language,
                         documentation: None,
                         modifiers: vec!["default".to_string()],
-                        signature: Some(format!("from {module_path}")),
+                        signature: Some(format!("from {}", ctx.module_path)),
                     });
                 }
                 "namespace_import" => {
@@ -665,18 +683,18 @@ impl JavaScriptExtractor {
                     let mut ns_cursor = child.walk();
                     for ns_child in child.children(&mut ns_cursor) {
                         if ns_child.kind() == "identifier" {
-                            let name = ns_child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
-                            let location = Location::from_node(&child, file_path);
+                            let name = ns_child.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string();
+                            let location = Location::from_node(&child, ctx.file_path);
                             
-                            symbols.push(Symbol {
+                            ctx.symbols.push(Symbol {
                                 name,
                                 kind: SymbolKind::Import,
                                 location,
-                                scope_chain: scope_stack.to_vec(),
-                                language,
+                                scope_chain: ctx.scope_stack.to_vec(),
+                                language: ctx.language,
                                 documentation: None,
                                 modifiers: vec!["namespace".to_string()],
-                                signature: Some(format!("from {module_path}")),
+                                signature: Some(format!("from {}", ctx.module_path)),
                             });
                             break;
                         }
@@ -688,24 +706,24 @@ impl JavaScriptExtractor {
                     for import_child in child.children(&mut import_cursor) {
                         if import_child.kind() == "import_specifier" {
                             let name = if let Some(alias) = import_child.child_by_field_name("alias") {
-                                alias.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+                                alias.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string()
                             } else if let Some(name_node) = import_child.child_by_field_name("name") {
-                                name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+                                name_node.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string()
                             } else {
                                 continue;
                             };
                             
-                            let location = Location::from_node(&import_child, file_path);
+                            let location = Location::from_node(&import_child, ctx.file_path);
                             
-                            symbols.push(Symbol {
+                            ctx.symbols.push(Symbol {
                                 name,
                                 kind: SymbolKind::Import,
                                 location,
-                                scope_chain: scope_stack.to_vec(),
-                                language,
+                                scope_chain: ctx.scope_stack.to_vec(),
+                                language: ctx.language,
                                 documentation: None,
                                 modifiers: vec!["named".to_string()],
-                                signature: Some(format!("from {module_path}")),
+                                signature: Some(format!("from {}", ctx.module_path)),
                             });
                         }
                     }

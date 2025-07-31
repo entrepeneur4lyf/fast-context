@@ -88,7 +88,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -101,7 +101,7 @@ impl ZigExtractor {
                 name,
                 kind: SymbolKind::Function,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Zig,
                 documentation,
                 modifiers,
@@ -198,7 +198,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -210,7 +210,7 @@ impl ZigExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Zig,
                 documentation: self.extract_zig_doc(node, source),
                 modifiers,
@@ -219,7 +219,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_const(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_const(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -231,7 +231,7 @@ impl ZigExtractor {
                 name,
                 kind: SymbolKind::Constant,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Zig,
                 documentation: self.extract_zig_doc(node, source),
                 modifiers,
@@ -240,7 +240,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Zig uses @import("path") for imports and @use for bringing symbols into scope
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -252,7 +252,7 @@ impl ZigExtractor {
                     name: import_path,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Zig,
                     documentation: None,
                     modifiers: vec!["import".to_string()],
@@ -268,7 +268,7 @@ impl ZigExtractor {
                     name: use_name,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Zig,
                     documentation: None,
                     modifiers: vec!["use".to_string()],
@@ -279,7 +279,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_type_alias(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_type_alias(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -288,7 +288,7 @@ impl ZigExtractor {
                 name,
                 kind: SymbolKind::Type,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Zig,
                 documentation: self.extract_zig_doc(node, source),
                 modifiers: vec!["type".to_string()],
@@ -297,7 +297,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_error_type(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_error_type(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -306,7 +306,7 @@ impl ZigExtractor {
                 name,
                 kind: SymbolKind::Type,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Zig,
                 documentation: self.extract_zig_doc(node, source),
                 modifiers: vec!["error".to_string()],
@@ -315,7 +315,7 @@ impl ZigExtractor {
         }
     }
 
-    fn extract_test(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_test(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Zig test functions: test "test name" { ... }
         let mut test_name = "unnamed_test".to_string();
 
@@ -335,7 +335,7 @@ impl ZigExtractor {
             name: test_name,
             kind: SymbolKind::Function,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::Zig,
             documentation,
             modifiers: vec!["test".to_string()],
@@ -343,7 +343,7 @@ impl ZigExtractor {
         });
     }
 
-    fn extract_comptime(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_comptime(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Zig comptime declarations: comptime var x = value; or comptime { ... }
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
@@ -371,7 +371,7 @@ impl ZigExtractor {
                 name,
                 kind,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Zig,
                 documentation: self.extract_zig_doc(node, source),
                 modifiers,

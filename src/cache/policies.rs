@@ -8,6 +8,75 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Configurable constraints for cache validation
+#[derive(Debug, Clone)]
+pub struct CacheConstraints {
+    pub min_memory_mb: usize,
+    pub max_memory_mb: usize,
+    pub min_l1_capacity: usize,
+    pub max_l1_capacity: usize,
+    pub max_disk_mb: usize,
+    pub max_threads: usize,
+    pub min_ttl: Duration,
+    pub max_ttl: Duration,
+    pub min_cascade_depth: usize,
+    pub max_cascade_depth: usize,
+}
+
+impl Default for CacheConstraints {
+    fn default() -> Self {
+        Self {
+            min_memory_mb: 50,           // 50MB minimum
+            max_memory_mb: 8192,         // 8GB maximum
+            min_l1_capacity: 100,        // 100 entries minimum
+            max_l1_capacity: 50000,      // 50K entries maximum
+            max_disk_mb: 10240,          // 10GB maximum disk usage
+            max_threads: 8,              // Maximum 8 background threads
+            min_ttl: Duration::from_secs(60),      // 1 minute minimum
+            max_ttl: Duration::from_secs(604800),  // 7 days maximum
+            min_cascade_depth: 3,        // Minimum cascade depth
+            max_cascade_depth: 50,       // Maximum cascade depth
+        }
+    }
+}
+
+impl CacheConstraints {
+    /// Create constraints optimized for development environments
+    pub fn for_development() -> Self {
+        Self {
+            min_memory_mb: 10,
+            max_memory_mb: 1024,         // 1GB max for dev
+            max_disk_mb: 1024,           // 1GB max disk for dev
+            max_threads: 4,              // Fewer threads for dev
+            ..Default::default()
+        }
+    }
+
+    /// Create constraints optimized for production environments
+    pub fn for_production() -> Self {
+        Self {
+            min_memory_mb: 100,
+            max_memory_mb: 16384,        // 16GB max for production
+            max_disk_mb: 51200,          // 50GB max disk for production
+            max_threads: 16,             // More threads for production
+            ..Default::default()
+        }
+    }
+
+    /// Create constraints optimized for CI/CD environments
+    pub fn for_ci_cd() -> Self {
+        Self {
+            min_memory_mb: 25,
+            max_memory_mb: 512,          // 512MB max for CI
+            max_disk_mb: 512,            // 512MB max disk for CI
+            max_threads: 2,              // Minimal threads for CI
+            min_ttl: Duration::from_secs(30),      // Shorter TTL for CI
+            max_ttl: Duration::from_secs(3600),    // 1 hour max for CI
+            ..Default::default()
+        }
+    }
+}
+
 /// Comprehensive cache configuration that adapts to project characteristics
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheConfig {
@@ -294,25 +363,34 @@ impl CacheConfig {
             return Err(ConfigValidationError::InvalidL1Capacity);
         }
         
-        // Ensure reasonable limits
-        self.memory_limit_mb = self.memory_limit_mb.clamp(50, 8192); // 50MB - 8GB
-        self.l1_capacity = self.l1_capacity.clamp(100, 50000);       // 100 - 50K entries
-        self.disk_limit_mb = self.disk_limit_mb.min(10240);            // Max 10GB disk
-        
+        // Apply configurable validation constraints
+        let constraints = CacheConstraints::default();
+
+        // Memory constraints
+        self.memory_limit_mb = self.memory_limit_mb.clamp(
+            constraints.min_memory_mb,
+            constraints.max_memory_mb
+        );
+        self.l1_capacity = self.l1_capacity.clamp(
+            constraints.min_l1_capacity,
+            constraints.max_l1_capacity
+        );
+        self.disk_limit_mb = self.disk_limit_mb.min(constraints.max_disk_mb);
+
         // Thread constraints
-        self.background_warming_threads = self.background_warming_threads.min(8);
-        
+        self.background_warming_threads = self.background_warming_threads.min(constraints.max_threads);
+
         // TTL constraints
-        let min_ttl = Duration::from_secs(60);  // 1 minute minimum
-        let max_ttl = Duration::from_secs(604800); // 7 days maximum
-        
-        self.symbol_ttl = self.symbol_ttl.max(min_ttl).min(max_ttl);
-        self.ast_ttl = self.ast_ttl.max(min_ttl).min(max_ttl);
-        self.graph_ttl = self.graph_ttl.max(min_ttl).min(max_ttl);
-        self.analysis_ttl = self.analysis_ttl.max(min_ttl).min(max_ttl);
-        
+        self.symbol_ttl = self.symbol_ttl.max(constraints.min_ttl).min(constraints.max_ttl);
+        self.ast_ttl = self.ast_ttl.max(constraints.min_ttl).min(constraints.max_ttl);
+        self.graph_ttl = self.graph_ttl.max(constraints.min_ttl).min(constraints.max_ttl);
+        self.analysis_ttl = self.analysis_ttl.max(constraints.min_ttl).min(constraints.max_ttl);
+
         // Cascade depth constraints
-        self.max_cascade_depth = self.max_cascade_depth.clamp(3, 50);
+        self.max_cascade_depth = self.max_cascade_depth.clamp(
+            constraints.min_cascade_depth,
+            constraints.max_cascade_depth
+        );
         
         // Logic constraints
         if !self.enable_l1_cache {

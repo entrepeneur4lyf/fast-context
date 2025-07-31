@@ -187,7 +187,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_self_closing_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_self_closing_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let element_name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -265,7 +265,7 @@ impl XmlExtractor {
                 name: symbol_name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::XML,
                 documentation: None,
                 modifiers,
@@ -274,7 +274,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_start_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_start_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // This is handled by extract_element for full elements
         // Only process standalone start tags
         if let Some(parent) = node.parent() {
@@ -294,7 +294,7 @@ impl XmlExtractor {
                         name: element_name,
                         kind: SymbolKind::Class,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::XML,
                         documentation: None,
                         modifiers,
@@ -305,7 +305,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_attribute(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_attribute(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let attr_name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -337,7 +337,7 @@ impl XmlExtractor {
                             name: format!("#{attr_value}"),
                             kind: SymbolKind::Variable,
                             location: location.clone(),
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::XML,
                             documentation: None,
                             modifiers: vec!["id".to_string(), "selector".to_string()],
@@ -354,7 +354,7 @@ impl XmlExtractor {
                                     name: format!(".{class_name}"),
                                     kind: SymbolKind::Class,
                                     location: location.clone(),
-                                    scope_chain: scope_stack.clone(),
+                                    scope_chain: scope_stack.to_owned(),
                                     language: LanguageId::XML,
                                     documentation: None,
                                     modifiers: vec!["class".to_string(), "selector".to_string()],
@@ -372,7 +372,7 @@ impl XmlExtractor {
                             name: format!("xmlns:{attr_value}"),
                             kind: SymbolKind::Namespace,
                             location: location.clone(),
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::XML,
                             documentation: None,
                             modifiers: vec!["namespace".to_string(), "uri".to_string()],
@@ -389,7 +389,7 @@ impl XmlExtractor {
                             name: format!("{prefix}:{attr_value}"),
                             kind: SymbolKind::Namespace,
                             location: location.clone(),
-                            scope_chain: scope_stack.clone(),
+                            scope_chain: scope_stack.to_owned(),
                             language: LanguageId::XML,
                             documentation: None,
                             modifiers: vec!["namespace".to_string(), "prefix".to_string()],
@@ -417,7 +417,7 @@ impl XmlExtractor {
                 name: attr_name,
                 kind: SymbolKind::Field,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::XML,
                 documentation: None,
                 modifiers,
@@ -426,7 +426,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_processing_instruction(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_processing_instruction(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let pi_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -453,7 +453,7 @@ impl XmlExtractor {
                     name: format!("<?{target}"),
                     kind: SymbolKind::Constant,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::XML,
                     documentation: None,
                     modifiers,
@@ -463,7 +463,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_doctype(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_doctype(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let doctype_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -477,7 +477,7 @@ impl XmlExtractor {
                     name: format!("<!DOCTYPE {doctype_name}"),
                     kind: SymbolKind::Type,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::XML,
                     documentation: None,
                     modifiers: vec!["doctype".to_string(), "declaration".to_string()],
@@ -487,7 +487,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_xml_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_xml_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let decl_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -508,7 +508,7 @@ impl XmlExtractor {
             name: "<?xml".to_string(),
             kind: SymbolKind::Constant,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::XML,
             documentation: None,
             modifiers,
@@ -516,7 +516,7 @@ impl XmlExtractor {
         });
     }
 
-    fn extract_cdata(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_cdata(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let location = Location::from_node(node, file_path);
         let cdata_content = self.get_node_text(node, source);
 
@@ -531,7 +531,7 @@ impl XmlExtractor {
             name: "<![CDATA[".to_string(),
             kind: SymbolKind::Constant,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::XML,
             documentation: Some(format!("CDATA section containing: {content_preview}")),
             modifiers: vec!["cdata".to_string(), "section".to_string()],
@@ -539,7 +539,7 @@ impl XmlExtractor {
         });
     }
 
-    fn extract_entity_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_entity_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let entity_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -564,7 +564,7 @@ impl XmlExtractor {
                     name: format!("&{entity_name};"),
                     kind: SymbolKind::Variable,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::XML,
                     documentation: None,
                     modifiers,
@@ -574,7 +574,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_element_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_element_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let decl_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -601,7 +601,7 @@ impl XmlExtractor {
                     name: format!("<!ELEMENT {element_name}"),
                     kind: SymbolKind::Type,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::XML,
                     documentation: None,
                     modifiers,
@@ -611,7 +611,7 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_attribute_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_attribute_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let decl_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -655,7 +655,7 @@ impl XmlExtractor {
                     name: format!("{element_name}@{attr_name}"),
                     kind: SymbolKind::Field,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::XML,
                     documentation: None,
                     modifiers,

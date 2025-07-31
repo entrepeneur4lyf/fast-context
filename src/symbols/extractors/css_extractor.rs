@@ -143,7 +143,7 @@ impl CssExtractor {
         }
     }
 
-    fn extract_at_rule(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_at_rule(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let rule_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -175,7 +175,7 @@ impl CssExtractor {
                     name: format!("@{at_rule_name}"),
                     kind: SymbolKind::Constant,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::CSS,
                     documentation: self.extract_css_doc(node, source),
                     modifiers,
@@ -185,7 +185,7 @@ impl CssExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let import_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -199,7 +199,7 @@ impl CssExtractor {
                     name: import_path.to_string(),
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::CSS,
                     documentation: None,
                     modifiers: vec!["import".to_string(), "css".to_string()],
@@ -221,7 +221,7 @@ impl CssExtractor {
                         name: import_path.to_string(),
                         kind: SymbolKind::Import,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::CSS,
                         documentation: None,
                         modifiers: vec!["import".to_string(), "url".to_string()],
@@ -296,7 +296,7 @@ impl CssExtractor {
         }
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let property_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -334,7 +334,7 @@ impl CssExtractor {
             name: property_name,
             kind: if modifiers.contains(&"custom".to_string()) { SymbolKind::Variable } else { SymbolKind::Field },
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
             modifiers,
@@ -342,7 +342,7 @@ impl CssExtractor {
         });
     }
 
-    fn extract_class_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_class_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let class_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -350,7 +350,7 @@ impl CssExtractor {
             name: class_name,
             kind: SymbolKind::Class,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
             modifiers: vec!["selector".to_string(), "class".to_string()],
@@ -358,7 +358,7 @@ impl CssExtractor {
         });
     }
 
-    fn extract_id_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_id_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let id_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -366,7 +366,7 @@ impl CssExtractor {
             name: id_name,
             kind: SymbolKind::Variable, // IDs are unique like variables
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
             modifiers: vec!["selector".to_string(), "id".to_string()],
@@ -374,7 +374,7 @@ impl CssExtractor {
         });
     }
 
-    fn extract_attribute_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_attribute_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let attr_selector = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
         
@@ -382,7 +382,7 @@ impl CssExtractor {
             name: attr_selector,
             kind: SymbolKind::Field,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
             modifiers: vec!["selector".to_string(), "attribute".to_string()],
@@ -390,7 +390,7 @@ impl CssExtractor {
         });
     }
 
-    fn extract_pseudo_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_pseudo_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let pseudo_selector = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -406,7 +406,7 @@ impl CssExtractor {
             name: pseudo_selector,
             kind: SymbolKind::Method, // Pseudo selectors are like methods
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
             modifiers,
@@ -414,7 +414,7 @@ impl CssExtractor {
         });
     }
 
-    fn extract_custom_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_custom_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let property_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -433,7 +433,7 @@ impl CssExtractor {
             name: property_name,
             kind: SymbolKind::Variable,
             location,
-            scope_chain: scope_stack.clone(),
+            scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
             modifiers: vec!["custom-property".to_string(), "variable".to_string(), "css-var".to_string()],

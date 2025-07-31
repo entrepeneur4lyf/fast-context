@@ -81,7 +81,7 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_using_statement(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_using_statement(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // C# using directive: using System; or using System.Collections.Generic;
         // Look for identifier or qualified_name children since C# doesn't use field names
         let mut cursor = node.walk();
@@ -94,7 +94,7 @@ impl CSharpExtractor {
                     name: using_name,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::CSharp,
                     documentation: None,
                     modifiers: vec!["using".to_string()],
@@ -195,7 +195,7 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_enum(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_enum(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             let location = Location::from_node(node, file_path);
@@ -207,7 +207,7 @@ impl CSharpExtractor {
                 name,
                 kind: SymbolKind::Enum,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::CSharp,
                 documentation,
                 modifiers,
@@ -216,7 +216,7 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             let location = Location::from_node(node, file_path);
@@ -229,7 +229,7 @@ impl CSharpExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::CSharp,
                 documentation,
                 modifiers,
@@ -238,7 +238,7 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_constructor(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_constructor(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             let location = Location::from_node(node, file_path);
@@ -250,7 +250,7 @@ impl CSharpExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::CSharp,
                 documentation: None,
                 modifiers,
@@ -259,7 +259,7 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             let location = Location::from_node(node, file_path);
@@ -272,7 +272,7 @@ impl CSharpExtractor {
                 name,
                 kind: SymbolKind::Field, // Properties are treated as fields
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::CSharp,
                 documentation,
                 modifiers,
@@ -281,7 +281,7 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_field(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_field(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // C# field declarations can contain multiple variables
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -297,7 +297,7 @@ impl CSharpExtractor {
                         name,
                         kind: SymbolKind::Field,
                         location,
-                        scope_chain: scope_stack.clone(),
+                        scope_chain: scope_stack.to_owned(),
                         language: LanguageId::CSharp,
                         documentation: None,
                         modifiers,

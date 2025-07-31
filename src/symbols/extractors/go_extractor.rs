@@ -274,7 +274,7 @@ impl GoExtractor {
         }
     }
 
-    fn extract_var_declarations(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_var_declarations(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "var_spec_list" {

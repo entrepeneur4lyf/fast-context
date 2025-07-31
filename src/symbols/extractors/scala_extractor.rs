@@ -88,7 +88,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_package(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_package(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract package name from qualified identifier
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -100,7 +100,7 @@ impl ScalaExtractor {
                     name: package_name,
                     kind: SymbolKind::Namespace,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Scala,
                     documentation: None,
                     modifiers: vec!["package".to_string()],
@@ -111,7 +111,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Scala imports can be: import scala.collection.mutable, import scala.util.{Try, Success, Failure}, import scala.collection._
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -130,7 +130,7 @@ impl ScalaExtractor {
                     name: import_name,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Scala,
                     documentation: None,
                     modifiers,
@@ -146,7 +146,7 @@ impl ScalaExtractor {
                     name: "_".to_string(),
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Scala,
                     documentation: None,
                     modifiers: vec!["import".to_string(), "wildcard".to_string()],
@@ -156,7 +156,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_import_selectors(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import_selectors(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
@@ -167,7 +167,7 @@ impl ScalaExtractor {
                     name: import_name,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Scala,
                     documentation: None,
                     modifiers: ["import", "selective"].iter().map(|s| s.to_string()).collect(),
@@ -272,7 +272,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -285,7 +285,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Function,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Scala,
                 documentation,
                 modifiers,
@@ -294,7 +294,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -307,7 +307,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Scala,
                 documentation,
                 modifiers,
@@ -316,7 +316,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_val(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_val(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract val declarations (immutable values)
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
@@ -329,7 +329,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Constant,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Scala,
                 documentation: None,
                 modifiers,
@@ -338,7 +338,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_var(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_var(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Extract var declarations (mutable variables)
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
@@ -351,7 +351,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Variable,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Scala,
                 documentation: None,
                 modifiers,
@@ -360,7 +360,7 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_type_alias(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_type_alias(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -369,7 +369,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Type,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::Scala,
                 documentation: self.extract_scala_doc(node, source),
                 modifiers: vec!["type".to_string()],

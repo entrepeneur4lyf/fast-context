@@ -77,7 +77,7 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Objective-C imports: #import <Foundation/Foundation.h> or #import "MyClass.h"
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -97,7 +97,7 @@ impl ObjectiveCExtractor {
                     name: import_name,
                     kind: SymbolKind::Import,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::ObjectiveC,
                     documentation: None,
                     modifiers: vec!["import".to_string()],
@@ -211,7 +211,7 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Objective-C methods can be instance (-) or class (+) methods
         let mut is_class_method = false;
 
@@ -245,7 +245,7 @@ impl ObjectiveCExtractor {
                 name: method_name,
                 kind: SymbolKind::Method,
                 location,
-                scope_chain: scope_stack.clone(),
+                scope_chain: scope_stack.to_owned(),
                 language: LanguageId::ObjectiveC,
                 documentation,
                 modifiers,
@@ -254,7 +254,7 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Look for property in struct_declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -278,7 +278,7 @@ impl ObjectiveCExtractor {
                                 name: name.to_string(),
                                 kind: SymbolKind::Field,
                                 location,
-                                scope_chain: scope_stack.clone(),
+                                scope_chain: scope_stack.to_owned(),
                                 language: LanguageId::ObjectiveC,
                                 documentation: None,
                                 modifiers,
@@ -293,7 +293,7 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_instance_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &Vec<Scope>) {
+    fn extract_instance_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         // Instance variables in Objective-C
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -305,7 +305,7 @@ impl ObjectiveCExtractor {
                     name,
                     kind: SymbolKind::Field,
                     location,
-                    scope_chain: scope_stack.clone(),
+                    scope_chain: scope_stack.to_owned(),
                     language: LanguageId::ObjectiveC,
                     documentation: None,
                     modifiers: vec!["ivar".to_string()],
