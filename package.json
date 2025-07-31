@@ -1,0 +1,75 @@
+{
+  "name": "fast-context",
+  "version": "0.1.0",
+  "description": "High-performance graph library for Node.js, powered by Rust",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "fast-context",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "aarch64-apple-darwin",
+        "aarch64-pc-windows-msvc"
+      ]
+    }
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "ava": "^6.0.0"
+  },
+  "optionalDependencies": {
+    "rustworkx-nodejs-win32-x64-msvc": "0.1.0",
+    "rustworkx-nodejs-darwin-x64": "0.1.0",
+    "rustworkx-nodejs-linux-x64-gnu": "0.1.0",
+    "rustworkx-nodejs-darwin-arm64": "0.1.0",
+    "rustworkx-nodejs-linux-x64-musl": "0.1.0",
+    "rustworkx-nodejs-linux-arm64-musl": "0.1.0",
+    "rustworkx-nodejs-linux-arm64-gnu": "0.1.0",
+    "rustworkx-nodejs-win32-arm64-msvc": "0.1.0"
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "bench": "node -r @swc-node/register benchmark/bench.ts",
+    "build": "cargo test generate_typescript_types && node scripts/update-types.js && napi build --platform --release",
+    "build:debug": "cargo test generate_typescript_types && node scripts/update-types.js && napi build --platform",
+    "generate-types": "cargo test generate_typescript_types && node scripts/update-types.js",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node manual_test.mjs",
+    "test:ava": "ava",
+    "universal": "napi universal",
+    "version": "napi version"
+  },
+  "ava": {
+    "match": [
+      "tests/**/*.test.mjs"
+    ]
+  },
+  "packageManager": "npm@10.8.2",
+  "keywords": [
+    "graph",
+    "graph-theory",
+    "algorithms",
+    "shortest-path",
+    "centrality",
+    "network",
+    "rust",
+    "napi-rs",
+    "performance"
+  ],
+  "author": "RustWorkX Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Qiskit/rustworkx-nodejs.git"
+  },
+  "homepage": "https://github.com/Qiskit/rustworkx-nodejs#readme",
+  "bugs": {
+    "url": "https://github.com/Qiskit/rustworkx-nodejs/issues"
+  }
+}

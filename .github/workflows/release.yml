@@ -1,0 +1,217 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  DEBUG: napi:*
+  APP_NAME: rustworkx-nodejs
+  MACOSX_DEPLOYMENT_TARGET: '10.13'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.get_version.outputs.VERSION }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          body: |
+            ## Changes in ${{ steps.get_version.outputs.VERSION }}
+            
+            This release includes the following changes:
+            - Cross-platform binaries for all supported platforms
+            - Bug fixes and performance improvements
+            
+            ### Installation
+            ```bash
+            npm install rustworkx-nodejs@${{ steps.get_version.outputs.VERSION }}
+            ```
+            
+            ### Supported Platforms
+            - Windows (x64, ARM64)
+            - macOS (x64, Apple Silicon)
+            - Linux (x64, ARM64, ARMv7, musl variants)
+            - FreeBSD
+
+  build-and-release:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: macos-latest
+            target: x86_64-apple-darwin
+            build: yarn build --target x86_64-apple-darwin
+          - host: macos-latest
+            target: aarch64-apple-darwin
+            build: yarn build --target aarch64-apple-darwin
+          - host: windows-latest
+            build: yarn build --target x86_64-pc-windows-msvc
+            target: x86_64-pc-windows-msvc
+          - host: windows-latest
+            build: yarn build --target aarch64-pc-windows-msvc
+            target: aarch64-pc-windows-msvc
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            build: yarn build --target x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+            build: yarn build --target x86_64-unknown-linux-musl
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
+            build: yarn build --target aarch64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine-aarch64
+            build: yarn build --target aarch64-unknown-linux-musl
+          - host: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-zig
+            build: yarn build --target armv7-unknown-linux-gnueabihf
+    name: Build release for ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        if: ${{ !matrix.settings.docker }}
+        with:
+          node-version: 18
+          cache: yarn
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        if: ${{ !matrix.settings.docker }}
+        with:
+          toolchain: stable
+          targets: ${{ matrix.settings.target }}
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            .cargo-cache
+            target/
+          key: ${{ matrix.settings.target }}-cargo-release-${{ matrix.settings.host }}
+      - uses: goto-bus-stop/setup-zig@v2
+        if: ${{ matrix.settings.target == 'armv7-unknown-linux-gnueabihf' }}
+        with:
+          version: 0.11.0
+      - name: Install dependencies
+        run: yarn install
+      - name: Build in docker
+        uses: addnab/docker-run-action@v3
+        if: ${{ matrix.settings.docker }}
+        with:
+          image: ${{ matrix.settings.docker }}
+          options: '--user 0:0 -v ${{ github.workspace }}/.cargo-cache:/root/.cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/root/.cargo/registry/index -v ${{ github.workspace }}:/build -w /build'
+          run: ${{ matrix.settings.build }}
+      - name: Build
+        run: ${{ matrix.settings.build }}
+        if: ${{ !matrix.settings.docker }}
+        shell: bash
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ env.APP_NAME }}.${{ matrix.settings.target }}.node
+          asset_name: ${{ env.APP_NAME }}.${{ matrix.settings.target }}.node
+          asset_content_type: application/octet-stream
+
+  build-freebsd-release:
+    needs: create-release
+    runs-on: macos-13
+    name: Build FreeBSD release
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        id: build
+        uses: vmactions/freebsd-vm@v1
+        env:
+          DEBUG: napi:*
+          RUSTUP_UNPACK_RAM: '26214400'
+          RUSTUP_IO_THREADS: '1'
+        with:
+          envs: DEBUG RUSTUP_UNPACK_RAM RUSTUP_IO_THREADS
+          usesh: true
+          mem: 3000
+          prepare: |
+            pkg install -y -f curl node18 yarn-node18
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable
+            export PATH="/root/.cargo/bin:$PATH"
+          run: |
+            export PATH="/root/.cargo/bin:$PATH"
+            yarn install
+            yarn build
+            rm -rf node_modules
+            rm -rf target
+      - name: Upload FreeBSD Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./${{ env.APP_NAME }}.freebsd-x64.node
+          asset_name: ${{ env.APP_NAME }}.freebsd-x64.node
+          asset_content_type: application/octet-stream
+
+  publish-npm:
+    needs: [create-release, build-and-release, build-freebsd-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          registry-url: 'https://registry.npmjs.org'
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - name: Install dependencies
+        run: yarn install
+      - name: Download release assets
+        run: |
+          # Download all the built binaries from the release
+          curl -L -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${{ github.ref_name }}" \
+            | jq -r '.assets[] | select(.name | endswith(".node")) | .browser_download_url' \
+            | xargs -I {} curl -L -O {}
+      - name: Prepare npm packages
+        run: yarn universal
+      - name: Publish to npm
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+          npm config set provenance true
+          if [[ "${{ steps.get_version.outputs.VERSION }}" == *"beta"* ]]; then
+            npm publish --access public --tag beta
+          elif [[ "${{ steps.get_version.outputs.VERSION }}" == *"alpha"* ]]; then
+            npm publish --access public --tag alpha
+          else
+            npm publish --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
