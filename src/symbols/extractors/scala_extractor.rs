@@ -1,5 +1,5 @@
 //! Scala symbol extractor
-//! 
+//!
 //! Extracts symbols from Scala source code including:
 //! - Classes and traits
 //! - Objects (singleton objects)
@@ -24,8 +24,14 @@ impl SymbolExtractor for ScalaExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -83,19 +89,29 @@ impl ScalaExtractor {
         }
 
         // Pop scope if we added one for this node
-        if matches!(node.kind(), "class_definition" | "trait_definition" | "object_definition" | "case_class_definition") {
+        if matches!(
+            node.kind(),
+            "class_definition" | "trait_definition" | "object_definition" | "case_class_definition"
+        ) {
             scope_stack.pop();
         }
     }
 
-    fn extract_package(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_package(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract package name from qualified identifier
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "qualified_identifier" || child.kind() == "identifier" {
                 let package_name = self.get_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
-                
+
                 symbols.push(Symbol {
                     name: package_name,
                     kind: SymbolKind::Namespace,
@@ -111,7 +127,14 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Scala imports can be: import scala.collection.mutable, import scala.util.{Try, Success, Failure}, import scala.collection._
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -156,13 +179,20 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_import_selectors(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import_selectors(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
                 let import_name = self.get_node_text(&child, source);
                 let location = Location::from_node(&child, file_path);
-                
+
                 symbols.push(Symbol {
                     name: import_name,
                     kind: SymbolKind::Import,
@@ -170,18 +200,28 @@ impl ScalaExtractor {
                     scope_chain: scope_stack.to_owned(),
                     language: LanguageId::Scala,
                     documentation: None,
-                    modifiers: ["import", "selective"].iter().map(|s| s.to_string()).collect(),
+                    modifiers: ["import", "selective"]
+                        .iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                     signature: None,
                 });
             }
         }
     }
 
-    fn extract_class(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push class as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -189,16 +229,16 @@ impl ScalaExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_scala_doc(node, source);
             let modifiers = self.extract_class_modifiers(node, source);
             let signature = self.extract_class_signature(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Scala,
                 documentation,
                 modifiers,
@@ -207,11 +247,18 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_trait(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_trait(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push trait as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -219,15 +266,15 @@ impl ScalaExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_scala_doc(node, source);
             let modifiers = self.extract_trait_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Interface,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Scala,
                 documentation,
                 modifiers,
@@ -236,7 +283,14 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_object(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_object(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -263,7 +317,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Scala,
                 documentation,
                 modifiers,
@@ -272,15 +326,22 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let signature = self.extract_function_signature(node, source);
             let documentation = self.extract_scala_doc(node, source);
             let modifiers = self.extract_function_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Function,
@@ -294,15 +355,22 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let signature = self.extract_method_signature(node, source);
             let documentation = self.extract_scala_doc(node, source);
             let modifiers = self.extract_method_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Method,
@@ -316,15 +384,22 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_val(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_val(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract val declarations (immutable values)
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let mut modifiers = vec!["val".to_string(), "immutable".to_string()];
             modifiers.extend(self.extract_val_modifiers(node, source));
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Constant,
@@ -338,15 +413,22 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_var(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_var(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract var declarations (mutable variables)
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let mut modifiers = vec!["var".to_string(), "mutable".to_string()];
             modifiers.extend(self.extract_var_modifiers(node, source));
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Variable,
@@ -360,7 +442,14 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_type_alias(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_type_alias(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -378,7 +467,14 @@ impl ScalaExtractor {
         }
     }
 
-    fn extract_case_class(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_case_class(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -401,7 +497,7 @@ impl ScalaExtractor {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Scala,
                 documentation,
                 modifiers,
@@ -427,8 +523,10 @@ impl ScalaExtractor {
                     if comment_text.starts_with("/**") && comment_text.ends_with("*/") {
                         // ScalaDoc comment
                         let content = comment_text
-                            .strip_prefix("/**").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/**")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())
@@ -467,20 +565,29 @@ impl ScalaExtractor {
 
     fn extract_class_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["class".to_string()];
-        
+
         // Look for modifiers before the class keyword
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
                 let modifier_text = self.get_node_text(&child, source);
                 for modifier in modifier_text.split_whitespace() {
-                    if matches!(modifier, "abstract" | "final" | "sealed" | "private" | "protected" | "implicit" | "lazy") {
+                    if matches!(
+                        modifier,
+                        "abstract"
+                            | "final"
+                            | "sealed"
+                            | "private"
+                            | "protected"
+                            | "implicit"
+                            | "lazy"
+                    ) {
                         modifiers.push(modifier.to_string());
                     }
                 }
             }
         }
-        
+
         // Check for extends and with clauses
         if node.child_by_field_name("extends").is_some() {
             modifiers.push("extends".to_string());
@@ -488,13 +595,13 @@ impl ScalaExtractor {
         if node.child_by_field_name("with").is_some() {
             modifiers.push("with".to_string());
         }
-        
+
         modifiers
     }
 
     fn extract_trait_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["trait".to_string()];
-        
+
         // Look for modifiers before the trait keyword
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -507,13 +614,13 @@ impl ScalaExtractor {
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_object_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Look for modifiers before the object keyword
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -526,69 +633,78 @@ impl ScalaExtractor {
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_function_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["def".to_string()];
-        
+
         // Look for modifiers before the def keyword
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
                 let modifier_text = self.get_node_text(&child, source);
                 for modifier in modifier_text.split_whitespace() {
-                    if matches!(modifier, "private" | "protected" | "override" | "final" | "implicit") {
+                    if matches!(
+                        modifier,
+                        "private" | "protected" | "override" | "final" | "implicit"
+                    ) {
                         modifiers.push(modifier.to_string());
                     }
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_method_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["def".to_string(), "method".to_string()];
-        
+
         // Look for modifiers before the def keyword
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
                 let modifier_text = self.get_node_text(&child, source);
                 for modifier in modifier_text.split_whitespace() {
-                    if matches!(modifier, "private" | "protected" | "override" | "final" | "implicit" | "abstract") {
+                    if matches!(
+                        modifier,
+                        "private" | "protected" | "override" | "final" | "implicit" | "abstract"
+                    ) {
                         modifiers.push(modifier.to_string());
                     }
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_val_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
                 let modifier_text = self.get_node_text(&child, source);
                 for modifier in modifier_text.split_whitespace() {
-                    if matches!(modifier, "private" | "protected" | "override" | "implicit" | "lazy") {
+                    if matches!(
+                        modifier,
+                        "private" | "protected" | "override" | "implicit" | "lazy"
+                    ) {
                         modifiers.push(modifier.to_string());
                     }
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_var_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifiers" {
@@ -600,37 +716,43 @@ impl ScalaExtractor {
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_class_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
-            
-        let params = node.child_by_field_name("parameters")
+
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_default();
-            
-        let extends_clause = node.child_by_field_name("extends")
+
+        let extends_clause = node
+            .child_by_field_name("extends")
             .map(|e| format!(" extends {}", self.get_node_text(&e, source)))
             .unwrap_or_default();
-            
+
         Some(format!("class {name}{params}{extends_clause}"))
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
-            
-        let params = node.child_by_field_name("parameters")
+
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
-            
-        let return_type = node.child_by_field_name("return_type")
+
+        let return_type = node
+            .child_by_field_name("return_type")
             .map(|rt| format!(": {}", self.get_node_text(&rt, source)))
             .unwrap_or_default();
-            
+
         Some(format!("def {name}{params}{return_type}"))
     }
 
@@ -639,14 +761,17 @@ impl ScalaExtractor {
     }
 
     fn extract_case_class_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
 
-        let extends_clause = node.child_by_field_name("extends")
+        let extends_clause = node
+            .child_by_field_name("extends")
             .map(|e| format!(" extends {}", self.get_node_text(&e, source)))
             .unwrap_or_default();
 
@@ -656,9 +781,9 @@ impl ScalaExtractor {
     fn is_companion_object(&self, object_name: &str, scope_stack: &[Scope]) -> bool {
         // A companion object has the same name as a class in the same scope
         // This is a simplified check - in practice, you'd need to track all symbols in the current scope
-        scope_stack.iter().any(|scope| {
-            scope.name == object_name && scope.kind == SymbolKind::Class
-        })
+        scope_stack
+            .iter()
+            .any(|scope| scope.name == object_name && scope.kind == SymbolKind::Class)
     }
 }
 

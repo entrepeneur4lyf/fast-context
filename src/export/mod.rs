@@ -1,44 +1,44 @@
 //! # Export & Serialization
-//! 
+//!
 //! Provides comprehensive export capabilities for external consumption including
 //! JSON exports, LSP-compatible formats, and embedding-friendly representations.
 
+pub mod embeddings;
 pub mod json;
 pub mod lsp;
-pub mod embeddings;
 pub mod pagination;
 
 // Re-export key types
-pub use json::{JsonExporter, ExportOptions};
-pub use lsp::{LspExporter, LspSymbolInformation, LspLocation};
-pub use embeddings::{EmbeddingExporter, SymbolEmbedding, CodeContext};
+pub use embeddings::{CodeContext, EmbeddingExporter, SymbolEmbedding};
+pub use json::{ExportOptions, JsonExporter};
+pub use lsp::{LspExporter, LspLocation, LspSymbolInformation};
 pub use pagination::{PagedResult, PaginationOptions, ResultFilter};
 
 use crate::analysis::AnalysisResult;
 
 use crate::symbols::{Symbol, SymbolKind};
+use petgraph::visit::EdgeRef;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use petgraph::visit::EdgeRef;
 
 /// Comprehensive export data structure containing all analysis results
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportData {
     /// Project metadata
     pub project: ProjectMetadata,
-    
+
     /// All symbols in the codebase
     pub symbols: Vec<ExportSymbol>,
-    
+
     /// Relationships between symbols
     pub relationships: Vec<ExportRelationship>,
-    
+
     /// File-level information
     pub files: Vec<FileInfo>,
-    
+
     /// Analysis statistics and metrics
     pub metrics: AnalysisMetrics,
-    
+
     /// Export metadata
     pub export_info: ExportMetadata,
 }
@@ -65,22 +65,22 @@ pub struct ExportSymbol {
     pub kind: String,
     pub file_path: String,
     pub language: String,
-    
+
     /// Location information
     pub location: ExportLocation,
-    
+
     /// Symbol metadata
     pub scope_chain: Vec<String>,
     pub modifiers: Vec<String>,
     pub signature: Option<String>,
     pub documentation: Option<String>,
-    
+
     /// Analysis data
     pub complexity: u32,
     pub dependencies: Vec<String>,
     pub dependents: Vec<String>,
     pub related_files: Vec<String>,
-    
+
     /// Additional metadata for external tools
     pub tags: Vec<String>,
     pub confidence: f32,
@@ -129,23 +129,23 @@ pub struct AnalysisMetrics {
     pub total_relationships: usize,
     pub files_analyzed: usize,
     pub languages_detected: Vec<String>,
-    
+
     /// Complexity metrics
     pub average_complexity: f32,
     pub max_complexity: u32,
     pub complexity_distribution: HashMap<String, usize>, // complexity_range -> count
-    
+
     /// Symbol distribution
     pub symbol_distribution: HashMap<String, usize>, // kind -> count
-    
+
     /// Quality metrics
     pub documented_symbols: usize,
     pub test_coverage_estimate: Option<f32>,
     pub technical_debt_score: Option<f32>,
-    
+
     /// Performance metrics
     pub analysis_duration_ms: u64,
-    pub memory_usage_mb: Option<f32>, 
+    pub memory_usage_mb: Option<f32>,
 }
 
 /// Export metadata
@@ -173,7 +173,7 @@ impl UniversalExporter {
             project_root,
         }
     }
-    
+
     /// Create comprehensive export data
     pub fn create_export_data(&self, options: &ExportOptions) -> ExportData {
         let symbols = self.extract_symbols(options);
@@ -181,7 +181,7 @@ impl UniversalExporter {
         let files = self.extract_file_info(options);
         let metrics = self.calculate_metrics();
         let project = self.extract_project_metadata();
-        
+
         ExportData {
             project,
             symbols,
@@ -204,11 +204,11 @@ impl UniversalExporter {
             },
         }
     }
-    
+
     /// Extract symbols for export
     fn extract_symbols(&self, options: &ExportOptions) -> Vec<ExportSymbol> {
         let mut symbols = Vec::new();
-        
+
         for node_idx in self.analysis.graph.node_indices() {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
                 // Apply filters
@@ -217,7 +217,7 @@ impl UniversalExporter {
                         continue;
                     }
                 }
-                
+
                 let export_symbol = ExportSymbol {
                     id: format!("sym_{}", node_idx.index()),
                     name: node.symbol.name.clone(),
@@ -233,7 +233,12 @@ impl UniversalExporter {
                         byte_offset: None, // Could be added from tree-sitter node
                         byte_length: None,
                     },
-                    scope_chain: node.symbol.scope_chain.iter().map(|s| s.name.clone()).collect(),
+                    scope_chain: node
+                        .symbol
+                        .scope_chain
+                        .iter()
+                        .map(|s| s.name.clone())
+                        .collect(),
                     modifiers: node.symbol.modifiers.clone(),
                     signature: node.symbol.signature.clone(),
                     documentation: node.symbol.documentation.clone(),
@@ -244,30 +249,31 @@ impl UniversalExporter {
                     tags: self.generate_symbol_tags(&node.symbol),
                     confidence: 1.0, // Could be calculated based on analysis quality
                 };
-                
+
                 symbols.push(export_symbol);
             }
         }
-        
+
         // Sort symbols for consistent export
         symbols.sort_by(|a, b| {
-            a.file_path.cmp(&b.file_path)
+            a.file_path
+                .cmp(&b.file_path)
                 .then_with(|| a.location.start_line.cmp(&b.location.start_line))
                 .then_with(|| a.name.cmp(&b.name))
         });
-        
+
         // Apply limit if specified
         if let Some(limit) = options.max_symbols {
             symbols.truncate(limit);
         }
-        
+
         symbols
     }
-    
+
     /// Extract relationships for export
     fn extract_relationships(&self, _options: &ExportOptions) -> Vec<ExportRelationship> {
         let mut relationships = Vec::new();
-        
+
         for edge_idx in self.analysis.graph.edge_indices() {
             if let Some((source_idx, target_idx)) = self.analysis.graph.edge_endpoints(edge_idx) {
                 if let Some(edge_data) = self.analysis.graph.edge_weight(edge_idx) {
@@ -287,19 +293,19 @@ impl UniversalExporter {
                         },
                         context: None, // Could extract code snippet
                     };
-                    
+
                     relationships.push(relationship);
                 }
             }
         }
-        
+
         relationships
     }
-    
+
     /// Extract file information
     fn extract_file_info(&self, _options: &ExportOptions) -> Vec<FileInfo> {
         let mut file_map: HashMap<String, FileInfo> = HashMap::new();
-        
+
         // Aggregate information by file
         for node_idx in self.analysis.graph.node_indices() {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
@@ -315,41 +321,41 @@ impl UniversalExporter {
                         content_hash: String::new(),
                     }
                 });
-                
+
                 entry.symbol_count += 1;
                 entry.complexity_score += node.metrics.cyclomatic_complexity as f32;
             }
         }
-        
+
         // Finalize metrics
         for file_info in file_map.values_mut() {
             if file_info.symbol_count > 0 {
                 file_info.complexity_score /= file_info.symbol_count as f32;
             }
         }
-        
+
         let mut files: Vec<FileInfo> = file_map.into_values().collect();
         files.sort_by(|a, b| a.path.cmp(&b.path));
-        
+
         files
     }
-    
+
     /// Calculate analysis metrics
     fn calculate_metrics(&self) -> AnalysisMetrics {
         let total_symbols = self.analysis.symbol_count;
         let total_relationships = self.analysis.relationship_count;
-        
+
         let mut complexity_sum = 0u64;
         let mut max_complexity = 0u32;
         let mut complexity_distribution = HashMap::new();
         let mut symbol_distribution = HashMap::new();
         let mut documented_count = 0;
-        
+
         for node in self.analysis.graph.node_weights() {
             let complexity = node.metrics.cyclomatic_complexity;
             complexity_sum += complexity as u64;
             max_complexity = max_complexity.max(complexity);
-            
+
             // Complexity distribution
             let complexity_range = match complexity {
                 0..=5 => "Low (0-5)",
@@ -357,29 +363,36 @@ impl UniversalExporter {
                 11..=20 => "High (11-20)",
                 _ => "Very High (20+)",
             };
-            *complexity_distribution.entry(complexity_range.to_string()).or_insert(0) += 1;
-            
+            *complexity_distribution
+                .entry(complexity_range.to_string())
+                .or_insert(0) += 1;
+
             // Symbol distribution
             let kind_str = format!("{:?}", node.symbol.kind);
             *symbol_distribution.entry(kind_str).or_insert(0) += 1;
-            
+
             // Documentation count
             if node.symbol.documentation.is_some() {
                 documented_count += 1;
             }
         }
-        
+
         let average_complexity = if total_symbols > 0 {
             complexity_sum as f32 / total_symbols as f32
         } else {
             0.0
         };
-        
+
         AnalysisMetrics {
             total_symbols,
             total_relationships,
             files_analyzed: self.analysis.file_count,
-            languages_detected: self.analysis.languages.iter().map(|lang| format!("{lang:?}")).collect(),
+            languages_detected: self
+                .analysis
+                .languages
+                .iter()
+                .map(|lang| format!("{lang:?}"))
+                .collect(),
             average_complexity,
             max_complexity,
             complexity_distribution,
@@ -387,11 +400,11 @@ impl UniversalExporter {
             documented_symbols: documented_count,
             test_coverage_estimate: None, // Could be calculated
             technical_debt_score: None,   // Could be calculated
-            analysis_duration_ms: 0, // Would need to be tracked during analysis
+            analysis_duration_ms: 0,      // Would need to be tracked during analysis
             memory_usage_mb: None,
         }
     }
-    
+
     /// Extract project metadata
     fn extract_project_metadata(&self) -> ProjectMetadata {
         ProjectMetadata {
@@ -401,7 +414,12 @@ impl UniversalExporter {
                 .map(|s| s.to_string()),
             version: None, // Could be extracted from package files
             description: None,
-            languages: self.analysis.languages.iter().map(|lang| format!("{lang:?}")).collect(),
+            languages: self
+                .analysis
+                .languages
+                .iter()
+                .map(|lang| format!("{lang:?}"))
+                .collect(),
             total_files: self.analysis.file_count,
             total_symbols: self.analysis.symbol_count,
             root_path: self.project_root.clone(),
@@ -411,7 +429,7 @@ impl UniversalExporter {
                 .as_secs(),
         }
     }
-    
+
     /// Helper methods
     fn should_include_symbol(&self, symbol: &Symbol, filters: &ResultFilter) -> bool {
         // Apply language filter
@@ -421,7 +439,7 @@ impl UniversalExporter {
                 return false;
             }
         }
-        
+
         // Apply symbol kind filter
         if let Some(ref kinds) = filters.symbol_kinds {
             let kind_str = format!("{:?}", symbol.kind);
@@ -429,21 +447,23 @@ impl UniversalExporter {
                 return false;
             }
         }
-        
+
         // Apply file pattern filter
         if let Some(ref patterns) = filters.file_patterns {
-            if !patterns.iter().any(|pattern| {
-                symbol.location.file_path.contains(pattern)
-            }) {
+            if !patterns
+                .iter()
+                .any(|pattern| symbol.location.file_path.contains(pattern))
+            {
                 return false;
             }
         }
-        
+
         true
     }
-    
+
     fn get_symbol_dependencies(&self, node_idx: petgraph::graph::NodeIndex) -> Vec<String> {
-        self.analysis.graph
+        self.analysis
+            .graph
             .edges_directed(node_idx, petgraph::Outgoing)
             .filter_map(|edge| {
                 let target_node = self.analysis.graph.node_weight(edge.target())?;
@@ -451,9 +471,10 @@ impl UniversalExporter {
             })
             .collect()
     }
-    
+
     fn get_symbol_dependents(&self, node_idx: petgraph::graph::NodeIndex) -> Vec<String> {
-        self.analysis.graph
+        self.analysis
+            .graph
             .edges_directed(node_idx, petgraph::Incoming)
             .filter_map(|edge| {
                 let source_node = self.analysis.graph.node_weight(edge.source())?;
@@ -461,35 +482,43 @@ impl UniversalExporter {
             })
             .collect()
     }
-    
+
     fn get_related_files(&self, node_idx: petgraph::graph::NodeIndex) -> Vec<String> {
         let mut related_files = std::collections::HashSet::new();
-        
+
         // Add files from dependencies
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 related_files.insert(target_node.file_path.clone());
             }
         }
-        
+
         // Add files from dependents
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Incoming) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Incoming)
+        {
             if let Some(source_node) = self.analysis.graph.node_weight(edge.source()) {
                 related_files.insert(source_node.file_path.clone());
             }
         }
-        
+
         // Remove the symbol's own file
         if let Some(node) = self.analysis.graph.node_weight(node_idx) {
             related_files.remove(&node.file_path);
         }
-        
+
         related_files.into_iter().collect()
     }
-    
+
     fn generate_symbol_tags(&self, symbol: &Symbol) -> Vec<String> {
         let mut tags = Vec::new();
-        
+
         // Add kind-based tags
         match symbol.kind {
             SymbolKind::Function => tags.push("function".to_string()),
@@ -500,25 +529,25 @@ impl UniversalExporter {
             SymbolKind::Variable => tags.push("variable".to_string()),
             _ => {}
         }
-        
+
         // Add modifier-based tags
         for modifier in &symbol.modifiers {
             tags.push(modifier.clone());
         }
-        
+
         // Add language-specific tags
         tags.push(format!("{:?}", symbol.language).to_lowercase());
-        
+
         // Add scope-based tags
         if !symbol.scope_chain.is_empty() {
             tags.push("scoped".to_string());
         }
-        
+
         // Add documentation tag
         if symbol.documentation.is_some() {
             tags.push("documented".to_string());
         }
-        
+
         tags
     }
 }
@@ -526,9 +555,9 @@ impl UniversalExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::symbols::{Symbol, SymbolKind, Location};
+    use crate::analysis::{CodeMetrics, CodeNode};
     use crate::parsers::LanguageId;
-    use crate::analysis::{CodeNode, CodeMetrics};
+    use crate::symbols::{Location, Symbol, SymbolKind};
     use petgraph::Graph;
 
     fn create_test_symbol(name: &str, kind: SymbolKind) -> Symbol {
@@ -554,13 +583,13 @@ mod tests {
     fn test_export_data_creation() {
         let mut graph = Graph::new();
         let symbol = create_test_symbol("test_function", SymbolKind::Function);
-        
+
         let node_data = CodeNode {
             symbol,
             file_path: "test.rs".to_string(),
             metrics: CodeMetrics::default(),
         };
-        
+
         graph.add_node(node_data);
 
         let analysis = AnalysisResult {
@@ -574,7 +603,7 @@ mod tests {
         let exporter = UniversalExporter::new(analysis, "/test/project".to_string());
         let options = ExportOptions::default();
         let export_data = exporter.create_export_data(&options);
-        
+
         assert_eq!(export_data.symbols.len(), 1);
         assert_eq!(export_data.symbols[0].name, "test_function");
         assert_eq!(export_data.symbols[0].kind, "Function");
@@ -585,6 +614,6 @@ mod tests {
     #[test]
     fn test_symbol_filtering() {
         // Simple test to verify basic functionality
-        assert!(true, "Export module test placeholder");
+        // Export module test placeholder - actual tests would go here
     }
 }

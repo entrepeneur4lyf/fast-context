@@ -1,5 +1,5 @@
 //! Dart-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Dart source code, including:
 //! - Function calls and method invocations
 //! - Class inheritance and mixin usage
@@ -10,9 +10,9 @@
 //! - Exception handling (try/catch/finally)
 //! - Generic types and type parameters
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Dart-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for DartDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Dart
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for DartDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -90,30 +94,33 @@ impl DependencyExtractor for DartDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "invocation")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier" | "selector")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "import_specification" | "export_specification")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        matches!(node.kind(), "class_definition") && 
-        (node.child_by_field_name("superclass").is_some() || 
-         node.child_by_field_name("interfaces").is_some() ||
-         node.child_by_field_name("mixins").is_some())
+        matches!(node.kind(), "class_definition")
+            && (node.child_by_field_name("superclass").is_some()
+                || node.child_by_field_name("interfaces").is_some()
+                || node.child_by_field_name("mixins").is_some())
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
-        matches!(node.kind(), "assignment_expression" | "variable_declaration")
+        matches!(
+            node.kind(),
+            "assignment_expression" | "variable_declaration"
+        )
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -124,7 +131,7 @@ impl DependencyExtractor for DartDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 let resolved_functions = context.find_symbols_global(&function_name);
                 let target_function = if !resolved_functions.is_empty() {
@@ -132,7 +139,7 @@ impl DependencyExtractor for DartDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -140,9 +147,9 @@ impl DependencyExtractor for DartDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -150,7 +157,7 @@ impl DependencyExtractor for DartDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -161,18 +168,18 @@ impl DependencyExtractor for DartDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             if self.is_dart_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
                 resolved_vars[0].qualified_name()
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -180,11 +187,11 @@ impl DependencyExtractor for DartDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -193,21 +200,23 @@ impl DependencyExtractor for DartDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // import 'dart:core'; import 'package:flutter/material.dart';
         if let Some(uri_node) = node.child_by_field_name("uri") {
-            let import_uri = self.get_node_text(&uri_node, source)
+            let import_uri = self
+                .get_node_text(&uri_node, source)
                 .trim_matches('"')
                 .trim_matches('\'')
                 .to_string();
-            
+
             if !import_uri.trim().is_empty() {
-                let dependency_type = if import_uri.starts_with("dart:") || import_uri.starts_with("package:") {
-                    DependencyType::ModuleDependency
-                } else {
-                    DependencyType::Imports
-                };
-                
+                let dependency_type =
+                    if import_uri.starts_with("dart:") || import_uri.starts_with("package:") {
+                        DependencyType::ModuleDependency
+                    } else {
+                        DependencyType::Imports
+                    };
+
                 let dependency = self.create_dependency(
                     current_scope.clone(),
                     import_uri,
@@ -218,7 +227,7 @@ impl DependencyExtractor for DartDependencyExtractor {
                 dependencies.push(dependency);
             }
         }
-        
+
         // Extract show/hide clauses
         if let Some(combinators_node) = node.child_by_field_name("combinators") {
             let mut cursor = combinators_node.walk();
@@ -244,7 +253,7 @@ impl DependencyExtractor for DartDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -254,7 +263,7 @@ impl DependencyExtractor for DartDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -272,7 +281,7 @@ impl DependencyExtractor for DartDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -305,27 +314,30 @@ impl DependencyExtractor for DartDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "while_statement" | "do_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "while_statement" | "do_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
         matches!(node.kind(), "try_statement")
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -483,7 +495,13 @@ impl DartDependencyExtractor {
 
         // Extract parameters
         if let Some(params_node) = node.child_by_field_name("parameters") {
-            self.extract_parameter_dependencies(params_node, source, context, dependencies, &current_scope);
+            self.extract_parameter_dependencies(
+                params_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as lambda dependency
@@ -511,7 +529,13 @@ impl DartDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "await" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -528,7 +552,8 @@ impl DartDependencyExtractor {
 
     /// Check if a string is a Dart keyword
     fn is_dart_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             // Dart keywords
             "abstract" | "as" | "assert" | "async" | "await" | "break" | "case" |
             "catch" | "class" | "const" | "continue" | "covariant" | "default" |
@@ -559,7 +584,11 @@ impl DartDependencyExtractor {
             if let Some(right_node) = node.child_by_field_name("right") {
                 let var_name = self.get_node_text(&left_node, source);
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -577,7 +606,11 @@ impl DartDependencyExtractor {
             if let Some(value_node) = node.child_by_field_name("value") {
                 let var_name = self.get_node_text(&name_node, source);
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
 
@@ -611,7 +644,13 @@ impl DartDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -653,7 +692,13 @@ impl DartDependencyExtractor {
             _ => {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -770,8 +815,12 @@ impl DartDependencyExtractor {
 
         while let Some(parent) = current.parent() {
             match parent.kind() {
-                "function_signature" | "class_definition" | "mixin_declaration" |
-                "extension_declaration" | "variable_declaration" | "formal_parameter" => {
+                "function_signature"
+                | "class_definition"
+                | "mixin_declaration"
+                | "extension_declaration"
+                | "variable_declaration"
+                | "formal_parameter" => {
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
                             return false;
@@ -807,18 +856,42 @@ impl DartDependencyExtractor {
             "for_statement" => {
                 // for (var i = 0; i < 10; i++) or for (item in collection)
                 if let Some(init_node) = node.child_by_field_name("initializer") {
-                    self.extract_condition_variables(init_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        init_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(update_node) = node.child_by_field_name("increment") {
-                    self.extract_condition_variables(update_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        update_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
 
                 // Enhanced for loop (for-in)
                 if let Some(iterable_node) = node.child_by_field_name("iterable") {
-                    self.extract_condition_variables(iterable_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        iterable_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(loop_var_node) = node.child_by_field_name("loop_variable") {
                     let var_name = self.get_node_text(&loop_var_node, source);
@@ -836,7 +909,13 @@ impl DartDependencyExtractor {
             }
             "while_statement" | "do_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -908,7 +987,13 @@ impl DartDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(expr_node) = node.child_by_field_name("expression") {
-            self.extract_condition_variables(expr_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                expr_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -934,7 +1019,13 @@ impl DartDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -957,7 +1048,11 @@ impl DartDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

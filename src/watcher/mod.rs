@@ -1,10 +1,10 @@
 //! # File System Integration
-//! 
+//!
 //! Real-time file monitoring and incremental graph updates for live coding assistance.
 //! Integrates with the intelligent caching system and code graph builder for seamless updates.
 
-use crate::cache::AdaptiveCacheManager;
 use crate::analysis::CodeGraphBuilder;
+use crate::cache::AdaptiveCacheManager;
 use crate::parsers::ParserFactory;
 use crate::symbols::SymbolExtractorFactory;
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -51,11 +51,15 @@ pub struct WatcherConfig {
 impl Default for WatcherConfig {
     fn default() -> Self {
         let mut watched_extensions = HashSet::new();
-        watched_extensions.extend([
-            "rs", "py", "js", "ts", "java", "go", "cs", "swift", "m", "mm",
-            "php", "rb", "scala", "zig", "dart", "lua", "sh", "bash",
-            "css", "html", "xml", "json", "yaml", "yml", "md"
-        ].iter().map(|s| s.to_string()));
+        watched_extensions.extend(
+            [
+                "rs", "py", "js", "ts", "java", "go", "cs", "swift", "m", "mm", "php", "rb",
+                "scala", "zig", "dart", "lua", "sh", "bash", "css", "html", "xml", "json", "yaml",
+                "yml", "md",
+            ]
+            .iter()
+            .map(|s| s.to_string()),
+        );
 
         Self {
             watch_dirs: vec![PathBuf::from(".")],
@@ -133,18 +137,19 @@ impl CodebaseWatcher {
         // Spawn background thread to process file system events
         thread::spawn(move || {
             let mut last_batch_time = Instant::now();
-            
+
             while let Ok(event) = rx.recv() {
                 if let Some(changes) = Self::process_fs_event(event, &config_clone) {
                     let mut debouncer = debouncer_clone.lock().unwrap();
-                    
+
                     for change in changes {
                         debouncer.add_change(change);
                     }
 
                     // Check if we should flush the batch
-                    if debouncer.should_flush() || 
-                       last_batch_time.elapsed() > config_clone.debounce_duration {
+                    if debouncer.should_flush()
+                        || last_batch_time.elapsed() > config_clone.debounce_duration
+                    {
                         let batched_changes = debouncer.flush();
                         if !batched_changes.is_empty() {
                             let _ = change_sender_clone.send(batched_changes);
@@ -276,7 +281,7 @@ impl ChangeDebouncer {
     /// Add a file change to the debouncer
     fn add_change(&mut self, change: FileChange) {
         self.last_change_time = Some(change.timestamp);
-        
+
         // For the same file, keep only the latest change
         // But handle renames specially
         match &change.change_type {
@@ -336,19 +341,25 @@ impl WatcherStats {
 
     pub fn record_change(&mut self, change: &FileChange) {
         self.total_changes += 1;
-        
+
         // Count by change type
         let type_key = match &change.change_type {
             ChangeType::Created => "created",
-            ChangeType::Modified => "modified", 
+            ChangeType::Modified => "modified",
             ChangeType::Deleted => "deleted",
             ChangeType::Renamed { .. } => "renamed",
         };
-        *self.changes_by_type.entry(type_key.to_string()).or_insert(0) += 1;
+        *self
+            .changes_by_type
+            .entry(type_key.to_string())
+            .or_insert(0) += 1;
 
         // Count by file extension
         if let Some(ext) = change.path.extension().and_then(|e| e.to_str()) {
-            *self.changes_by_extension.entry(ext.to_string()).or_insert(0) += 1;
+            *self
+                .changes_by_extension
+                .entry(ext.to_string())
+                .or_insert(0) += 1;
         }
     }
 }
@@ -377,30 +388,39 @@ mod tests {
     #[test]
     fn test_should_watch_file() {
         let config = WatcherConfig::default();
-        
+
         // Should watch Rust files
-        assert!(CodebaseWatcher::should_watch_file(Path::new("src/main.rs"), &config));
-        
+        assert!(CodebaseWatcher::should_watch_file(
+            Path::new("src/main.rs"),
+            &config
+        ));
+
         // Should not watch files in ignored directories
-        assert!(!CodebaseWatcher::should_watch_file(Path::new("node_modules/package.json"), &config));
-        
+        assert!(!CodebaseWatcher::should_watch_file(
+            Path::new("node_modules/package.json"),
+            &config
+        ));
+
         // Should not watch files without extensions in watched list
-        assert!(!CodebaseWatcher::should_watch_file(Path::new("README"), &config));
+        assert!(!CodebaseWatcher::should_watch_file(
+            Path::new("README"),
+            &config
+        ));
     }
 
     #[test]
     fn test_change_debouncer() {
         let mut debouncer = ChangeDebouncer::new(Duration::from_millis(100), 5);
-        
+
         let change = FileChange {
             path: PathBuf::from("test.rs"),
             change_type: ChangeType::Modified,
             timestamp: Instant::now(),
         };
-        
+
         debouncer.add_change(change);
         assert_eq!(debouncer.pending_changes.len(), 1);
-        
+
         let flushed = debouncer.flush();
         assert_eq!(flushed.len(), 1);
         assert_eq!(debouncer.pending_changes.len(), 0);
@@ -409,13 +429,13 @@ mod tests {
     #[test]
     fn test_watcher_stats() {
         let mut stats = WatcherStats::new();
-        
+
         let change = FileChange {
             path: PathBuf::from("test.rs"),
             change_type: ChangeType::Modified,
             timestamp: Instant::now(),
         };
-        
+
         stats.record_change(&change);
         assert_eq!(stats.total_changes, 1);
         assert_eq!(stats.changes_by_type.get("modified"), Some(&1));
@@ -426,17 +446,19 @@ mod tests {
     async fn test_file_watcher_integration() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("test.rs");
-        
-        let mut config = WatcherConfig::default();
-        config.watch_dirs = vec![temp_dir.path().to_path_buf()];
-        config.debounce_duration = Duration::from_millis(100);
-        
+
+        let config = WatcherConfig {
+            watch_dirs: vec![temp_dir.path().to_path_buf()],
+            debounce_duration: Duration::from_millis(100),
+            ..Default::default()
+        };
+
         let watcher = CodebaseWatcher::new(config).unwrap();
         let mut receiver = watcher.subscribe();
-        
+
         // Create a test file
         fs::write(&test_file, "fn main() {}").unwrap();
-        
+
         // Wait for the change event
         tokio::time::timeout(Duration::from_secs(2), async {
             while let Ok(changes) = receiver.recv().await {
@@ -447,6 +469,8 @@ mod tests {
                     break;
                 }
             }
-        }).await.expect("Should receive file change event");
+        })
+        .await
+        .expect("Should receive file change event");
     }
 }

@@ -1,5 +1,5 @@
 //! C# symbol extractor
-//! 
+//!
 //! Extracts symbols from C# source code including:
 //! - Classes, interfaces, and enums
 //! - Methods and constructors
@@ -23,8 +23,14 @@ impl SymbolExtractor for CSharpExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -76,12 +82,22 @@ impl CSharpExtractor {
         }
 
         // Pop scope if we added one for this node
-        if matches!(node.kind(), "namespace_declaration" | "class_declaration" | "interface_declaration") {
+        if matches!(
+            node.kind(),
+            "namespace_declaration" | "class_declaration" | "interface_declaration"
+        ) {
             scope_stack.pop();
         }
     }
 
-    fn extract_using_statement(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_using_statement(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // C# using directive: using System; or using System.Collections.Generic;
         // Look for identifier or qualified_name children since C# doesn't use field names
         let mut cursor = node.walk();
@@ -89,7 +105,7 @@ impl CSharpExtractor {
             if child.kind() == "identifier" || child.kind() == "qualified_name" {
                 let using_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 symbols.push(Symbol {
                     name: using_name,
                     kind: SymbolKind::Import,
@@ -105,14 +121,21 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_namespace(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_namespace(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // Look for qualified_name child since C# doesn't use field names for namespace
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "qualified_name" || child.kind() == "identifier" {
                 let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 // Push namespace as scope for nested items
                 let scope = Scope {
                     name: name.clone(),
@@ -120,12 +143,12 @@ impl CSharpExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Namespace,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::CSharp,
                     documentation: None,
                     modifiers: vec!["namespace".to_string()],
@@ -136,15 +159,25 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_class(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             // Extract modifiers (public, private, static, etc.)
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_xml_doc(node, source);
-            
+
             // Push class as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -152,12 +185,12 @@ impl CSharpExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::CSharp,
                 documentation,
                 modifiers,
@@ -166,14 +199,24 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_interface(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_interface(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_xml_doc(node, source);
-            
+
             // Push interface as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -181,12 +224,12 @@ impl CSharpExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Interface,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::CSharp,
                 documentation,
                 modifiers,
@@ -195,14 +238,24 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_enum(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_enum(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_xml_doc(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Enum,
@@ -216,15 +269,25 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_xml_doc(node, source);
             let signature = self.extract_method_signature(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Method,
@@ -238,14 +301,24 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_constructor(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_constructor(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let signature = self.extract_constructor_signature(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Method,
@@ -259,15 +332,25 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_property(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let mut modifiers = self.extract_modifiers(node, source);
             modifiers.push("property".to_string());
             let documentation = self.extract_xml_doc(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Field, // Properties are treated as fields
@@ -281,18 +364,28 @@ impl CSharpExtractor {
         }
     }
 
-    fn extract_field(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_field(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // C# field declarations can contain multiple variables
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&child, file_path);
-                    
+
                     let mut modifiers = self.extract_modifiers(node, source);
                     modifiers.push("field".to_string());
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Field,
@@ -310,7 +403,7 @@ impl CSharpExtractor {
 
     fn extract_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Look for modifier lists that typically appear before declarations
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -320,7 +413,7 @@ impl CSharpExtractor {
                 }
             }
         }
-        
+
         modifiers
     }
 
@@ -404,28 +497,35 @@ impl CSharpExtractor {
 
     fn extract_method_signature(&self, node: &Node, source: &str) -> Option<String> {
         // Extract method signature including return type, name, and parameters
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-            
-        let return_type = node.child_by_field_name("type")
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
+        let return_type = node
+            .child_by_field_name("type")
             .and_then(|t| t.utf8_text(source.as_bytes()).ok())
             .unwrap_or("void");
-            
-        let params = node.child_by_field_name("parameters")
+
+        let params = node
+            .child_by_field_name("parameters")
             .and_then(|p| p.utf8_text(source.as_bytes()).ok())
             .unwrap_or("()");
-            
+
         Some(format!("{return_type} {name}{params}"))
     }
 
     fn extract_constructor_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-            
-        let params = node.child_by_field_name("parameters")
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
+        let params = node
+            .child_by_field_name("parameters")
             .and_then(|p| p.utf8_text(source.as_bytes()).ok())
             .unwrap_or("()");
-            
+
         Some(format!("{name}{params}"))
     }
 }

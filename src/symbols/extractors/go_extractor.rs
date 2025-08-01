@@ -1,5 +1,5 @@
 //! Go symbol extractor
-//! 
+//!
 //! Extracts symbols from Go source code including:
 //! - Package declarations and imports
 //! - Functions and methods
@@ -23,8 +23,14 @@ impl SymbolExtractor for GoExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -44,9 +50,10 @@ impl GoExtractor {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "package_identifier" {
-                        let package_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                        let package_name =
+                            child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                         let location = Location::from_node(&node, file_path);
-                        
+
                         symbols.push(Symbol {
                             name: package_name,
                             kind: SymbolKind::Namespace,
@@ -66,12 +73,15 @@ impl GoExtractor {
             }
             "function_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     let signature = self.extract_function_signature(&node, source);
                     let documentation = self.extract_go_doc(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Function,
@@ -86,12 +96,15 @@ impl GoExtractor {
             }
             "method_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     let signature = self.extract_method_signature(&node, source);
                     let documentation = self.extract_go_doc(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Method,
@@ -123,13 +136,20 @@ impl GoExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Go imports can have different structures:
         // import "package"
         // import alias "package"
         // import . "package"
         // import _ "package"
-        
+
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "import_spec_list" {
@@ -137,7 +157,13 @@ impl GoExtractor {
                 let mut list_cursor = child.walk();
                 for spec_node in child.children(&mut list_cursor) {
                     if spec_node.kind() == "import_spec" {
-                        self.process_import_spec(&spec_node, source, file_path, symbols, scope_stack);
+                        self.process_import_spec(
+                            &spec_node,
+                            source,
+                            file_path,
+                            symbols,
+                            scope_stack,
+                        );
                     }
                 }
             } else if child.kind() == "import_spec" {
@@ -146,36 +172,51 @@ impl GoExtractor {
             }
         }
     }
-    
-    fn process_import_spec(&self, spec_node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+
+    fn process_import_spec(
+        &self,
+        spec_node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let mut import_path = String::new();
         let mut alias = None;
         let mut is_dot_import = false;
         let mut is_blank_import = false;
-        
+
         let mut spec_cursor = spec_node.walk();
         for spec_child in spec_node.children(&mut spec_cursor) {
             match spec_child.kind() {
                 "package_identifier" => {
-                    alias = Some(spec_child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
+                    alias = Some(
+                        spec_child
+                            .utf8_text(source.as_bytes())
+                            .unwrap_or("")
+                            .to_string(),
+                    );
                 }
                 "dot" => is_dot_import = true,
                 "blank_identifier" => is_blank_import = true,
                 "interpreted_string_literal" | "raw_string_literal" => {
-                    import_path = spec_child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    import_path = spec_child
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     // Remove quotes
                     if import_path.starts_with('"') && import_path.ends_with('"') {
-                        import_path = import_path[1..import_path.len()-1].to_string();
+                        import_path = import_path[1..import_path.len() - 1].to_string();
                     }
                 }
                 _ => {}
             }
         }
-        
+
         if !import_path.is_empty() {
             let location = Location::from_node(spec_node, file_path);
             let mut modifiers = vec!["import".to_string()];
-            
+
             if is_dot_import {
                 modifiers.push("dot".to_string());
             }
@@ -185,12 +226,16 @@ impl GoExtractor {
             if alias.is_some() {
                 modifiers.push("aliased".to_string());
             }
-            
+
             let import_name = alias.unwrap_or_else(|| {
                 // Extract package name from path
-                import_path.split('/').next_back().unwrap_or(&import_path).to_string()
+                import_path
+                    .split('/')
+                    .next_back()
+                    .unwrap_or(&import_path)
+                    .to_string()
             });
-            
+
             symbols.push(Symbol {
                 name: import_name,
                 kind: SymbolKind::Import,
@@ -205,60 +250,86 @@ impl GoExtractor {
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-            
-        let params = node.child_by_field_name("parameters")
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
+        let params = node
+            .child_by_field_name("parameters")
             .and_then(|p| p.utf8_text(source.as_bytes()).ok())
             .unwrap_or("()");
-            
-        let result = node.child_by_field_name("result")
+
+        let result = node
+            .child_by_field_name("result")
             .and_then(|r| r.utf8_text(source.as_bytes()).ok())
             .unwrap_or("");
-            
+
         Some(format!("func {name}{params} {result}").trim().to_string())
     }
 
     fn extract_method_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-            
-        let receiver = node.child_by_field_name("receiver")
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
+        let receiver = node
+            .child_by_field_name("receiver")
             .and_then(|r| r.utf8_text(source.as_bytes()).ok())
             .unwrap_or("");
-            
-        let params = node.child_by_field_name("parameters")
+
+        let params = node
+            .child_by_field_name("parameters")
             .and_then(|p| p.utf8_text(source.as_bytes()).ok())
             .unwrap_or("()");
-            
-        let result = node.child_by_field_name("result")
+
+        let result = node
+            .child_by_field_name("result")
             .and_then(|r| r.utf8_text(source.as_bytes()).ok())
             .unwrap_or("");
-            
-        Some(format!("func {receiver}{name}{params} {result}").trim().to_string())
+
+        Some(
+            format!("func {receiver}{name}{params} {result}")
+                .trim()
+                .to_string(),
+        )
     }
 
-    fn extract_type_declarations(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_type_declarations(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "type_spec" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&child, file_path);
-                    
+
                     // Determine the type kind based on the type definition
-                    let (kind, modifiers) = if let Some(type_node) = child.child_by_field_name("type") {
-                        match type_node.kind() {
-                            "struct_type" => (SymbolKind::Struct, vec!["struct".to_string()]),
-                            "interface_type" => (SymbolKind::Interface, vec!["interface".to_string()]),
-                            _ => (SymbolKind::Type, vec!["type".to_string()]),
-                        }
-                    } else {
-                        (SymbolKind::Type, vec!["type".to_string()])
-                    };
-                    
+                    let (kind, modifiers) =
+                        if let Some(type_node) = child.child_by_field_name("type") {
+                            match type_node.kind() {
+                                "struct_type" => (SymbolKind::Struct, vec!["struct".to_string()]),
+                                "interface_type" => {
+                                    (SymbolKind::Interface, vec!["interface".to_string()])
+                                }
+                                _ => (SymbolKind::Type, vec!["type".to_string()]),
+                            }
+                        } else {
+                            (SymbolKind::Type, vec!["type".to_string()])
+                        };
+
                     let documentation = self.extract_go_doc(&child, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind,
@@ -274,7 +345,14 @@ impl GoExtractor {
         }
     }
 
-    fn extract_var_declarations(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_var_declarations(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "var_spec_list" {
@@ -291,15 +369,25 @@ impl GoExtractor {
             }
         }
     }
-    
-    fn process_var_spec(&self, spec_node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+
+    fn process_var_spec(
+        &self,
+        spec_node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract variable names from the var_spec
         let mut var_cursor = spec_node.walk();
         for var_child in spec_node.children(&mut var_cursor) {
             if var_child.kind() == "identifier" {
-                let name = var_child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let name = var_child
+                    .utf8_text(source.as_bytes())
+                    .unwrap_or("")
+                    .to_string();
                 let location = Location::from_node(&var_child, file_path);
-                
+
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Variable,
@@ -314,7 +402,14 @@ impl GoExtractor {
         }
     }
 
-    fn extract_const_declarations(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_const_declarations(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "const_spec" {
@@ -322,9 +417,12 @@ impl GoExtractor {
                 let mut const_cursor = child.walk();
                 for const_child in child.children(&mut const_cursor) {
                     if const_child.kind() == "identifier" {
-                        let name = const_child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                        let name = const_child
+                            .utf8_text(source.as_bytes())
+                            .unwrap_or("")
+                            .to_string();
                         let location = Location::from_node(&const_child, file_path);
-                        
+
                         symbols.push(Symbol {
                             name,
                             kind: SymbolKind::Constant,
@@ -361,8 +459,10 @@ impl GoExtractor {
                     } else if comment_text.starts_with("/*") && comment_text.ends_with("*/") {
                         // Block comment
                         let content = comment_text
-                            .strip_prefix("/*").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/*")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())

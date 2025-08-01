@@ -1,5 +1,5 @@
 //! CSS symbol extractor
-//! 
+//!
 //! Extracts symbols from CSS source code including:
 //! - Selectors (class, id, element, attribute, pseudo)
 //! - Rules and at-rules
@@ -23,8 +23,14 @@ impl SymbolExtractor for CssExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -85,17 +91,27 @@ impl CssExtractor {
         }
 
         // Pop scope if we added one for this node
-        if matches!(node.kind(), "rule_set" | "media_statement" | "keyframes_statement" | "supports_statement") {
+        if matches!(
+            node.kind(),
+            "rule_set" | "media_statement" | "keyframes_statement" | "supports_statement"
+        ) {
             scope_stack.pop();
         }
     }
 
-    fn extract_rule_set(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_rule_set(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // Extract selectors from the rule set
         if let Some(selectors) = node.child_by_field_name("selectors") {
             let selector_text = self.get_node_text(&selectors, source);
             let location = Location::from_node(&selectors, file_path);
-            
+
             // Push rule as scope for properties
             let scope = Scope {
                 name: selector_text.clone(),
@@ -103,7 +119,7 @@ impl CssExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             // Extract individual selectors
             let mut cursor = selectors.walk();
             for child in selectors.children(&mut cursor) {
@@ -111,9 +127,9 @@ impl CssExtractor {
                     let selector = self.get_node_text(&child, source).trim().to_string();
                     if !selector.is_empty() {
                         let location = Location::from_node(&child, file_path);
-                        
+
                         let mut modifiers = vec!["selector".to_string()];
-                        
+
                         // Determine selector type
                         if selector.starts_with('.') {
                             modifiers.push("class".to_string());
@@ -126,12 +142,12 @@ impl CssExtractor {
                         } else {
                             modifiers.push("element".to_string());
                         }
-                        
+
                         symbols.push(Symbol {
                             name: selector,
                             kind: SymbolKind::Class,
                             location,
-                            scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                            scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                             language: LanguageId::CSS,
                             documentation: self.extract_css_doc(node, source),
                             modifiers,
@@ -143,17 +159,26 @@ impl CssExtractor {
         }
     }
 
-    fn extract_at_rule(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_at_rule(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let rule_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         // Extract at-rule name
         if let Some(name_start) = rule_text.find('@') {
-            if let Some(name_end) = rule_text[name_start + 1..].find(|c: char| c.is_whitespace() || c == '{' || c == ';') {
+            if let Some(name_end) = rule_text[name_start + 1..]
+                .find(|c: char| c.is_whitespace() || c == '{' || c == ';')
+            {
                 let at_rule_name = &rule_text[name_start + 1..name_start + 1 + name_end];
-                
+
                 let mut modifiers = vec!["at-rule".to_string(), at_rule_name.to_string()];
-                
+
                 // Special handling for different at-rules
                 match at_rule_name {
                     "import" => {
@@ -170,7 +195,7 @@ impl CssExtractor {
                     }
                     _ => {}
                 }
-                
+
                 symbols.push(Symbol {
                     name: format!("@{at_rule_name}"),
                     kind: SymbolKind::Constant,
@@ -185,16 +210,23 @@ impl CssExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let import_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         // Extract import path
         if let Some(url_start) = import_text.find('"').or_else(|| import_text.find('\'')) {
             let quote_char = import_text.chars().nth(url_start).unwrap();
             if let Some(url_end) = import_text[url_start + 1..].find(quote_char) {
                 let import_path = &import_text[url_start + 1..url_start + 1 + url_end];
-                
+
                 symbols.push(Symbol {
                     name: import_path.to_string(),
                     kind: SymbolKind::Import,
@@ -212,11 +244,11 @@ impl CssExtractor {
                 let start_pos = url_start + 4;
                 if let Some(url_end) = import_text[start_pos..].find(')') {
                     let mut import_path = &import_text[start_pos..start_pos + url_end];
-                    
+
                     // Remove quotes if present
                     import_path = import_path.trim_start_matches('"').trim_start_matches('\'');
                     import_path = import_path.trim_end_matches('"').trim_end_matches('\'');
-                    
+
                     symbols.push(Symbol {
                         name: import_path.to_string(),
                         kind: SymbolKind::Import,
@@ -232,16 +264,23 @@ impl CssExtractor {
         }
     }
 
-    fn extract_media(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_media(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let media_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         // Extract media query
         if let Some(query_start) = media_text.find("@media") {
             let query_part = &media_text[query_start + 6..];
             if let Some(brace_pos) = query_part.find('{') {
                 let media_query = query_part[..brace_pos].trim();
-                
+
                 // Push media query as scope
                 let scope = Scope {
                     name: format!("@media {media_query}"),
@@ -249,12 +288,12 @@ impl CssExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 symbols.push(Symbol {
                     name: format!("@media {media_query}"),
                     kind: SymbolKind::Namespace,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::CSS,
                     documentation: self.extract_css_doc(node, source),
                     modifiers: vec!["media-query".to_string()],
@@ -264,16 +303,23 @@ impl CssExtractor {
         }
     }
 
-    fn extract_keyframes(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_keyframes(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let keyframes_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         // Extract keyframes name
         if let Some(name_start) = keyframes_text.find("@keyframes") {
             let name_part = &keyframes_text[name_start + 10..];
             if let Some(brace_pos) = name_part.find('{') {
                 let animation_name = name_part[..brace_pos].trim();
-                
+
                 // Push keyframes as scope
                 let scope = Scope {
                     name: animation_name.to_string(),
@@ -281,12 +327,12 @@ impl CssExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 symbols.push(Symbol {
                     name: animation_name.to_string(),
                     kind: SymbolKind::Function,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::CSS,
                     documentation: self.extract_css_doc(node, source),
                     modifiers: vec!["keyframes".to_string(), "animation".to_string()],
@@ -296,12 +342,19 @@ impl CssExtractor {
         }
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_property(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let property_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         let mut modifiers = vec!["property".to_string()];
-        
+
         // Detect custom properties (CSS variables)
         if property_name.starts_with("--") {
             modifiers.push("custom".to_string());
@@ -318,7 +371,7 @@ impl CssExtractor {
         } else if self.is_transform_property(&property_name) {
             modifiers.push("transform".to_string());
         }
-        
+
         // Get property value if available
         let signature = if let Some(parent) = node.parent() {
             if parent.kind() == "declaration" {
@@ -329,10 +382,14 @@ impl CssExtractor {
         } else {
             None
         };
-        
+
         symbols.push(Symbol {
             name: property_name,
-            kind: if modifiers.contains(&"custom".to_string()) { SymbolKind::Variable } else { SymbolKind::Field },
+            kind: if modifiers.contains(&"custom".to_string()) {
+                SymbolKind::Variable
+            } else {
+                SymbolKind::Field
+            },
             location,
             scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
@@ -342,10 +399,17 @@ impl CssExtractor {
         });
     }
 
-    fn extract_class_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_class_selector(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let class_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         symbols.push(Symbol {
             name: class_name,
             kind: SymbolKind::Class,
@@ -358,10 +422,17 @@ impl CssExtractor {
         });
     }
 
-    fn extract_id_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_id_selector(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let id_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         symbols.push(Symbol {
             name: id_name,
             kind: SymbolKind::Variable, // IDs are unique like variables
@@ -374,10 +445,17 @@ impl CssExtractor {
         });
     }
 
-    fn extract_attribute_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_attribute_selector(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let attr_selector = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         symbols.push(Symbol {
             name: attr_selector,
             kind: SymbolKind::Field,
@@ -390,7 +468,14 @@ impl CssExtractor {
         });
     }
 
-    fn extract_pseudo_selector(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_pseudo_selector(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let pseudo_selector = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -414,7 +499,14 @@ impl CssExtractor {
         });
     }
 
-    fn extract_custom_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_custom_property(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let property_name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -436,12 +528,23 @@ impl CssExtractor {
             scope_chain: scope_stack.to_owned(),
             language: LanguageId::CSS,
             documentation: None,
-            modifiers: vec!["custom-property".to_string(), "variable".to_string(), "css-var".to_string()],
+            modifiers: vec![
+                "custom-property".to_string(),
+                "variable".to_string(),
+                "css-var".to_string(),
+            ],
             signature,
         });
     }
 
-    fn extract_supports(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_supports(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let supports_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -463,7 +566,7 @@ impl CssExtractor {
                     name: format!("@supports {supports_query}"),
                     kind: SymbolKind::Namespace,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::CSS,
                     documentation: self.extract_css_doc(node, source),
                     modifiers: vec!["supports-query".to_string(), "feature-query".to_string()],
@@ -489,8 +592,10 @@ impl CssExtractor {
                     let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
                     if comment_text.starts_with("/*") && comment_text.ends_with("*/") {
                         let content = comment_text
-                            .strip_prefix("/*").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/*")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .trim();
                         if !content.is_empty() {
                             doc_comments.insert(0, content.to_string());
@@ -518,38 +623,90 @@ impl CssExtractor {
     }
 
     fn is_grid_property(&self, property: &str) -> bool {
-        matches!(property,
-            "display" | "grid" | "grid-template" | "grid-template-rows" | "grid-template-columns" |
-            "grid-template-areas" | "grid-auto-rows" | "grid-auto-columns" | "grid-auto-flow" |
-            "grid-row" | "grid-column" | "grid-area" | "grid-row-start" | "grid-row-end" |
-            "grid-column-start" | "grid-column-end" | "justify-items" | "align-items" |
-            "place-items" | "justify-content" | "align-content" | "place-content" |
-            "justify-self" | "align-self" | "place-self" | "grid-gap" | "grid-row-gap" |
-            "grid-column-gap" | "gap" | "row-gap" | "column-gap"
+        matches!(
+            property,
+            "display"
+                | "grid"
+                | "grid-template"
+                | "grid-template-rows"
+                | "grid-template-columns"
+                | "grid-template-areas"
+                | "grid-auto-rows"
+                | "grid-auto-columns"
+                | "grid-auto-flow"
+                | "grid-row"
+                | "grid-column"
+                | "grid-area"
+                | "grid-row-start"
+                | "grid-row-end"
+                | "grid-column-start"
+                | "grid-column-end"
+                | "justify-items"
+                | "align-items"
+                | "place-items"
+                | "justify-content"
+                | "align-content"
+                | "place-content"
+                | "justify-self"
+                | "align-self"
+                | "place-self"
+                | "grid-gap"
+                | "grid-row-gap"
+                | "grid-column-gap"
+                | "gap"
+                | "row-gap"
+                | "column-gap"
         )
     }
 
     fn is_flexbox_property(&self, property: &str) -> bool {
-        matches!(property,
-            "display" | "flex" | "flex-direction" | "flex-wrap" | "flex-flow" |
-            "justify-content" | "align-items" | "align-content" | "order" |
-            "flex-grow" | "flex-shrink" | "flex-basis" | "align-self"
+        matches!(
+            property,
+            "display"
+                | "flex"
+                | "flex-direction"
+                | "flex-wrap"
+                | "flex-flow"
+                | "justify-content"
+                | "align-items"
+                | "align-content"
+                | "order"
+                | "flex-grow"
+                | "flex-shrink"
+                | "flex-basis"
+                | "align-self"
         )
     }
 
     fn is_animation_property(&self, property: &str) -> bool {
-        matches!(property,
-            "animation" | "animation-name" | "animation-duration" | "animation-timing-function" |
-            "animation-delay" | "animation-iteration-count" | "animation-direction" |
-            "animation-fill-mode" | "animation-play-state" | "transition" | "transition-property" |
-            "transition-duration" | "transition-timing-function" | "transition-delay"
+        matches!(
+            property,
+            "animation"
+                | "animation-name"
+                | "animation-duration"
+                | "animation-timing-function"
+                | "animation-delay"
+                | "animation-iteration-count"
+                | "animation-direction"
+                | "animation-fill-mode"
+                | "animation-play-state"
+                | "transition"
+                | "transition-property"
+                | "transition-duration"
+                | "transition-timing-function"
+                | "transition-delay"
         )
     }
 
     fn is_transform_property(&self, property: &str) -> bool {
-        matches!(property,
-            "transform" | "transform-origin" | "transform-style" | "perspective" |
-            "perspective-origin" | "backface-visibility"
+        matches!(
+            property,
+            "transform"
+                | "transform-origin"
+                | "transform-style"
+                | "perspective"
+                | "perspective-origin"
+                | "backface-visibility"
         )
     }
 }

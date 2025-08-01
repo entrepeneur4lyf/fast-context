@@ -1,9 +1,9 @@
 //! # Embedding-Friendly Export
-//! 
+//!
 //! Specialized export format optimized for AI embeddings and machine learning
 //! applications, providing rich contextual information for code understanding.
 
-use super::{ExportData, UniversalExporter, ExportOptions};
+use super::{ExportData, ExportOptions, UniversalExporter};
 use crate::analysis::AnalysisResult;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,19 +13,19 @@ use std::collections::HashMap;
 pub struct SymbolEmbedding {
     /// Unique identifier
     pub id: String,
-    
+
     /// Core symbol information
     pub symbol: EmbeddingSymbolInfo,
-    
+
     /// Rich contextual information
     pub context: CodeContext,
-    
+
     /// Structural relationships
     pub relationships: EmbeddingRelationships,
-    
+
     /// Semantic features
     pub semantic_features: SemanticFeatures,
-    
+
     /// Embedding-specific metadata
     pub embedding_metadata: EmbeddingMetadata,
 }
@@ -62,19 +62,19 @@ pub struct EmbeddingLocation {
 pub struct CodeContext {
     /// Surrounding code snippet
     pub surrounding_code: Option<String>,
-    
+
     /// Function/class body content
     pub body_content: Option<String>,
-    
+
     /// Leading comments
     pub leading_comments: Vec<String>,
-    
+
     /// Inline comments
     pub inline_comments: Vec<String>,
-    
+
     /// File-level context
     pub file_context: FileContext,
-    
+
     /// Project-level context
     pub project_context: ProjectContext,
 }
@@ -84,16 +84,16 @@ pub struct CodeContext {
 pub struct FileContext {
     /// File summary/description
     pub summary: Option<String>,
-    
+
     /// Other symbols in the same file
     pub sibling_symbols: Vec<String>,
-    
+
     /// Import statements in the file
     pub imports: Vec<String>,
-    
+
     /// File-level tags/annotations
     pub file_tags: Vec<String>,
-    
+
     /// File complexity metrics
     pub complexity_metrics: FileComplexityMetrics,
 }
@@ -103,16 +103,16 @@ pub struct FileContext {
 pub struct ProjectContext {
     /// Project type/domain
     pub project_type: Option<String>,
-    
+
     /// Primary programming languages
     pub primary_languages: Vec<String>,
-    
+
     /// Project tags/characteristics
     pub project_tags: Vec<String>,
-    
+
     /// Related projects/dependencies
     pub related_projects: Vec<String>,
-    
+
     /// Project complexity level
     pub complexity_level: String,
 }
@@ -134,16 +134,16 @@ pub struct FileComplexityMetrics {
 pub struct EmbeddingRelationships {
     /// Direct dependencies (what this symbol uses)
     pub dependencies: Vec<EmbeddingRelationship>,
-    
+
     /// Direct dependents (what uses this symbol)
     pub dependents: Vec<EmbeddingRelationship>,
-    
+
     /// Hierarchical relationships (parent/child)
     pub hierarchy: Vec<EmbeddingRelationship>,
-    
+
     /// Semantic relationships (similar/related symbols)
     pub semantic_links: Vec<EmbeddingRelationship>,
-    
+
     /// Cross-file relationships
     pub cross_file_links: Vec<EmbeddingRelationship>,
 }
@@ -163,16 +163,16 @@ pub struct EmbeddingRelationship {
 pub struct SemanticFeatures {
     /// Abstract syntax tree features
     pub ast_features: AstFeatures,
-    
+
     /// Textual features
     pub text_features: TextFeatures,
-    
+
     /// Structural features
     pub structural_features: StructuralFeatures,
-    
+
     /// Behavioral features
     pub behavioral_features: BehavioralFeatures,
-    
+
     /// Language-specific features
     pub language_features: LanguageFeatures,
 }
@@ -182,13 +182,13 @@ pub struct SemanticFeatures {
 pub struct AstFeatures {
     /// Node types in the AST
     pub node_types: Vec<String>,
-    
+
     /// AST depth
     pub depth: usize,
-    
+
     /// Number of children
     pub child_count: usize,
-    
+
     /// AST structural patterns
     pub patterns: Vec<String>,
 }
@@ -198,19 +198,19 @@ pub struct AstFeatures {
 pub struct TextFeatures {
     /// Token count
     pub token_count: usize,
-    
+
     /// Unique token count
     pub unique_tokens: usize,
-    
+
     /// Text length in characters
     pub char_count: usize,
-    
+
     /// Keywords used
     pub keywords: Vec<String>,
-    
+
     /// Identifiers used
     pub identifiers: Vec<String>,
-    
+
     /// Literals used
     pub literals: Vec<String>,
 }
@@ -220,19 +220,19 @@ pub struct TextFeatures {
 pub struct StructuralFeatures {
     /// Cyclomatic complexity
     pub cyclomatic_complexity: u32,
-    
+
     /// Nesting depth
     pub nesting_depth: usize,
-    
+
     /// Number of parameters
     pub parameter_count: usize,
-    
+
     /// Number of local variables
     pub local_variable_count: usize,
-    
+
     /// Number of return statements
     pub return_count: usize,
-    
+
     /// Control flow complexity
     pub control_flow_complexity: u32,
 }
@@ -242,16 +242,16 @@ pub struct StructuralFeatures {
 pub struct BehavioralFeatures {
     /// Function calls made
     pub calls_made: Vec<String>,
-    
+
     /// Variables accessed
     pub variables_accessed: Vec<String>,
-    
+
     /// Side effects detected
     pub side_effects: Vec<String>,
-    
+
     /// I/O operations
     pub io_operations: Vec<String>,
-    
+
     /// Memory operations
     pub memory_operations: Vec<String>,
 }
@@ -261,13 +261,13 @@ pub struct BehavioralFeatures {
 pub struct LanguageFeatures {
     /// Language-specific constructs used
     pub constructs: Vec<String>,
-    
+
     /// Design patterns detected
     pub patterns: Vec<String>,
-    
+
     /// Idioms used
     pub idioms: Vec<String>,
-    
+
     /// Framework-specific features
     pub framework_features: Vec<String>,
 }
@@ -277,19 +277,19 @@ pub struct LanguageFeatures {
 pub struct EmbeddingMetadata {
     /// Vector dimensions (if pre-computed)
     pub vector_dimensions: Option<usize>,
-    
+
     /// Embedding model used
     pub model_name: Option<String>,
-    
+
     /// Confidence scores
     pub confidence_scores: HashMap<String, f32>,
-    
+
     /// Feature importance weights
     pub feature_weights: HashMap<String, f32>,
-    
+
     /// Preprocessing flags
     pub preprocessing: PreprocessingFlags,
-    
+
     /// Quality metrics
     pub quality_metrics: QualityMetrics,
 }
@@ -299,16 +299,16 @@ pub struct EmbeddingMetadata {
 pub struct PreprocessingFlags {
     /// Normalize identifier names
     pub normalize_identifiers: bool,
-    
+
     /// Remove comments
     pub remove_comments: bool,
-    
+
     /// Tokenize content
     pub tokenize: bool,
-    
+
     /// Apply stemming
     pub stem_tokens: bool,
-    
+
     /// Remove stop words
     pub remove_stop_words: bool,
 }
@@ -318,13 +318,13 @@ pub struct PreprocessingFlags {
 pub struct QualityMetrics {
     /// Completeness score (0.0 - 1.0)
     pub completeness: f32,
-    
+
     /// Context richness score (0.0 - 1.0)
     pub context_richness: f32,
-    
+
     /// Relationship density (0.0 - 1.0)
     pub relationship_density: f32,
-    
+
     /// Information content score (0.0 - 1.0)
     pub information_content: f32,
 }
@@ -334,13 +334,13 @@ pub struct QualityMetrics {
 pub struct EmbeddingExport {
     /// All symbol embeddings
     pub embeddings: Vec<SymbolEmbedding>,
-    
+
     /// Global context information
     pub global_context: GlobalContext,
-    
+
     /// Export configuration
     pub export_config: EmbeddingExportConfig,
-    
+
     /// Export metadata
     pub metadata: EmbeddingExportMetadata,
 }
@@ -350,19 +350,19 @@ pub struct EmbeddingExport {
 pub struct GlobalContext {
     /// Project vocabulary (all unique tokens)
     pub vocabulary: Vec<String>,
-    
+
     /// Global symbol index
     pub symbol_index: HashMap<String, usize>,
-    
+
     /// File index
     pub file_index: HashMap<String, Vec<usize>>,
-    
+
     /// Language distribution
     pub language_distribution: HashMap<String, f32>,
-    
+
     /// Complexity distribution
     pub complexity_distribution: HashMap<String, usize>,
-    
+
     /// Common patterns
     pub common_patterns: Vec<String>,
 }
@@ -372,19 +372,19 @@ pub struct GlobalContext {
 pub struct EmbeddingExportConfig {
     /// Include code context
     pub include_context: bool,
-    
+
     /// Include semantic features  
     pub include_semantic_features: bool,
-    
+
     /// Include relationships
     pub include_relationships: bool,
-    
+
     /// Maximum context length
     pub max_context_length: usize,
-    
+
     /// Feature extraction options
     pub feature_options: FeatureExtractionOptions,
-    
+
     /// Preprocessing options
     pub preprocessing: PreprocessingFlags,
 }
@@ -394,16 +394,16 @@ pub struct EmbeddingExportConfig {
 pub struct FeatureExtractionOptions {
     /// Extract AST features
     pub ast_features: bool,
-    
+
     /// Extract text features
     pub text_features: bool,
-    
+
     /// Extract structural features
     pub structural_features: bool,
-    
+
     /// Extract behavioral features
     pub behavioral_features: bool,
-    
+
     /// Extract language-specific features
     pub language_features: bool,
 }
@@ -430,18 +430,24 @@ impl EmbeddingExporter {
             exporter: UniversalExporter::new(analysis, project_root),
         }
     }
-    
+
     /// Export symbol embeddings
-    pub fn export_embeddings(&self, options: &ExportOptions, config: &EmbeddingExportConfig) -> EmbeddingExport {
+    pub fn export_embeddings(
+        &self,
+        options: &ExportOptions,
+        config: &EmbeddingExportConfig,
+    ) -> EmbeddingExport {
         let export_data = self.exporter.create_export_data(options);
-        
+
         let symbol_count = export_data.symbols.len();
-        let embeddings: Vec<SymbolEmbedding> = export_data.symbols.iter()
+        let embeddings: Vec<SymbolEmbedding> = export_data
+            .symbols
+            .iter()
             .map(|symbol| self.create_symbol_embedding(symbol.clone(), &export_data, config))
             .collect();
-        
+
         let global_context = self.create_global_context(&embeddings);
-        
+
         EmbeddingExport {
             embeddings,
             global_context,
@@ -458,7 +464,7 @@ impl EmbeddingExporter {
             },
         }
     }
-    
+
     /// Create a single symbol embedding
     fn create_symbol_embedding(
         &self,
@@ -486,7 +492,7 @@ impl EmbeddingExporter {
                 relative_position: self.calculate_relative_position(&symbol, export_data),
             },
         };
-        
+
         let context = if config.include_context {
             self.create_code_context(&symbol, export_data)
         } else {
@@ -513,7 +519,7 @@ impl EmbeddingExporter {
                 project_context: self.create_project_context(export_data),
             }
         };
-        
+
         let relationships = if config.include_relationships {
             self.create_embedding_relationships(&symbol, export_data)
         } else {
@@ -525,7 +531,7 @@ impl EmbeddingExporter {
                 cross_file_links: Vec::new(),
             }
         };
-        
+
         let semantic_features = if config.include_semantic_features {
             self.extract_semantic_features(&symbol, config)
         } else {
@@ -567,7 +573,7 @@ impl EmbeddingExporter {
                 },
             }
         };
-        
+
         let embedding_metadata = EmbeddingMetadata {
             vector_dimensions: None,
             model_name: None,
@@ -576,7 +582,7 @@ impl EmbeddingExporter {
             preprocessing: config.preprocessing.clone(),
             quality_metrics: self.calculate_quality_metrics(&symbol, &context, &relationships),
         };
-        
+
         SymbolEmbedding {
             id: symbol.id,
             symbol: embedding_symbol,
@@ -586,11 +592,19 @@ impl EmbeddingExporter {
             embedding_metadata,
         }
     }
-    
+
     /// Calculate relative position of symbol in file
-    fn calculate_relative_position(&self, symbol: &super::ExportSymbol, export_data: &ExportData) -> f32 {
+    fn calculate_relative_position(
+        &self,
+        symbol: &super::ExportSymbol,
+        export_data: &ExportData,
+    ) -> f32 {
         // Find the file and calculate relative position
-        if let Some(file_info) = export_data.files.iter().find(|f| f.path == symbol.file_path) {
+        if let Some(file_info) = export_data
+            .files
+            .iter()
+            .find(|f| f.path == symbol.file_path)
+        {
             if file_info.line_count > 0 {
                 symbol.location.start_line as f32 / file_info.line_count as f32
             } else {
@@ -600,20 +614,28 @@ impl EmbeddingExporter {
             0.0
         }
     }
-    
+
     /// Create rich code context
-    fn create_code_context(&self, symbol: &super::ExportSymbol, export_data: &ExportData) -> CodeContext {
+    fn create_code_context(
+        &self,
+        symbol: &super::ExportSymbol,
+        export_data: &ExportData,
+    ) -> CodeContext {
         // Find sibling symbols in the same file
-        let sibling_symbols: Vec<String> = export_data.symbols.iter()
+        let sibling_symbols: Vec<String> = export_data
+            .symbols
+            .iter()
             .filter(|s| s.file_path == symbol.file_path && s.id != symbol.id)
             .map(|s| s.qualified_name.clone())
             .collect();
-        
+
         // Calculate file complexity metrics
-        let file_symbols: Vec<&super::ExportSymbol> = export_data.symbols.iter()
+        let file_symbols: Vec<&super::ExportSymbol> = export_data
+            .symbols
+            .iter()
             .filter(|s| s.file_path == symbol.file_path)
             .collect();
-        
+
         let complexity_metrics = FileComplexityMetrics {
             total_lines: 0, // Would need file system access
             code_lines: 0,
@@ -621,13 +643,17 @@ impl EmbeddingExporter {
             blank_lines: 0,
             symbol_count: file_symbols.len(),
             average_complexity: if !file_symbols.is_empty() {
-                file_symbols.iter().map(|s| s.complexity as f32).sum::<f32>() / file_symbols.len() as f32
+                file_symbols
+                    .iter()
+                    .map(|s| s.complexity as f32)
+                    .sum::<f32>()
+                    / file_symbols.len() as f32
             } else {
                 0.0
             },
             max_complexity: file_symbols.iter().map(|s| s.complexity).max().unwrap_or(0),
         };
-        
+
         let file_context = FileContext {
             summary: None, // Could be generated from file content
             sibling_symbols,
@@ -635,7 +661,7 @@ impl EmbeddingExporter {
             file_tags: Vec::new(),
             complexity_metrics,
         };
-        
+
         CodeContext {
             surrounding_code: None, // Would need file system access to extract
             body_content: None,
@@ -645,7 +671,7 @@ impl EmbeddingExporter {
             project_context: self.create_project_context(export_data),
         }
     }
-    
+
     /// Create project context
     fn create_project_context(&self, export_data: &ExportData) -> ProjectContext {
         ProjectContext {
@@ -662,10 +688,16 @@ impl EmbeddingExporter {
             },
         }
     }
-    
+
     /// Create embedding relationships
-    fn create_embedding_relationships(&self, symbol: &super::ExportSymbol, _export_data: &ExportData) -> EmbeddingRelationships {
-        let dependencies: Vec<EmbeddingRelationship> = symbol.dependencies.iter()
+    fn create_embedding_relationships(
+        &self,
+        symbol: &super::ExportSymbol,
+        _export_data: &ExportData,
+    ) -> EmbeddingRelationships {
+        let dependencies: Vec<EmbeddingRelationship> = symbol
+            .dependencies
+            .iter()
             .map(|dep| EmbeddingRelationship {
                 target_symbol: dep.clone(),
                 relationship_type: "uses".to_string(),
@@ -674,8 +706,10 @@ impl EmbeddingExporter {
                 location: None,
             })
             .collect();
-        
-        let dependents: Vec<EmbeddingRelationship> = symbol.dependents.iter()
+
+        let dependents: Vec<EmbeddingRelationship> = symbol
+            .dependents
+            .iter()
             .map(|dep| EmbeddingRelationship {
                 target_symbol: dep.clone(),
                 relationship_type: "used_by".to_string(),
@@ -684,9 +718,11 @@ impl EmbeddingExporter {
                 location: None,
             })
             .collect();
-        
+
         // Find cross-file relationships
-        let cross_file_links: Vec<EmbeddingRelationship> = symbol.related_files.iter()
+        let cross_file_links: Vec<EmbeddingRelationship> = symbol
+            .related_files
+            .iter()
             .map(|file| EmbeddingRelationship {
                 target_symbol: file.clone(),
                 relationship_type: "cross_file".to_string(),
@@ -695,26 +731,31 @@ impl EmbeddingExporter {
                 location: None,
             })
             .collect();
-        
+
         EmbeddingRelationships {
             dependencies,
             dependents,
-            hierarchy: Vec::new(), // Would need hierarchical analysis
+            hierarchy: Vec::new(),      // Would need hierarchical analysis
             semantic_links: Vec::new(), // Would need semantic similarity computation
             cross_file_links,
         }
     }
-    
+
     /// Extract semantic features
-    fn extract_semantic_features(&self, symbol: &super::ExportSymbol, config: &EmbeddingExportConfig) -> SemanticFeatures {
+    fn extract_semantic_features(
+        &self,
+        symbol: &super::ExportSymbol,
+        config: &EmbeddingExportConfig,
+    ) -> SemanticFeatures {
         let text_features = if config.feature_options.text_features {
             let signature_text = symbol.signature.as_deref().unwrap_or("");
             let doc_text = symbol.documentation.as_deref().unwrap_or("");
             let combined_text = format!("{signature_text} {doc_text}");
-            
+
             TextFeatures {
                 token_count: combined_text.split_whitespace().count(),
-                unique_tokens: combined_text.split_whitespace()
+                unique_tokens: combined_text
+                    .split_whitespace()
                     .collect::<std::collections::HashSet<_>>()
                     .len(),
                 char_count: combined_text.len(),
@@ -732,7 +773,7 @@ impl EmbeddingExporter {
                 literals: Vec::new(),
             }
         };
-        
+
         SemanticFeatures {
             ast_features: AstFeatures {
                 node_types: Vec::new(),
@@ -764,23 +805,38 @@ impl EmbeddingExporter {
             },
         }
     }
-    
+
     /// Extract keywords from text based on language
     fn extract_keywords(&self, text: &str, language: &str) -> Vec<String> {
         let common_keywords = match language.to_lowercase().as_str() {
-            "rust" => vec!["fn", "struct", "enum", "impl", "trait", "pub", "mut", "let", "const"],
-            "python" => vec!["def", "class", "import", "from", "if", "for", "while", "try", "except"],
-            "javascript" | "typescript" => vec!["function", "class", "const", "let", "var", "if", "for", "while", "try", "catch"],
-            "java" => vec!["public", "private", "class", "interface", "extends", "implements", "static", "final"],
+            "rust" => vec![
+                "fn", "struct", "enum", "impl", "trait", "pub", "mut", "let", "const",
+            ],
+            "python" => vec![
+                "def", "class", "import", "from", "if", "for", "while", "try", "except",
+            ],
+            "javascript" | "typescript" => vec![
+                "function", "class", "const", "let", "var", "if", "for", "while", "try", "catch",
+            ],
+            "java" => vec![
+                "public",
+                "private",
+                "class",
+                "interface",
+                "extends",
+                "implements",
+                "static",
+                "final",
+            ],
             _ => vec!["function", "class", "public", "private", "static"],
         };
-        
+
         text.split_whitespace()
             .filter(|word| common_keywords.contains(&word.to_lowercase().as_str()))
             .map(|word| word.to_string())
             .collect()
     }
-    
+
     /// Calculate quality metrics
     fn calculate_quality_metrics(
         &self,
@@ -795,7 +851,7 @@ impl EmbeddingExporter {
         } else {
             0.3
         };
-        
+
         let context_richness = if context.surrounding_code.is_some() {
             0.9
         } else if !context.file_context.sibling_symbols.is_empty() {
@@ -803,16 +859,16 @@ impl EmbeddingExporter {
         } else {
             0.2
         };
-        
+
         let relationship_density = {
-            let total_relationships = relationships.dependencies.len() + 
-                                    relationships.dependents.len() + 
-                                    relationships.cross_file_links.len();
+            let total_relationships = relationships.dependencies.len()
+                + relationships.dependents.len()
+                + relationships.cross_file_links.len();
             (total_relationships as f32 / 10.0).min(1.0) // Normalize to 0-1
         };
-        
+
         let information_content = (completeness + context_richness + relationship_density) / 3.0;
-        
+
         QualityMetrics {
             completeness,
             context_richness,
@@ -820,7 +876,7 @@ impl EmbeddingExporter {
             information_content,
         }
     }
-    
+
     /// Create global context
     fn create_global_context(&self, embeddings: &[SymbolEmbedding]) -> GlobalContext {
         let mut vocabulary = std::collections::HashSet::new();
@@ -828,7 +884,7 @@ impl EmbeddingExporter {
         let mut file_index: HashMap<String, Vec<usize>> = HashMap::new();
         let mut language_counts = HashMap::new();
         let mut complexity_counts = HashMap::new();
-        
+
         for (idx, embedding) in embeddings.iter().enumerate() {
             // Build vocabulary
             for keyword in &embedding.semantic_features.text_features.keywords {
@@ -837,34 +893,43 @@ impl EmbeddingExporter {
             for identifier in &embedding.semantic_features.text_features.identifiers {
                 vocabulary.insert(identifier.clone());
             }
-            
+
             // Build symbol index
             symbol_index.insert(embedding.symbol.qualified_name.clone(), idx);
-            
+
             // Build file index
             file_index
                 .entry(embedding.symbol.file_path.clone())
                 .or_default()
                 .push(idx);
-            
+
             // Language distribution
-            *language_counts.entry(embedding.symbol.language.clone()).or_insert(0) += 1;
-            
+            *language_counts
+                .entry(embedding.symbol.language.clone())
+                .or_insert(0) += 1;
+
             // Complexity distribution
-            let complexity_range = match embedding.semantic_features.structural_features.cyclomatic_complexity {
+            let complexity_range = match embedding
+                .semantic_features
+                .structural_features
+                .cyclomatic_complexity
+            {
                 0..=5 => "Low",
                 6..=10 => "Medium",
                 11..=20 => "High",
                 _ => "Very High",
             };
-            *complexity_counts.entry(complexity_range.to_string()).or_insert(0) += 1;
+            *complexity_counts
+                .entry(complexity_range.to_string())
+                .or_insert(0) += 1;
         }
-        
+
         let total_embeddings = embeddings.len() as f32;
-        let language_distribution = language_counts.into_iter()
+        let language_distribution = language_counts
+            .into_iter()
             .map(|(lang, count)| (lang, count as f32 / total_embeddings))
             .collect();
-        
+
         GlobalContext {
             vocabulary: vocabulary.into_iter().collect(),
             symbol_index,
@@ -904,14 +969,14 @@ impl Default for EmbeddingExportConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::symbols::{Symbol, SymbolKind, Location};
+    use crate::analysis::{AnalysisResult, CodeMetrics, CodeNode};
     use crate::parsers::LanguageId;
-    use crate::analysis::{CodeNode, CodeMetrics, AnalysisResult};
+    use crate::symbols::{Location, Symbol, SymbolKind};
     use petgraph::Graph;
 
     fn create_test_analysis() -> AnalysisResult {
         let mut graph = Graph::new();
-        
+
         let symbol = Symbol {
             name: "test_function".to_string(),
             kind: SymbolKind::Function,
@@ -928,7 +993,7 @@ mod tests {
             modifiers: vec!["pub".to_string()],
             signature: Some("fn test_function(x: i32) -> String".to_string()),
         };
-        
+
         let node_data = CodeNode {
             symbol,
             file_path: "/test/main.rs".to_string(),
@@ -937,7 +1002,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        
+
         graph.add_node(node_data);
 
         AnalysisResult {
@@ -955,19 +1020,29 @@ mod tests {
         let exporter = EmbeddingExporter::new(analysis, "/test".to_string());
         let options = ExportOptions::default();
         let config = EmbeddingExportConfig::default();
-        
+
         let embedding_export = exporter.export_embeddings(&options, &config);
-        
+
         assert_eq!(embedding_export.embeddings.len(), 1);
         let embedding = &embedding_export.embeddings[0];
-        
+
         assert_eq!(embedding.symbol.name, "test_function");
-        assert_eq!(embedding.semantic_features.structural_features.cyclomatic_complexity, 8);
+        assert_eq!(
+            embedding
+                .semantic_features
+                .structural_features
+                .cyclomatic_complexity,
+            8
+        );
         assert!(embedding.embedding_metadata.quality_metrics.completeness > 0.5);
-        
+
         // Check that semantic features were extracted
         assert!(embedding.semantic_features.text_features.token_count > 0);
-        assert!(!embedding.semantic_features.text_features.keywords.is_empty());
+        assert!(!embedding
+            .semantic_features
+            .text_features
+            .keywords
+            .is_empty());
     }
 
     #[test]
@@ -976,12 +1051,12 @@ mod tests {
         let exporter = EmbeddingExporter::new(analysis, "/test".to_string());
         let options = ExportOptions::default();
         let config = EmbeddingExportConfig::default();
-        
+
         let embedding_export = exporter.export_embeddings(&options, &config);
         let embedding = &embedding_export.embeddings[0];
-        
+
         let metrics = &embedding.embedding_metadata.quality_metrics;
-        
+
         // Should have high completeness due to signature and documentation
         assert!(metrics.completeness > 0.9);
         assert!(metrics.information_content > 0.0);
@@ -993,12 +1068,15 @@ mod tests {
         let exporter = EmbeddingExporter::new(analysis, "/test".to_string());
         let options = ExportOptions::default();
         let config = EmbeddingExportConfig::default();
-        
+
         let embedding_export = exporter.export_embeddings(&options, &config);
-        
+
         assert!(!embedding_export.global_context.vocabulary.is_empty());
         assert_eq!(embedding_export.global_context.symbol_index.len(), 1);
         assert_eq!(embedding_export.global_context.file_index.len(), 1);
-        assert!(embedding_export.global_context.language_distribution.contains_key("Rust"));
+        assert!(embedding_export
+            .global_context
+            .language_distribution
+            .contains_key("Rust"));
     }
 }

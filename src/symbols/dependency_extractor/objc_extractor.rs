@@ -1,5 +1,5 @@
 //! Objective-C-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Objective-C source code, including:
 //! - Method calls and message sending
 //! - Property access and instance variables
@@ -10,9 +10,9 @@
 //! - Control flow (if/else, loops, switch)
 //! - Memory management patterns
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Objective-C-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::ObjectiveC
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -84,28 +88,31 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "message_expression")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
-        matches!(node.kind(), "identifier" | "property_access" | "field_access")
+        matches!(
+            node.kind(),
+            "identifier" | "property_access" | "field_access"
+        )
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "preproc_import" | "import_declaration")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        matches!(node.kind(), "class_interface" | "class_implementation") && 
-        node.child_by_field_name("superclass").is_some()
+        matches!(node.kind(), "class_interface" | "class_implementation")
+            && node.child_by_field_name("superclass").is_some()
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "assignment_expression")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -117,7 +124,7 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
         if let Some(receiver_node) = node.child_by_field_name("receiver") {
             let receiver_name = self.get_node_text(&receiver_node, source);
             let current_scope = context.current_scope();
-            
+
             if !receiver_name.trim().is_empty() && !self.is_objc_keyword(&receiver_name) {
                 let dependency = self.create_dependency(
                     current_scope.clone(),
@@ -129,12 +136,12 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
                 dependencies.push(dependency);
             }
         }
-        
+
         // Extract selector (method name)
         if let Some(selector_node) = node.child_by_field_name("selector") {
             let selector_name = self.get_node_text(&selector_node, source);
             let current_scope = context.current_scope();
-            
+
             if !selector_name.trim().is_empty() {
                 let dependency = self.create_dependency(
                     current_scope,
@@ -146,13 +153,13 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
                 dependencies.push(dependency);
             }
         }
-        
+
         // Extract arguments
         if let Some(args_node) = node.child_by_field_name("arguments") {
             self.extract_argument_references(args_node, source, context, dependencies);
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -163,18 +170,18 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             if self.is_objc_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
                 resolved_vars[0].qualified_name()
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -182,11 +189,11 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -195,24 +202,26 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // #import "Header.h" or @import Foundation;
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "string_literal" || child.kind() == "system_lib_string" {
-                let import_path = self.get_node_text(&child, source)
+                let import_path = self
+                    .get_node_text(&child, source)
                     .trim_matches('"')
                     .trim_matches('<')
                     .trim_matches('>')
                     .to_string();
-                
+
                 if !import_path.trim().is_empty() {
-                    let dependency_type = if import_path.contains('/') || import_path.ends_with(".h") {
-                        DependencyType::Imports
-                    } else {
-                        DependencyType::ModuleDependency
-                    };
-                    
+                    let dependency_type =
+                        if import_path.contains('/') || import_path.ends_with(".h") {
+                            DependencyType::Imports
+                        } else {
+                            DependencyType::ModuleDependency
+                        };
+
                     let dependency = self.create_dependency(
                         current_scope.clone(),
                         import_path,
@@ -225,7 +234,7 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -235,7 +244,7 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -247,12 +256,16 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
             if let Some(right_node) = node.child_by_field_name("right") {
                 let var_name = self.get_node_text(&left_node, source);
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -282,27 +295,33 @@ impl DependencyExtractor for ObjectiveCDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "while_statement" | "do_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "while_statement" | "do_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
-        matches!(node.kind(), "try_statement" | "catch_clause" | "finally_clause")
+        matches!(
+            node.kind(),
+            "try_statement" | "catch_clause" | "finally_clause"
+        )
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -384,7 +403,8 @@ impl ObjectiveCDependencyExtractor {
 
     /// Check if a string is an Objective-C keyword
     fn is_objc_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             // Objective-C keywords
             "@interface" | "@implementation" | "@protocol" | "@end" | "@class" |
             "@selector" | "@encode" | "@synchronized" | "@autoreleasepool" |
@@ -438,8 +458,11 @@ impl ObjectiveCDependencyExtractor {
 
         while let Some(parent) = current.parent() {
             match parent.kind() {
-                "method_declaration" | "class_interface" | "class_implementation" |
-                "protocol_declaration" | "parameter_declaration" => {
+                "method_declaration"
+                | "class_interface"
+                | "class_implementation"
+                | "protocol_declaration"
+                | "parameter_declaration" => {
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
                             return false;
@@ -490,7 +513,13 @@ impl ObjectiveCDependencyExtractor {
             _ => {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -507,7 +536,13 @@ impl ObjectiveCDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -565,18 +600,42 @@ impl ObjectiveCDependencyExtractor {
         match node.kind() {
             "for_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(init_node) = node.child_by_field_name("initializer") {
-                    self.extract_condition_variables(init_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        init_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(update_node) = node.child_by_field_name("update") {
-                    self.extract_condition_variables(update_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        update_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_statement" | "do_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -614,7 +673,13 @@ impl ObjectiveCDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -640,7 +705,13 @@ impl ObjectiveCDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -663,7 +734,11 @@ impl ObjectiveCDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

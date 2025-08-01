@@ -1,5 +1,5 @@
 //! # Query Interface for AI Assistants
-//! 
+//!
 //! Provides high-level query interface for AI coding assistants to efficiently
 //! retrieve code context, relationships, and insights from the analyzed codebase.
 
@@ -27,9 +27,9 @@ pub struct ArchitecturalThresholds {
 impl Default for ArchitecturalThresholds {
     fn default() -> Self {
         Self {
-            high_coupling_threshold: 10,      // Industry standard for high coupling
-            high_complexity_threshold: 20,    // McCabe complexity threshold
-            high_dependency_threshold: 15,    // High dependency count
+            high_coupling_threshold: 10,     // Industry standard for high coupling
+            high_complexity_threshold: 20,   // McCabe complexity threshold
+            high_dependency_threshold: 15,   // High dependency count
             critical_impact_threshold: 20.0, // Critical cycle impact
             high_impact_threshold: 10.0,     // High cycle impact
             medium_impact_threshold: 5.0,    // Medium cycle impact
@@ -44,9 +44,9 @@ impl ArchitecturalThresholds {
     /// Create thresholds optimized for large codebases
     pub fn for_large_codebase() -> Self {
         Self {
-            high_coupling_threshold: 15,      // Higher threshold for large codebases
-            high_complexity_threshold: 25,    // Higher complexity tolerance
-            high_dependency_threshold: 20,    // More dependencies expected
+            high_coupling_threshold: 15,     // Higher threshold for large codebases
+            high_complexity_threshold: 25,   // Higher complexity tolerance
+            high_dependency_threshold: 20,   // More dependencies expected
             critical_impact_threshold: 30.0, // Higher impact threshold
             high_impact_threshold: 15.0,     // Higher impact threshold
             large_result_threshold: 20,      // Larger result sets expected
@@ -57,9 +57,9 @@ impl ArchitecturalThresholds {
     /// Create thresholds optimized for small/medium codebases
     pub fn for_small_codebase() -> Self {
         Self {
-            high_coupling_threshold: 7,       // Lower threshold for small codebases
-            high_complexity_threshold: 15,    // Lower complexity tolerance
-            high_dependency_threshold: 10,    // Fewer dependencies expected
+            high_coupling_threshold: 7,      // Lower threshold for small codebases
+            high_complexity_threshold: 15,   // Lower complexity tolerance
+            high_dependency_threshold: 10,   // Fewer dependencies expected
             critical_impact_threshold: 15.0, // Lower impact threshold
             high_impact_threshold: 8.0,      // Lower impact threshold
             large_result_threshold: 5,       // Smaller result sets expected
@@ -233,7 +233,9 @@ impl CodeQueryEngine {
 
     /// Find symbols by type/kind
     pub fn find_symbols_by_kind(&self, kind: SymbolKind) -> QueryResult {
-        let matching_symbols: Vec<SymbolInfo> = self.analysis.graph
+        let matching_symbols: Vec<SymbolInfo> = self
+            .analysis
+            .graph
             .node_indices()
             .filter_map(|node_idx| {
                 if let Some(node) = self.analysis.graph.node_weight(node_idx) {
@@ -286,15 +288,23 @@ impl CodeQueryEngine {
 
         if let Some(&target_node) = self.symbol_index.get(symbol_name) {
             // Find all nodes that have edges pointing to this symbol
-            for edge_idx in self.analysis.graph.edges_directed(target_node, petgraph::Incoming) {
+            for edge_idx in self
+                .analysis
+                .graph
+                .edges_directed(target_node, petgraph::Incoming)
+            {
                 let source_node = edge_idx.source();
-                
+
                 if let Some(symbol_info) = self.get_symbol_info(source_node) {
                     dependents.push(symbol_info);
                 }
 
                 if let Some(edge_data) = self.analysis.graph.edge_weight(edge_idx.id()) {
-                    relationships.push(self.relationship_to_info(source_node, target_node, edge_data));
+                    relationships.push(self.relationship_to_info(
+                        source_node,
+                        target_node,
+                        edge_data,
+                    ));
                 }
             }
         }
@@ -317,15 +327,23 @@ impl CodeQueryEngine {
 
         if let Some(&source_node) = self.symbol_index.get(symbol_name) {
             // Find all nodes that this symbol points to
-            for edge_idx in self.analysis.graph.edges_directed(source_node, petgraph::Outgoing) {
+            for edge_idx in self
+                .analysis
+                .graph
+                .edges_directed(source_node, petgraph::Outgoing)
+            {
                 let target_node = edge_idx.target();
-                
+
                 if let Some(symbol_info) = self.get_symbol_info(target_node) {
                     dependencies.push(symbol_info);
                 }
 
                 if let Some(edge_data) = self.analysis.graph.edge_weight(edge_idx.id()) {
-                    relationships.push(self.relationship_to_info(source_node, target_node, edge_data));
+                    relationships.push(self.relationship_to_info(
+                        source_node,
+                        target_node,
+                        edge_data,
+                    ));
                 }
             }
         }
@@ -343,7 +361,9 @@ impl CodeQueryEngine {
 
     /// Find the most complex symbols in the codebase
     pub fn find_complex_symbols(&self, limit: usize) -> QueryResult {
-        let complex_symbols: Vec<SymbolInfo> = self.analysis.graph
+        let complex_symbols: Vec<SymbolInfo> = self
+            .analysis
+            .graph
             .node_indices()
             .filter_map(|node_idx| self.get_symbol_info(node_idx))
             .collect::<Vec<_>>()
@@ -377,7 +397,9 @@ impl CodeQueryEngine {
         // Find symbols with high fan-out (too many dependencies)
         for node_idx in self.analysis.graph.node_indices() {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
-                let outgoing_edges = self.analysis.graph
+                let outgoing_edges = self
+                    .analysis
+                    .graph
                     .edges_directed(node_idx, petgraph::Outgoing)
                     .count();
 
@@ -386,7 +408,7 @@ impl CodeQueryEngine {
                         "Symbol '{}' has high coupling with {} dependencies",
                         node.symbol.name, outgoing_edges
                     ));
-                    
+
                     if let Some(symbol_info) = self.get_symbol_info(node_idx) {
                         problem_symbols.push(symbol_info);
                     }
@@ -412,7 +434,8 @@ impl CodeQueryEngine {
 
         let context = ContextInfo {
             total_symbols: self.analysis.symbol_count,
-            files_involved: problem_symbols.iter()
+            files_involved: problem_symbols
+                .iter()
                 .map(|s| s.file_path.clone())
                 .collect::<HashSet<_>>()
                 .len(),
@@ -438,9 +461,11 @@ impl CodeQueryEngine {
     /// Get detailed information about a specific symbol
     fn get_symbol_info(&self, node_idx: NodeIndex) -> Option<SymbolInfo> {
         let node = self.analysis.graph.node_weight(node_idx)?;
-        
+
         // Find dependencies (outgoing edges)
-        let dependencies: Vec<String> = self.analysis.graph
+        let dependencies: Vec<String> = self
+            .analysis
+            .graph
             .edges_directed(node_idx, petgraph::Outgoing)
             .filter_map(|edge| {
                 let target_node = self.analysis.graph.node_weight(edge.target())?;
@@ -449,7 +474,9 @@ impl CodeQueryEngine {
             .collect();
 
         // Find dependents (incoming edges)
-        let dependents: Vec<String> = self.analysis.graph
+        let dependents: Vec<String> = self
+            .analysis
+            .graph
             .edges_directed(node_idx, petgraph::Incoming)
             .filter_map(|edge| {
                 let source_node = self.analysis.graph.node_weight(edge.source())?;
@@ -458,7 +485,8 @@ impl CodeQueryEngine {
             .collect();
 
         // Find related files through dependencies
-        let mut related_files: HashSet<String> = dependencies.iter()
+        let mut related_files: HashSet<String> = dependencies
+            .iter()
             .chain(dependents.iter())
             .filter_map(|symbol_name| {
                 let node_idx = self.symbol_index.get(symbol_name)?;
@@ -466,7 +494,7 @@ impl CodeQueryEngine {
                 Some(node.file_path.clone())
             })
             .collect();
-        
+
         related_files.remove(&node.file_path); // Remove the symbol's own file
         let related_files: Vec<String> = related_files.into_iter().collect();
 
@@ -487,12 +515,16 @@ impl CodeQueryEngine {
         target_node: NodeIndex,
         relationship: &CodeRelationship,
     ) -> RelationshipInfo {
-        let source_symbol = self.analysis.graph
+        let source_symbol = self
+            .analysis
+            .graph
             .node_weight(source_node)
             .map(|n| n.symbol.qualified_name())
             .unwrap_or_else(|| "unknown".to_string());
 
-        let target_symbol = self.analysis.graph
+        let target_symbol = self
+            .analysis
+            .graph
             .node_weight(target_node)
             .map(|n| n.symbol.qualified_name())
             .unwrap_or_else(|| "unknown".to_string());
@@ -508,7 +540,8 @@ impl CodeQueryEngine {
 
     /// Build context information for query results
     fn build_context(&self, symbols: &[SymbolInfo]) -> ContextInfo {
-        let files_involved = symbols.iter()
+        let files_involved = symbols
+            .iter()
             .map(|s| s.file_path.clone())
             .collect::<HashSet<_>>()
             .len();
@@ -536,18 +569,23 @@ impl CodeQueryEngine {
             suggestions.push(format!("No symbols found matching '{pattern}'"));
             suggestions.push("Try using partial names or check spelling".to_string());
         } else {
-            suggestions.push(format!("Found {} symbols matching '{}'", symbols.len(), pattern));
-            
+            suggestions.push(format!(
+                "Found {} symbols matching '{}'",
+                symbols.len(),
+                pattern
+            ));
+
             if symbols.len() > self.thresholds.large_result_threshold {
                 suggestions.push("Consider narrowing your search".to_string());
             }
 
             // Suggest related symbols
-            let related: HashSet<String> = symbols.iter()
+            let related: HashSet<String> = symbols
+                .iter()
                 .flat_map(|s| s.dependencies.iter().chain(s.dependents.iter()))
                 .cloned()
                 .collect();
-            
+
             if !related.is_empty() {
                 let related_list: Vec<String> = related.into_iter().take(3).collect();
                 suggestions.push(format!("Related symbols: {}", related_list.join(", ")));
@@ -582,7 +620,11 @@ impl CodeQueryEngine {
     }
 
     /// Generate suggestions for dependency queries
-    fn generate_dependency_suggestions(&self, symbol_name: &str, is_dependents: bool) -> Vec<String> {
+    fn generate_dependency_suggestions(
+        &self,
+        symbol_name: &str,
+        is_dependents: bool,
+    ) -> Vec<String> {
         if is_dependents {
             vec![
                 format!("Symbols that depend on '{}'", symbol_name),
@@ -626,12 +668,15 @@ impl CodeQueryEngine {
                 // Check for factory naming patterns
                 if name.contains("factory") || name.ends_with("factory") {
                     // Verify it creates other objects (has outgoing relationships to classes)
-                    let creates_objects = self.analysis.graph
+                    let creates_objects = self
+                        .analysis
+                        .graph
                         .edges_directed(node_idx, petgraph::Outgoing)
                         .any(|edge| {
                             if let Some(target) = self.analysis.graph.node_weight(edge.target()) {
-                                target.symbol.kind == SymbolKind::Class &&
-                                edge.weight().kind == crate::analysis::RelationshipKind::Calls
+                                target.symbol.kind == SymbolKind::Class
+                                    && edge.weight().kind
+                                        == crate::analysis::RelationshipKind::Calls
                             } else {
                                 false
                             }
@@ -645,8 +690,11 @@ impl CodeQueryEngine {
                 // Check for factory methods (static methods that return instances)
                 if node.symbol.kind == SymbolKind::Method {
                     if let Some(signature) = &node.symbol.signature {
-                        if signature.contains("static") &&
-                           (name.contains("create") || name.contains("make") || name.contains("build")) {
+                        if signature.contains("static")
+                            && (name.contains("create")
+                                || name.contains("make")
+                                || name.contains("build"))
+                        {
                             patterns.push(format!("Factory Method Pattern ({})", node.symbol.name));
                         }
                     }
@@ -719,9 +767,12 @@ impl CodeQueryEngine {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
                 let name = &node.symbol.name.to_lowercase();
 
-                if (name.contains("observer") || name.contains("listener") || name.contains("subscriber")) &&
-                   (node.symbol.kind == SymbolKind::Interface || node.symbol.kind == SymbolKind::Class) {
-
+                if (name.contains("observer")
+                    || name.contains("listener")
+                    || name.contains("subscriber"))
+                    && (node.symbol.kind == SymbolKind::Interface
+                        || node.symbol.kind == SymbolKind::Class)
+                {
                     // Check for notify/update methods
                     if self.has_notification_methods(node_idx) {
                         patterns.push(format!("Observer Pattern ({})", node.symbol.name));
@@ -745,8 +796,10 @@ impl CodeQueryEngine {
                     // Check for multiple implementations
                     let implementations = self.count_implementations(node_idx);
                     if implementations > 1 {
-                        patterns.push(format!("Strategy Pattern ({} with {} implementations)",
-                                            node.symbol.name, implementations));
+                        patterns.push(format!(
+                            "Strategy Pattern ({} with {} implementations)",
+                            node.symbol.name, implementations
+                        ));
                     }
                 }
             }
@@ -799,9 +852,18 @@ impl CodeQueryEngine {
     fn detect_mvc_pattern(&self) -> Vec<String> {
         let mut patterns = Vec::new();
 
-        let has_controllers = self.symbol_index.keys().any(|name| name.to_lowercase().contains("controller"));
-        let has_models = self.symbol_index.keys().any(|name| name.to_lowercase().contains("model"));
-        let has_views = self.symbol_index.keys().any(|name| name.to_lowercase().contains("view"));
+        let has_controllers = self
+            .symbol_index
+            .keys()
+            .any(|name| name.to_lowercase().contains("controller"));
+        let has_models = self
+            .symbol_index
+            .keys()
+            .any(|name| name.to_lowercase().contains("model"));
+        let has_views = self
+            .symbol_index
+            .keys()
+            .any(|name| name.to_lowercase().contains("view"));
 
         if has_controllers && has_models && has_views {
             patterns.push("MVC Pattern".to_string());
@@ -818,9 +880,10 @@ impl CodeQueryEngine {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
                 let name = &node.symbol.name.to_lowercase();
 
-                if name.contains("repository") &&
-                   (node.symbol.kind == SymbolKind::Class || node.symbol.kind == SymbolKind::Interface) {
-
+                if name.contains("repository")
+                    && (node.symbol.kind == SymbolKind::Class
+                        || node.symbol.kind == SymbolKind::Interface)
+                {
                     // Check for CRUD methods
                     if self.has_crud_methods(node_idx) {
                         patterns.push(format!("Repository Pattern ({})", node.symbol.name));
@@ -839,7 +902,9 @@ impl CodeQueryEngine {
         // Look for constructor injection patterns
         let constructor_injection_count = self.count_constructor_injection();
         if constructor_injection_count > 3 {
-            patterns.push(format!("Dependency Injection Pattern ({constructor_injection_count} classes)"));
+            patterns.push(format!(
+                "Dependency Injection Pattern ({constructor_injection_count} classes)"
+            ));
         }
 
         // Look for DI containers
@@ -847,8 +912,9 @@ impl CodeQueryEngine {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
                 let name = &node.symbol.name.to_lowercase();
 
-                if (name.contains("container") || name.contains("injector") || name.contains("ioc")) &&
-                   node.symbol.kind == SymbolKind::Class {
+                if (name.contains("container") || name.contains("injector") || name.contains("ioc"))
+                    && node.symbol.kind == SymbolKind::Class
+                {
                     patterns.push(format!("DI Container Pattern ({})", node.symbol.name));
                 }
             }
@@ -865,7 +931,7 @@ impl CodeQueryEngine {
             if symbol.complexity > self.thresholds.high_complexity_threshold {
                 issues.push(format!("High complexity in '{}'", symbol.symbol.name));
             }
-            
+
             if symbol.dependencies.len() > self.thresholds.high_dependency_threshold {
                 issues.push(format!("High coupling in '{}'", symbol.symbol.name));
             }
@@ -885,9 +951,11 @@ impl CodeQueryEngine {
 
         // Analyze each strongly connected component with more than one node
         for scc in sccs.into_iter().filter(|scc| scc.len() > 1) {
-            let cycle_symbols: Vec<String> = scc.iter()
+            let cycle_symbols: Vec<String> = scc
+                .iter()
                 .filter_map(|&node_idx| {
-                    dependency_graph.node_weight(node_idx)
+                    dependency_graph
+                        .node_weight(node_idx)
                         .map(|node| node.symbol.name.clone())
                 })
                 .collect();
@@ -897,9 +965,11 @@ impl CodeQueryEngine {
             }
 
             // Get files involved in the cycle
-            let files_involved: Vec<String> = scc.iter()
+            let files_involved: Vec<String> = scc
+                .iter()
                 .filter_map(|&node_idx| {
-                    dependency_graph.node_weight(node_idx)
+                    dependency_graph
+                        .node_weight(node_idx)
                         .map(|node| node.file_path.clone())
                 })
                 .collect::<HashSet<_>>()
@@ -913,7 +983,8 @@ impl CodeQueryEngine {
             let severity = self.classify_cycle_severity(impact_score, &scc, &files_involved);
 
             // Generate cycle breaking suggestions
-            let breaking_suggestions = self.generate_cycle_breaking_suggestions(&scc, &cycle_symbols);
+            let breaking_suggestions =
+                self.generate_cycle_breaking_suggestions(&scc, &cycle_symbols);
 
             cycle_infos.push(CircularDependencyInfo {
                 cycle: cycle_symbols,
@@ -925,7 +996,11 @@ impl CodeQueryEngine {
         }
 
         // Sort by impact score (highest first)
-        cycle_infos.sort_by(|a, b| b.impact_score.partial_cmp(&a.impact_score).unwrap_or(std::cmp::Ordering::Equal));
+        cycle_infos.sort_by(|a, b| {
+            b.impact_score
+                .partial_cmp(&a.impact_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         cycle_infos
     }
@@ -960,16 +1035,23 @@ impl CodeQueryEngine {
     }
 
     /// Classify cycle severity based on impact and characteristics
-    fn classify_cycle_severity(&self, impact_score: f32, scc: &[NodeIndex], files_involved: &[String]) -> CycleSeverity {
+    fn classify_cycle_severity(
+        &self,
+        impact_score: f32,
+        scc: &[NodeIndex],
+        files_involved: &[String],
+    ) -> CycleSeverity {
         // Critical: High impact, many files, or core system components
-        if impact_score > self.thresholds.critical_impact_threshold ||
-           files_involved.len() > self.thresholds.max_files_for_critical ||
-           self.involves_core_components(scc) {
+        if impact_score > self.thresholds.critical_impact_threshold
+            || files_involved.len() > self.thresholds.max_files_for_critical
+            || self.involves_core_components(scc)
+        {
             CycleSeverity::Critical
         }
         // High: Significant impact or cross-file dependencies
-        else if impact_score > self.thresholds.high_impact_threshold ||
-                files_involved.len() > self.thresholds.max_files_for_high {
+        else if impact_score > self.thresholds.high_impact_threshold
+            || files_involved.len() > self.thresholds.max_files_for_high
+        {
             CycleSeverity::High
         }
         // Medium: Moderate impact
@@ -990,8 +1072,12 @@ impl CodeQueryEngine {
             if let Some(node) = dependency_graph.node_weight(node_idx) {
                 let name = &node.symbol.name.to_lowercase();
                 // Check for common core component patterns
-                if name.contains("main") || name.contains("core") || name.contains("system")
-                   || name.contains("manager") || name.contains("controller") {
+                if name.contains("main")
+                    || name.contains("core")
+                    || name.contains("system")
+                    || name.contains("manager")
+                    || name.contains("controller")
+                {
                     return true;
                 }
             }
@@ -1000,42 +1086,57 @@ impl CodeQueryEngine {
     }
 
     /// Generate suggestions for breaking circular dependencies
-    fn generate_cycle_breaking_suggestions(&self, scc: &[NodeIndex], _cycle_symbols: &[String]) -> Vec<String> {
+    fn generate_cycle_breaking_suggestions(
+        &self,
+        scc: &[NodeIndex],
+        _cycle_symbols: &[String],
+    ) -> Vec<String> {
         let mut suggestions = Vec::new();
 
         // Generic suggestions based on cycle characteristics
         if scc.len() > 3 {
-            suggestions.push("Consider breaking this large cycle into smaller, more focused components".to_string());
+            suggestions.push(
+                "Consider breaking this large cycle into smaller, more focused components"
+                    .to_string(),
+            );
         }
 
-        suggestions.push("Introduce an interface or abstract class to break direct dependencies".to_string());
+        suggestions.push(
+            "Introduce an interface or abstract class to break direct dependencies".to_string(),
+        );
         suggestions.push("Use dependency injection to invert control flow".to_string());
         suggestions.push("Extract common functionality into a separate module".to_string());
 
         // Specific suggestions based on symbol types
         let dependency_graph = &self.analysis.graph;
         let has_classes = scc.iter().any(|&node_idx| {
-            dependency_graph.node_weight(node_idx)
+            dependency_graph
+                .node_weight(node_idx)
                 .map(|node| node.symbol.kind == SymbolKind::Class)
                 .unwrap_or(false)
         });
 
         if has_classes {
             suggestions.push("Apply the Dependency Inversion Principle - depend on abstractions, not concretions".to_string());
-            suggestions.push("Consider using the Observer pattern to decouple components".to_string());
+            suggestions
+                .push("Consider using the Observer pattern to decouple components".to_string());
         }
 
         // File-based suggestions
-        let files_involved: HashSet<String> = scc.iter()
+        let files_involved: HashSet<String> = scc
+            .iter()
             .filter_map(|&node_idx| {
-                dependency_graph.node_weight(node_idx)
+                dependency_graph
+                    .node_weight(node_idx)
                     .map(|node| node.file_path.clone())
             })
             .collect();
 
         if files_involved.len() > 1 {
-            suggestions.push("Consider reorganizing code to reduce cross-file dependencies".to_string());
-            suggestions.push("Move related functionality into the same module or package".to_string());
+            suggestions
+                .push("Consider reorganizing code to reduce cross-file dependencies".to_string());
+            suggestions
+                .push("Move related functionality into the same module or package".to_string());
         }
 
         suggestions
@@ -1043,7 +1144,9 @@ impl CodeQueryEngine {
 
     /// Calculate overall complexity score for the codebase
     fn calculate_overall_complexity(&self) -> f32 {
-        let total_complexity: u32 = self.analysis.graph
+        let total_complexity: u32 = self
+            .analysis
+            .graph
             .node_weights()
             .map(|node| node.metrics.cyclomatic_complexity)
             .sum();
@@ -1056,11 +1159,20 @@ impl CodeQueryEngine {
     /// Check if a class has a private constructor
     fn has_private_constructor(&self, node_idx: NodeIndex) -> bool {
         // Look for constructor methods with private modifiers
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
-                if target_node.symbol.kind == SymbolKind::Method &&
-                   (target_node.symbol.name == "constructor" || target_node.symbol.name == "__init__") {
-                    return target_node.symbol.modifiers.contains(&"private".to_string());
+                if target_node.symbol.kind == SymbolKind::Method
+                    && (target_node.symbol.name == "constructor"
+                        || target_node.symbol.name == "__init__")
+                {
+                    return target_node
+                        .symbol
+                        .modifiers
+                        .contains(&"private".to_string());
                 }
             }
         }
@@ -1069,12 +1181,17 @@ impl CodeQueryEngine {
 
     /// Check if a class has static instance methods
     fn has_static_instance_method(&self, node_idx: NodeIndex) -> bool {
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let name = &target_node.symbol.name.to_lowercase();
-                    if (name.contains("instance") || name.contains("getinstance")) &&
-                       target_node.symbol.modifiers.contains(&"static".to_string()) {
+                    if (name.contains("instance") || name.contains("getinstance"))
+                        && target_node.symbol.modifiers.contains(&"static".to_string())
+                    {
                         return true;
                     }
                 }
@@ -1085,12 +1202,17 @@ impl CodeQueryEngine {
 
     /// Check if a class has static instance fields
     fn has_static_instance_field(&self, node_idx: NodeIndex) -> bool {
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Field {
                     let name = &target_node.symbol.name.to_lowercase();
-                    if name.contains("instance") &&
-                       target_node.symbol.modifiers.contains(&"static".to_string()) {
+                    if name.contains("instance")
+                        && target_node.symbol.modifiers.contains(&"static".to_string())
+                    {
                         return true;
                     }
                 }
@@ -1103,13 +1225,19 @@ impl CodeQueryEngine {
     fn has_fluent_interface(&self, node_idx: NodeIndex) -> bool {
         let mut fluent_methods = 0;
 
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     // Check if method signature suggests it returns self
                     if let Some(signature) = &target_node.symbol.signature {
-                        if signature.contains("return this") || signature.contains("-> Self") ||
-                           signature.contains("return self") {
+                        if signature.contains("return this")
+                            || signature.contains("-> Self")
+                            || signature.contains("return self")
+                        {
                             fluent_methods += 1;
                         }
                     }
@@ -1122,7 +1250,11 @@ impl CodeQueryEngine {
 
     /// Check if a class has a build method
     fn has_build_method(&self, node_idx: NodeIndex) -> bool {
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let name = &target_node.symbol.name.to_lowercase();
@@ -1137,12 +1269,19 @@ impl CodeQueryEngine {
 
     /// Check if a class has notification methods (for Observer pattern)
     fn has_notification_methods(&self, node_idx: NodeIndex) -> bool {
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let name = &target_node.symbol.name.to_lowercase();
-                    if name.contains("notify") || name.contains("update") ||
-                       name.contains("onchange") || name.contains("handle") {
+                    if name.contains("notify")
+                        || name.contains("update")
+                        || name.contains("onchange")
+                        || name.contains("handle")
+                    {
                         return true;
                     }
                 }
@@ -1155,7 +1294,11 @@ impl CodeQueryEngine {
     fn count_implementations(&self, interface_idx: NodeIndex) -> usize {
         let mut count = 0;
 
-        for edge in self.analysis.graph.edges_directed(interface_idx, petgraph::Incoming) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(interface_idx, petgraph::Incoming)
+        {
             if edge.weight().kind == crate::analysis::RelationshipKind::Implements {
                 count += 1;
             }
@@ -1168,9 +1311,14 @@ impl CodeQueryEngine {
     fn implements_wrapped_interface(&self, node_idx: NodeIndex) -> bool {
         // This is a simplified check - in a full implementation, we'd analyze
         // the composition relationship and interface implementation
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
-            if edge.weight().kind == crate::analysis::RelationshipKind::Implements ||
-               edge.weight().kind == crate::analysis::RelationshipKind::DependsOn {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
+            if edge.weight().kind == crate::analysis::RelationshipKind::Implements
+                || edge.weight().kind == crate::analysis::RelationshipKind::DependsOn
+            {
                 return true;
             }
         }
@@ -1182,7 +1330,11 @@ impl CodeQueryEngine {
         let mut implements_count = 0;
         let mut depends_count = 0;
 
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             match edge.weight().kind {
                 crate::analysis::RelationshipKind::Implements => implements_count += 1,
                 crate::analysis::RelationshipKind::DependsOn => depends_count += 1,
@@ -1196,9 +1348,15 @@ impl CodeQueryEngine {
     /// Check if a repository has CRUD methods
     fn has_crud_methods(&self, node_idx: NodeIndex) -> bool {
         let mut crud_methods = 0;
-        let crud_patterns = ["create", "read", "update", "delete", "find", "save", "get", "remove"];
+        let crud_patterns = [
+            "create", "read", "update", "delete", "find", "save", "get", "remove",
+        ];
 
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let name = &target_node.symbol.name.to_lowercase();
@@ -1220,10 +1378,16 @@ impl CodeQueryEngine {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
                 if node.symbol.kind == SymbolKind::Class {
                     // Check if constructor has dependencies injected
-                    for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+                    for edge in self
+                        .analysis
+                        .graph
+                        .edges_directed(node_idx, petgraph::Outgoing)
+                    {
                         if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
-                            if target_node.symbol.kind == SymbolKind::Method &&
-                               (target_node.symbol.name == "constructor" || target_node.symbol.name == "__init__") {
+                            if target_node.symbol.kind == SymbolKind::Method
+                                && (target_node.symbol.name == "constructor"
+                                    || target_node.symbol.name == "__init__")
+                            {
                                 // Check if constructor has parameters (simplified check)
                                 if let Some(signature) = &target_node.symbol.signature {
                                     if signature.contains("(") && signature.contains(",") {
@@ -1246,8 +1410,8 @@ impl CodeQueryEngine {
 mod tests {
     use super::*;
     use crate::analysis::CodeMetrics;
-    use crate::symbols::Location;
     use crate::parsers::LanguageId;
+    use crate::symbols::Location;
     use petgraph::Graph;
 
     fn create_test_symbol(name: &str, kind: SymbolKind) -> Symbol {
@@ -1288,13 +1452,13 @@ mod tests {
     fn test_find_symbols_by_kind() {
         let mut graph = Graph::new();
         let symbol = create_test_symbol("test_function", SymbolKind::Function);
-        
+
         let node_data = crate::analysis::CodeNode {
             symbol,
             file_path: "test.rs".to_string(),
             metrics: CodeMetrics::default(),
         };
-        
+
         graph.add_node(node_data);
 
         let analysis = AnalysisResult {
@@ -1307,7 +1471,7 @@ mod tests {
 
         let engine = CodeQueryEngine::new(analysis);
         let result = engine.find_symbols_by_kind(SymbolKind::Function);
-        
+
         assert_eq!(result.symbols.len(), 1);
         assert_eq!(result.symbols[0].symbol.name, "test_function");
     }

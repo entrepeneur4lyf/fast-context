@@ -23,7 +23,13 @@ impl SymbolExtractor for MarkdownExtractor {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
 
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -41,7 +47,10 @@ impl MarkdownExtractor {
             // Headers: # Header, ## Header, etc.
             "atx_heading" | "setext_heading" => {
                 if let Some(heading_content) = node.child_by_field_name("heading_content") {
-                    let title = self.get_node_text(heading_content, source).trim().to_string();
+                    let title = self
+                        .get_node_text(heading_content, source)
+                        .trim()
+                        .to_string();
                     if !title.is_empty() {
                         let location = Location::from_node(&node, file_path);
                         let level = self.get_heading_level(&node, source);
@@ -199,14 +208,29 @@ impl MarkdownExtractor {
         } else {
             // For setext headings, = is h1, - is h2
             let text = self.get_node_text(*node, source);
-            if text.contains('=') { 1 } else { 2 }
+            if text.contains('=') {
+                1
+            } else {
+                2
+            }
         }
     }
 
-    fn adjust_scope_stack_for_heading(&self, scope_stack: &mut Vec<Scope>, level: usize, new_scope: Scope) {
+    fn adjust_scope_stack_for_heading(
+        &self,
+        scope_stack: &mut Vec<Scope>,
+        level: usize,
+        new_scope: Scope,
+    ) {
         // Remove scopes that are at the same level or deeper
         scope_stack.retain(|scope| {
-            if let Some(modifier) = scope.name.chars().take_while(|&c| c == '#').count().checked_sub(1) {
+            if let Some(modifier) = scope
+                .name
+                .chars()
+                .take_while(|&c| c == '#')
+                .count()
+                .checked_sub(1)
+            {
                 modifier < level - 1
             } else {
                 true
@@ -261,7 +285,8 @@ impl MarkdownExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "table_header_row" {
-                let headers: Vec<String> = child.children(&mut child.walk())
+                let headers: Vec<String> = child
+                    .children(&mut child.walk())
                     .filter(|cell| cell.kind() == "table_cell")
                     .map(|cell| self.get_node_text(cell, source).trim().to_string())
                     .collect();

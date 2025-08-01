@@ -1,5 +1,5 @@
 //! Swift symbol extractor
-//! 
+//!
 //! Extracts symbols from Swift source code including:
 //! - Functions and methods
 //! - Classes and structs
@@ -23,8 +23,14 @@ impl SymbolExtractor for SwiftExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -74,7 +80,9 @@ impl SwiftExtractor {
         if matches!(node.kind(), "class_declaration" | "protocol_declaration") {
             // For class_declaration, check if it was a class or struct (not enum)
             if node.kind() == "class_declaration" {
-                if self.node_contains_keyword(&node, "class") || self.node_contains_keyword(&node, "struct") {
+                if self.node_contains_keyword(&node, "class")
+                    || self.node_contains_keyword(&node, "struct")
+                {
                     scope_stack.pop();
                 }
             } else {
@@ -83,14 +91,21 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Swift import: import Foundation, import UIKit.UIView
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" || child.kind() == "simple_identifier" {
                 let import_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 symbols.push(Symbol {
                     name: import_name,
                     kind: SymbolKind::Import,
@@ -106,14 +121,24 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_type_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_type_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_swift_doc(node, source);
-            
+
             // Determine the type based on keywords in the node
             let (kind, should_push_scope) = if self.node_contains_keyword(node, "class") {
                 (SymbolKind::Class, true)
@@ -124,7 +149,7 @@ impl SwiftExtractor {
             } else {
                 (SymbolKind::Class, true) // Default to class if unclear
             };
-            
+
             // Push as scope for nested items if needed
             if should_push_scope {
                 let scope = Scope {
@@ -134,12 +159,17 @@ impl SwiftExtractor {
                 };
                 scope_stack.push(scope);
             }
-            
+
             symbols.push(Symbol {
                 name,
                 kind,
                 location,
-                scope_chain: scope_stack[..if should_push_scope { scope_stack.len()-1 } else { scope_stack.len() }].to_vec(),
+                scope_chain: scope_stack[..if should_push_scope {
+                    scope_stack.len() - 1
+                } else {
+                    scope_stack.len()
+                }]
+                    .to_vec(),
                 language: LanguageId::Swift,
                 documentation,
                 modifiers,
@@ -148,14 +178,24 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_protocol(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_protocol(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_swift_doc(node, source);
-            
+
             // Push protocol as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -163,12 +203,12 @@ impl SwiftExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Interface,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Swift,
                 documentation,
                 modifiers,
@@ -187,22 +227,35 @@ impl SwiftExtractor {
         false
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let modifiers = self.extract_modifiers(node, source);
             let documentation = self.extract_swift_doc(node, source);
             let signature = self.extract_function_signature(node, source);
-            
+
             // Determine if this is a method (inside a type) or standalone function
-            let kind = if scope_stack.iter().any(|s| matches!(s.kind, SymbolKind::Class | SymbolKind::Struct)) {
+            let kind = if scope_stack
+                .iter()
+                .any(|s| matches!(s.kind, SymbolKind::Class | SymbolKind::Struct))
+            {
                 SymbolKind::Method
             } else {
                 SymbolKind::Function
             };
-            
+
             symbols.push(Symbol {
                 name,
                 kind,
@@ -216,13 +269,20 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_initializer(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_initializer(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Swift initializers don't have names, but we'll use "init"
         let location = Location::from_node(node, file_path);
-        
+
         let modifiers = self.extract_modifiers(node, source);
         let signature = self.extract_init_signature(node, source);
-        
+
         symbols.push(Symbol {
             name: "init".to_string(),
             kind: SymbolKind::Method,
@@ -235,15 +295,25 @@ impl SwiftExtractor {
         });
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_property(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
             let location = Location::from_node(node, file_path);
-            
+
             let mut modifiers = self.extract_modifiers(node, source);
             modifiers.push("property".to_string());
             let documentation = self.extract_swift_doc(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Field,
@@ -257,7 +327,14 @@ impl SwiftExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Swift variable declarations can contain multiple bindings
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -265,13 +342,18 @@ impl SwiftExtractor {
                 // Look for the pattern (variable name) in the binding
                 let mut binding_cursor = child.walk();
                 for binding_child in child.children(&mut binding_cursor) {
-                    if binding_child.kind() == "simple_identifier" || binding_child.kind() == "identifier" {
-                        let name = binding_child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    if binding_child.kind() == "simple_identifier"
+                        || binding_child.kind() == "identifier"
+                    {
+                        let name = binding_child
+                            .utf8_text(source.as_bytes())
+                            .unwrap_or("")
+                            .to_string();
                         let location = Location::from_node(&binding_child, file_path);
-                        
+
                         let mut modifiers = self.extract_modifiers(node, source);
                         modifiers.push("variable".to_string());
-                        
+
                         symbols.push(Symbol {
                             name,
                             kind: SymbolKind::Variable,
@@ -291,7 +373,7 @@ impl SwiftExtractor {
 
     fn extract_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Look for modifiers that appear before declarations
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -312,7 +394,7 @@ impl SwiftExtractor {
                 _ => {}
             }
         }
-        
+
         modifiers
     }
 
@@ -336,8 +418,10 @@ impl SwiftExtractor {
                     } else if comment_text.starts_with("/**") && comment_text.ends_with("*/") {
                         // Block documentation comment
                         let content = comment_text
-                            .strip_prefix("/**").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/**")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())
@@ -354,8 +438,10 @@ impl SwiftExtractor {
                     let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
                     if comment_text.starts_with("/**") {
                         let content = comment_text
-                            .strip_prefix("/**").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/**")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())
@@ -387,31 +473,36 @@ impl SwiftExtractor {
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-            
-        let params = node.child_by_field_name("parameters")
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
+        let params = node
+            .child_by_field_name("parameters")
             .and_then(|p| p.utf8_text(source.as_bytes()).ok())
             .unwrap_or("()");
-            
-        let return_type = node.child_by_field_name("result")
+
+        let return_type = node
+            .child_by_field_name("result")
             .and_then(|r| r.utf8_text(source.as_bytes()).ok())
             .unwrap_or("");
-            
-        let return_part = if return_type.is_empty() { 
-            String::new() 
-        } else { 
-            format!(" -> {return_type}") 
+
+        let return_part = if return_type.is_empty() {
+            String::new()
+        } else {
+            format!(" -> {return_type}")
         };
-        
+
         Some(format!("func {name}{params}{return_part}"))
     }
 
     fn extract_init_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .and_then(|p| p.utf8_text(source.as_bytes()).ok())
             .unwrap_or("()");
-            
+
         Some(format!("init{params}"))
     }
 }

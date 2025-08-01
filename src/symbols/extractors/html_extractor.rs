@@ -1,5 +1,5 @@
 //! HTML symbol extractor
-//! 
+//!
 //! Extracts symbols from HTML source code including:
 //! - Elements and tags
 //! - Attributes (id, class, data attributes)
@@ -23,8 +23,14 @@ impl SymbolExtractor for HtmlExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -75,13 +81,20 @@ impl HtmlExtractor {
         }
     }
 
-    fn extract_element(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_element(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // Extract element name from start tag
         if let Some(start_tag) = node.child_by_field_name("start_tag") {
             if let Some(name_node) = start_tag.child_by_field_name("name") {
                 let tag_name = self.get_node_text(&name_node, source);
                 let location = Location::from_node(&start_tag, file_path);
-                
+
                 // Push element as scope for nested items
                 let scope = Scope {
                     name: tag_name.clone(),
@@ -89,7 +102,7 @@ impl HtmlExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 let mut modifiers = vec!["element".to_string(), tag_name.clone()];
 
                 // Add semantic element classification
@@ -113,7 +126,7 @@ impl HtmlExtractor {
                 // Extract important attributes for additional context
                 let mut id_attr = None;
                 let mut class_attr = None;
-                
+
                 let mut cursor = start_tag.walk();
                 for child in start_tag.children(&mut cursor) {
                     if child.kind() == "attribute" {
@@ -121,17 +134,21 @@ impl HtmlExtractor {
                             let attr_name_text = self.get_node_text(&attr_name, source);
                             if attr_name_text == "id" {
                                 if let Some(attr_value) = child.child_by_field_name("value") {
-                                    id_attr = Some(self.clean_attribute_value(&self.get_node_text(&attr_value, source)));
+                                    id_attr = Some(self.clean_attribute_value(
+                                        &self.get_node_text(&attr_value, source),
+                                    ));
                                 }
                             } else if attr_name_text == "class" {
                                 if let Some(attr_value) = child.child_by_field_name("value") {
-                                    class_attr = Some(self.clean_attribute_value(&self.get_node_text(&attr_value, source)));
+                                    class_attr = Some(self.clean_attribute_value(
+                                        &self.get_node_text(&attr_value, source),
+                                    ));
                                 }
                             }
                         }
                     }
                 }
-                
+
                 // Add id and class info to modifiers
                 if let Some(id) = &id_attr {
                     modifiers.push(format!("id={id}"));
@@ -139,21 +156,25 @@ impl HtmlExtractor {
                 if let Some(class) = &class_attr {
                     modifiers.push(format!("class={class}"));
                 }
-                
+
                 // Create element name with id/class for uniqueness
                 let element_name = if let Some(id) = id_attr {
                     format!("{tag_name}#{id}")
                 } else if let Some(class) = class_attr {
-                    format!("{}.{}", tag_name, class.split_whitespace().next().unwrap_or(""))
+                    format!(
+                        "{}.{}",
+                        tag_name,
+                        class.split_whitespace().next().unwrap_or("")
+                    )
                 } else {
                     tag_name.clone()
                 };
-                
+
                 symbols.push(Symbol {
                     name: element_name,
                     kind: SymbolKind::Class,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::HTML,
                     documentation: self.extract_html_doc(node, source),
                     modifiers,
@@ -163,25 +184,37 @@ impl HtmlExtractor {
         }
     }
 
-    fn extract_self_closing_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_self_closing_tag(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let tag_name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
-            let mut modifiers = vec!["element".to_string(), "self-closing".to_string(), tag_name.clone()];
-            
+
+            let mut modifiers = vec![
+                "element".to_string(),
+                "self-closing".to_string(),
+                tag_name.clone(),
+            ];
+
             // Extract important attributes
             let mut id_attr = None;
             let mut src_attr = None;
             let mut href_attr = None;
-            
+
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 if child.kind() == "attribute" {
                     if let Some(attr_name) = child.child_by_field_name("name") {
                         let attr_name_text = self.get_node_text(&attr_name, source);
                         if let Some(attr_value) = child.child_by_field_name("value") {
-                            let value = self.clean_attribute_value(&self.get_node_text(&attr_value, source));
+                            let value = self
+                                .clean_attribute_value(&self.get_node_text(&attr_value, source));
                             match attr_name_text.as_str() {
                                 "id" => id_attr = Some(value),
                                 "src" => src_attr = Some(value),
@@ -192,7 +225,7 @@ impl HtmlExtractor {
                     }
                 }
             }
-            
+
             // Add attribute info to modifiers
             if let Some(id) = &id_attr {
                 modifiers.push(format!("id={id}"));
@@ -203,14 +236,14 @@ impl HtmlExtractor {
             if let Some(href) = &href_attr {
                 modifiers.push(format!("href={href}"));
             }
-            
+
             // Create element name with id for uniqueness
             let element_name = if let Some(id) = id_attr {
                 format!("{tag_name}#{id}")
             } else {
                 tag_name.clone()
             };
-            
+
             symbols.push(Symbol {
                 name: element_name,
                 kind: SymbolKind::Class,
@@ -224,7 +257,14 @@ impl HtmlExtractor {
         }
     }
 
-    fn extract_start_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_start_tag(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // This is handled by extract_element for full elements
         // Only process standalone start tags
         if let Some(parent) = node.parent() {
@@ -232,7 +272,7 @@ impl HtmlExtractor {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let tag_name = self.get_node_text(&name_node, source);
                     let location = Location::from_node(node, file_path);
-                    
+
                     symbols.push(Symbol {
                         name: tag_name.clone(),
                         kind: SymbolKind::Class,
@@ -248,9 +288,16 @@ impl HtmlExtractor {
         }
     }
 
-    fn extract_script_element(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_script_element(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let location = Location::from_node(node, file_path);
-        
+
         // Push script as scope
         let scope = Scope {
             name: "script".to_string(),
@@ -258,11 +305,11 @@ impl HtmlExtractor {
             location: location.clone(),
         };
         scope_stack.push(scope);
-        
+
         let mut modifiers = vec!["element".to_string(), "script".to_string()];
         let mut src_attr = None;
         let mut type_attr = None;
-        
+
         // Extract script attributes
         if let Some(start_tag) = node.child_by_field_name("start_tag") {
             let mut cursor = start_tag.walk();
@@ -271,7 +318,8 @@ impl HtmlExtractor {
                     if let Some(attr_name) = child.child_by_field_name("name") {
                         let attr_name_text = self.get_node_text(&attr_name, source);
                         if let Some(attr_value) = child.child_by_field_name("value") {
-                            let value = self.clean_attribute_value(&self.get_node_text(&attr_value, source));
+                            let value = self
+                                .clean_attribute_value(&self.get_node_text(&attr_value, source));
                             match attr_name_text.as_str() {
                                 "src" => {
                                     src_attr = Some(value.clone());
@@ -288,7 +336,7 @@ impl HtmlExtractor {
                 }
             }
         }
-        
+
         let script_name = if let Some(src) = &src_attr {
             format!("script[src={src}]")
         } else {
@@ -313,7 +361,7 @@ impl HtmlExtractor {
             name: script_name,
             kind: SymbolKind::Function,
             location,
-            scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+            scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
             language: LanguageId::HTML,
             documentation: self.extract_html_doc(node, source),
             modifiers,
@@ -321,9 +369,16 @@ impl HtmlExtractor {
         });
     }
 
-    fn extract_style_element(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_style_element(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let location = Location::from_node(node, file_path);
-        
+
         // Push style as scope
         let scope = Scope {
             name: "style".to_string(),
@@ -331,9 +386,9 @@ impl HtmlExtractor {
             location: location.clone(),
         };
         scope_stack.push(scope);
-        
+
         let mut modifiers = vec!["element".to_string(), "style".to_string()];
-        
+
         // Extract style attributes
         if let Some(start_tag) = node.child_by_field_name("start_tag") {
             let mut cursor = start_tag.walk();
@@ -343,7 +398,9 @@ impl HtmlExtractor {
                         let attr_name_text = self.get_node_text(&attr_name, source);
                         if attr_name_text == "type" {
                             if let Some(attr_value) = child.child_by_field_name("value") {
-                                let value = self.clean_attribute_value(&self.get_node_text(&attr_value, source));
+                                let value = self.clean_attribute_value(
+                                    &self.get_node_text(&attr_value, source),
+                                );
                                 modifiers.push(format!("type={value}"));
                             }
                         }
@@ -351,12 +408,12 @@ impl HtmlExtractor {
                 }
             }
         }
-        
+
         symbols.push(Symbol {
             name: "style[inline]".to_string(),
             kind: SymbolKind::Namespace,
             location,
-            scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+            scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
             language: LanguageId::HTML,
             documentation: self.extract_html_doc(node, source),
             modifiers,
@@ -364,19 +421,27 @@ impl HtmlExtractor {
         });
     }
 
-    fn extract_attribute(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_attribute(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let attr_name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let mut modifiers = vec!["attribute".to_string()];
             let signature;
-            
+
             // Get attribute value
             if let Some(value_node) = node.child_by_field_name("value") {
-                let attr_value = self.clean_attribute_value(&self.get_node_text(&value_node, source));
+                let attr_value =
+                    self.clean_attribute_value(&self.get_node_text(&value_node, source));
                 signature = Some(format!("{attr_name}={attr_value}"));
-                
+
                 // Special handling for important attributes
                 match attr_name.as_str() {
                     "id" => {
@@ -454,7 +519,7 @@ impl HtmlExtractor {
                 modifiers.push("boolean".to_string());
                 signature = Some(attr_name.clone());
             }
-            
+
             symbols.push(Symbol {
                 name: attr_name,
                 kind: SymbolKind::Field,
@@ -468,7 +533,14 @@ impl HtmlExtractor {
         }
     }
 
-    fn extract_doctype(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_doctype(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let doctype_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -504,9 +576,10 @@ impl HtmlExtractor {
 
     fn clean_attribute_value(&self, value: &str) -> String {
         // Remove quotes from attribute values
-        if (value.starts_with('"') && value.ends_with('"')) || 
-           (value.starts_with('\'') && value.ends_with('\'')) {
-            value[1..value.len()-1].to_string()
+        if (value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\''))
+        {
+            value[1..value.len() - 1].to_string()
         } else {
             value.to_string()
         }
@@ -524,8 +597,10 @@ impl HtmlExtractor {
                     let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
                     if comment_text.starts_with("<!--") && comment_text.ends_with("-->") {
                         let content = comment_text
-                            .strip_prefix("<!--").unwrap_or("")
-                            .strip_suffix("-->").unwrap_or("")
+                            .strip_prefix("<!--")
+                            .unwrap_or("")
+                            .strip_suffix("-->")
+                            .unwrap_or("")
                             .trim();
                         if !content.is_empty() {
                             doc_comments.insert(0, content.to_string());
@@ -559,36 +634,86 @@ impl HtmlExtractor {
     }
 
     fn is_semantic_element(&self, tag_name: &str) -> bool {
-        matches!(tag_name,
-            "article" | "aside" | "details" | "figcaption" | "figure" | "footer" | "header" |
-            "main" | "mark" | "nav" | "section" | "summary" | "time" | "address" | "hgroup"
+        matches!(
+            tag_name,
+            "article"
+                | "aside"
+                | "details"
+                | "figcaption"
+                | "figure"
+                | "footer"
+                | "header"
+                | "main"
+                | "mark"
+                | "nav"
+                | "section"
+                | "summary"
+                | "time"
+                | "address"
+                | "hgroup"
         )
     }
 
     fn is_form_element(&self, tag_name: &str) -> bool {
-        matches!(tag_name,
-            "form" | "input" | "textarea" | "select" | "option" | "optgroup" | "button" |
-            "label" | "fieldset" | "legend" | "datalist" | "output" | "progress" | "meter"
+        matches!(
+            tag_name,
+            "form"
+                | "input"
+                | "textarea"
+                | "select"
+                | "option"
+                | "optgroup"
+                | "button"
+                | "label"
+                | "fieldset"
+                | "legend"
+                | "datalist"
+                | "output"
+                | "progress"
+                | "meter"
         )
     }
 
     fn is_media_element(&self, tag_name: &str) -> bool {
-        matches!(tag_name,
-            "audio" | "video" | "source" | "track" | "img" | "picture" | "canvas" | "svg" |
-            "embed" | "object" | "param" | "iframe"
+        matches!(
+            tag_name,
+            "audio"
+                | "video"
+                | "source"
+                | "track"
+                | "img"
+                | "picture"
+                | "canvas"
+                | "svg"
+                | "embed"
+                | "object"
+                | "param"
+                | "iframe"
         )
     }
 
     fn is_interactive_element(&self, tag_name: &str) -> bool {
-        matches!(tag_name,
-            "a" | "button" | "input" | "select" | "textarea" | "details" | "summary" |
-            "dialog" | "menu" | "menuitem"
+        matches!(
+            tag_name,
+            "a" | "button"
+                | "input"
+                | "select"
+                | "textarea"
+                | "details"
+                | "summary"
+                | "dialog"
+                | "menu"
+                | "menuitem"
         )
     }
 
     fn is_custom_element(&self, tag_name: &str) -> bool {
         // Custom elements must contain a hyphen
-        tag_name.contains('-') && tag_name.chars().next().is_some_and(|c| c.is_ascii_lowercase())
+        tag_name.contains('-')
+            && tag_name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_ascii_lowercase())
     }
 }
 

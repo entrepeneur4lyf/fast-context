@@ -1,5 +1,5 @@
 //! Python-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Python source code, including:
 //! - Function calls and method invocations
 //! - Variable references and assignments  
@@ -8,9 +8,9 @@
 //! - Exception handling (try/except/finally)
 //! - Control flow (if/elif/else, loops, comprehensions)
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Python-specific dependency extractor
@@ -20,7 +20,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Python
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -29,11 +29,15 @@ impl DependencyExtractor for PythonDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -85,27 +89,27 @@ impl DependencyExtractor for PythonDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "call")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier" | "attribute")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "import_statement" | "import_from_statement")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
         node.kind() == "class_definition" && node.child_by_field_name("superclasses").is_some()
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "assignment" | "augmented_assignment")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -116,7 +120,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 // Try to resolve the function in known symbols
                 let resolved_functions = context.find_symbols_global(&function_name);
@@ -125,7 +129,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -133,9 +137,9 @@ impl DependencyExtractor for PythonDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -143,7 +147,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -155,12 +159,12 @@ impl DependencyExtractor for PythonDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords and built-ins
             if self.is_python_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -168,7 +172,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -176,11 +180,11 @@ impl DependencyExtractor for PythonDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -189,7 +193,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         match node.kind() {
             "import_statement" => {
                 // import module1, module2
@@ -225,14 +229,16 @@ impl DependencyExtractor for PythonDependencyExtractor {
                         dependencies.push(dependency);
                     }
                 }
-                
+
                 // Extract imported names
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "import_list" {
                         let mut import_cursor = child.walk();
                         for import_child in child.children(&mut import_cursor) {
-                            if import_child.kind() == "identifier" || import_child.kind() == "aliased_import" {
+                            if import_child.kind() == "identifier"
+                                || import_child.kind() == "aliased_import"
+                            {
                                 let import_name = self.get_node_text(&import_child, source);
                                 if !import_name.trim().is_empty() {
                                     let dependency = self.create_dependency(
@@ -252,7 +258,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -262,7 +268,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -280,7 +286,7 @@ impl DependencyExtractor for PythonDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -307,28 +313,31 @@ impl DependencyExtractor for PythonDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement" | "elif_clause" | "else_clause")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "for_statement" | "while_statement")
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
-        matches!(node.kind(), "try_statement" | "except_clause" | "finally_clause")
+        matches!(
+            node.kind(),
+            "try_statement" | "except_clause" | "finally_clause"
+        )
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         // Python doesn't have switch statements (until match in 3.10)
         matches!(node.kind(), "match_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -412,7 +421,8 @@ impl PythonDependencyExtractor {
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if child.kind() == "identifier" || child.kind() == "attribute" || child.kind() == "call" {
+            if child.kind() == "identifier" || child.kind() == "attribute" || child.kind() == "call"
+            {
                 let decorator_name = self.get_node_text(&child, source);
                 if !decorator_name.trim().is_empty() {
                     let dependency = self.create_dependency(
@@ -442,7 +452,11 @@ impl PythonDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -472,7 +486,11 @@ impl PythonDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -490,7 +508,13 @@ impl PythonDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as conditional execution
@@ -532,13 +556,25 @@ impl PythonDependencyExtractor {
                 }
 
                 if let Some(right_node) = node.child_by_field_name("right") {
-                    self.extract_condition_variables(right_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        right_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_statement" => {
                 // while condition:
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -613,7 +649,13 @@ impl PythonDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -636,7 +678,11 @@ impl PythonDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,
@@ -663,7 +709,13 @@ impl PythonDependencyExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "with_item" {
                 if let Some(value_node) = child.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
         }
@@ -700,7 +752,13 @@ impl PythonDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -786,8 +844,12 @@ impl PythonDependencyExtractor {
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip identifiers in these declaration contexts
-                "function_definition" | "class_definition" | "assignment" |
-                "parameter" | "import_statement" | "import_from_statement" => {
+                "function_definition"
+                | "class_definition"
+                | "assignment"
+                | "parameter"
+                | "import_statement"
+                | "import_from_statement" => {
                     // Check if this identifier is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -810,7 +872,8 @@ impl PythonDependencyExtractor {
 
     /// Check if a string is a Python keyword
     fn is_python_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "False" | "None" | "True" | "and" | "as" | "assert" | "async" | "await" |
             "break" | "class" | "continue" | "def" | "del" | "elif" | "else" | "except" |
             "finally" | "for" | "from" | "global" | "if" | "import" | "in" | "is" |

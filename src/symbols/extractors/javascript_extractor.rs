@@ -1,5 +1,5 @@
 //! JavaScript/TypeScript symbol extractor
-//! 
+//!
 //! Extracts symbols from JavaScript and TypeScript source code including:
 //! - Functions and arrow functions
 //! - Classes and methods
@@ -23,8 +23,14 @@ impl SymbolExtractor for JavaScriptExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -54,17 +60,19 @@ impl JavaScriptExtractor {
             LanguageId::JavaScript
         };
 
-        
         match node.kind() {
             "function_declaration" | "function" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     let signature = self.extract_function_signature(&node, source);
                     let documentation = self.extract_jsdoc(&node, source);
                     let modifiers = self.extract_function_modifiers(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Function,
@@ -83,11 +91,15 @@ impl JavaScriptExtractor {
                     match parent.kind() {
                         "variable_declarator" => {
                             if let Some(name_node) = parent.child_by_field_name("name") {
-                                let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                                let name = name_node
+                                    .utf8_text(source.as_bytes())
+                                    .unwrap_or("")
+                                    .to_string();
                                 let location = Location::from_node(&node, file_path);
-                                
-                                let signature = self.extract_arrow_function_signature(&node, source, &name);
-                                
+
+                                let signature =
+                                    self.extract_arrow_function_signature(&node, source, &name);
+
                                 symbols.push(Symbol {
                                     name,
                                     kind: SymbolKind::Function,
@@ -103,9 +115,10 @@ impl JavaScriptExtractor {
                         "assignment_expression" => {
                             if let Some(left) = parent.child_by_field_name("left") {
                                 if left.kind() == "identifier" {
-                                    let name = left.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                                    let name =
+                                        left.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                                     let location = Location::from_node(&node, file_path);
-                                    
+
                                     symbols.push(Symbol {
                                         name,
                                         kind: SymbolKind::Function,
@@ -125,9 +138,12 @@ impl JavaScriptExtractor {
             }
             "class_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     // Push class as scope for nested items
                     let scope = Scope {
                         name: name.clone(),
@@ -135,15 +151,15 @@ impl JavaScriptExtractor {
                         location: location.clone(),
                     };
                     scope_stack.push(scope);
-                    
+
                     let documentation = self.extract_jsdoc(&node, source);
                     let modifiers = self.extract_class_modifiers(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Class,
                         location,
-                        scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                        scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                         language,
                         documentation,
                         modifiers,
@@ -153,13 +169,16 @@ impl JavaScriptExtractor {
             }
             "method_definition" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     let signature = self.extract_method_signature(&node, source);
                     let documentation = self.extract_jsdoc(&node, source);
                     let modifiers = self.extract_method_modifiers(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Method,
@@ -183,9 +202,12 @@ impl JavaScriptExtractor {
             }
             "interface_declaration" if language == LanguageId::TypeScript => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Interface,
@@ -200,9 +222,12 @@ impl JavaScriptExtractor {
             }
             "type_alias_declaration" if language == LanguageId::TypeScript => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Type,
@@ -231,38 +256,59 @@ impl JavaScriptExtractor {
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-        let params = node.child_by_field_name("parameters")?
-            .utf8_text(source.as_bytes()).ok()?;
-        
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+        let params = node
+            .child_by_field_name("parameters")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
         // Check for async modifier
-        let is_async = node.prev_sibling()
+        let is_async = node
+            .prev_sibling()
             .map(|s| s.kind() == "async")
             .unwrap_or(false);
-        
+
         let async_prefix = if is_async { "async " } else { "" };
         Some(format!("{async_prefix}function {name}{params}"))
     }
 
-    fn extract_arrow_function_signature(&self, node: &Node, source: &str, name: &str) -> Option<String> {
-        let params = node.child_by_field_name("parameters")?
-            .utf8_text(source.as_bytes()).ok()?;
+    fn extract_arrow_function_signature(
+        &self,
+        node: &Node,
+        source: &str,
+        name: &str,
+    ) -> Option<String> {
+        let params = node
+            .child_by_field_name("parameters")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
         Some(format!("const {name} = {params} => {{...}}"))
     }
 
     fn extract_method_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")?
-            .utf8_text(source.as_bytes()).ok()?;
-        let params = node.child_by_field_name("parameters")?
-            .utf8_text(source.as_bytes()).ok()?;
-        
+        let name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+        let params = node
+            .child_by_field_name("parameters")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+
         // Check for method kind (get, set, async, static)
-        let kind = node.child_by_field_name("kind")
+        let kind = node
+            .child_by_field_name("kind")
             .and_then(|k| k.utf8_text(source.as_bytes()).ok())
             .unwrap_or("");
-        
-        let prefix = if kind.is_empty() { "" } else { &format!("{kind} ") };
+
+        let prefix = if kind.is_empty() {
+            ""
+        } else {
+            &format!("{kind} ")
+        };
         Some(format!("{prefix}{name}{params}"))
     }
 
@@ -354,19 +400,40 @@ impl JavaScriptExtractor {
         } else if tag_line.starts_with("@function") || tag_line.starts_with("@method") {
             self.process_function_tag(tag_line)
         } else if tag_line.starts_with("@example") {
-            format!("Example: {}", tag_line.strip_prefix("@example").unwrap_or("").trim())
+            format!(
+                "Example: {}",
+                tag_line.strip_prefix("@example").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@see") {
-            format!("See: {}", tag_line.strip_prefix("@see").unwrap_or("").trim())
+            format!(
+                "See: {}",
+                tag_line.strip_prefix("@see").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@since") {
-            format!("Since: {}", tag_line.strip_prefix("@since").unwrap_or("").trim())
+            format!(
+                "Since: {}",
+                tag_line.strip_prefix("@since").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@deprecated") {
-            format!("Deprecated: {}", tag_line.strip_prefix("@deprecated").unwrap_or("").trim())
+            format!(
+                "Deprecated: {}",
+                tag_line.strip_prefix("@deprecated").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@author") {
-            format!("Author: {}", tag_line.strip_prefix("@author").unwrap_or("").trim())
+            format!(
+                "Author: {}",
+                tag_line.strip_prefix("@author").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@version") {
-            format!("Version: {}", tag_line.strip_prefix("@version").unwrap_or("").trim())
+            format!(
+                "Version: {}",
+                tag_line.strip_prefix("@version").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@todo") {
-            format!("TODO: {}", tag_line.strip_prefix("@todo").unwrap_or("").trim())
+            format!(
+                "TODO: {}",
+                tag_line.strip_prefix("@todo").unwrap_or("").trim()
+            )
         } else if tag_line.starts_with("@override") {
             "Override: This method overrides a parent method".to_string()
         } else if tag_line.starts_with("@abstract") {
@@ -383,8 +450,15 @@ impl JavaScriptExtractor {
             "Public: This is a public member".to_string()
         } else {
             // Generic tag processing
-            let tag_name = tag_line.split_whitespace().next().unwrap_or("").trim_start_matches('@');
-            let content = tag_line.strip_prefix(&format!("@{tag_name}")).unwrap_or("").trim();
+            let tag_name = tag_line
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_start_matches('@');
+            let content = tag_line
+                .strip_prefix(&format!("@{tag_name}"))
+                .unwrap_or("")
+                .trim();
             if content.is_empty() {
                 format!("{}: true", tag_name.to_uppercase())
             } else {
@@ -428,7 +502,11 @@ impl JavaScriptExtractor {
 
     /// Process @returns/@return tags with type and description
     fn process_return_tag(&self, tag_line: &str) -> String {
-        let tag_prefix = if tag_line.starts_with("@returns") { "@returns" } else { "@return" };
+        let tag_prefix = if tag_line.starts_with("@returns") {
+            "@returns"
+        } else {
+            "@return"
+        };
         let content = tag_line.strip_prefix(tag_prefix).unwrap_or("").trim();
 
         if content.starts_with('{') {
@@ -451,7 +529,11 @@ impl JavaScriptExtractor {
 
     /// Process @throws/@exception tags
     fn process_throws_tag(&self, tag_line: &str) -> String {
-        let tag_prefix = if tag_line.starts_with("@throws") { "@throws" } else { "@exception" };
+        let tag_prefix = if tag_line.starts_with("@throws") {
+            "@throws"
+        } else {
+            "@exception"
+        };
         let content = tag_line.strip_prefix(tag_prefix).unwrap_or("").trim();
 
         if content.starts_with('{') {
@@ -477,7 +559,7 @@ impl JavaScriptExtractor {
         let content = tag_line.strip_prefix("@type").unwrap_or("").trim();
 
         if content.starts_with('{') && content.ends_with('}') {
-            let type_part = &content[1..content.len()-1];
+            let type_part = &content[1..content.len() - 1];
             format!("Type: {type_part}")
         } else {
             format!("Type: {content}")
@@ -509,7 +591,11 @@ impl JavaScriptExtractor {
 
     /// Process @class/@constructor tags
     fn process_class_tag(&self, tag_line: &str) -> String {
-        let tag_prefix = if tag_line.starts_with("@class") { "@class" } else { "@constructor" };
+        let tag_prefix = if tag_line.starts_with("@class") {
+            "@class"
+        } else {
+            "@constructor"
+        };
         let content = tag_line.strip_prefix(tag_prefix).unwrap_or("").trim();
 
         if content.is_empty() {
@@ -527,7 +613,11 @@ impl JavaScriptExtractor {
 
     /// Process @function/@method tags
     fn process_function_tag(&self, tag_line: &str) -> String {
-        let tag_prefix = if tag_line.starts_with("@function") { "@function" } else { "@method" };
+        let tag_prefix = if tag_line.starts_with("@function") {
+            "@function"
+        } else {
+            "@method"
+        };
         let content = tag_line.strip_prefix(tag_prefix).unwrap_or("").trim();
 
         if content.is_empty() {
@@ -539,14 +629,14 @@ impl JavaScriptExtractor {
 
     fn extract_function_modifiers(&self, node: &Node, _source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for async
         if let Some(prev) = node.prev_sibling() {
             if prev.kind() == "async" {
                 modifiers.push("async".to_string());
             }
         }
-        
+
         // Check for export
         if let Some(parent) = node.parent() {
             if parent.kind() == "export_statement" {
@@ -559,7 +649,7 @@ impl JavaScriptExtractor {
 
     fn extract_class_modifiers(&self, node: &Node, _source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for export
         if let Some(parent) = node.parent() {
             if parent.kind() == "export_statement" {
@@ -577,7 +667,7 @@ impl JavaScriptExtractor {
 
     fn extract_method_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for static
         if let Some(kind) = node.child_by_field_name("kind") {
             if let Ok(kind_text) = kind.utf8_text(source.as_bytes()) {
@@ -608,7 +698,15 @@ impl JavaScriptExtractor {
         modifiers
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], language: LanguageId) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+        language: LanguageId,
+    ) {
         // Find the source string
         let mut module_path = String::new();
         let mut cursor = node.walk();
@@ -620,7 +718,7 @@ impl JavaScriptExtractor {
                 break;
             }
         }
-        
+
         // Extract import specifiers
         cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -640,7 +738,7 @@ impl JavaScriptExtractor {
                     // Simple import like: import './module';
                     let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                     let location = Location::from_node(&child, file_path);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Import,
@@ -663,9 +761,12 @@ impl JavaScriptExtractor {
             match child.kind() {
                 "identifier" => {
                     // Default import: import Foo from './foo'
-                    let name = child.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string();
+                    let name = child
+                        .utf8_text(ctx.source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&child, ctx.file_path);
-                    
+
                     ctx.symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Import,
@@ -683,9 +784,12 @@ impl JavaScriptExtractor {
                     let mut ns_cursor = child.walk();
                     for ns_child in child.children(&mut ns_cursor) {
                         if ns_child.kind() == "identifier" {
-                            let name = ns_child.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string();
+                            let name = ns_child
+                                .utf8_text(ctx.source.as_bytes())
+                                .unwrap_or("")
+                                .to_string();
                             let location = Location::from_node(&child, ctx.file_path);
-                            
+
                             ctx.symbols.push(Symbol {
                                 name,
                                 kind: SymbolKind::Import,
@@ -705,16 +809,25 @@ impl JavaScriptExtractor {
                     let mut import_cursor = child.walk();
                     for import_child in child.children(&mut import_cursor) {
                         if import_child.kind() == "import_specifier" {
-                            let name = if let Some(alias) = import_child.child_by_field_name("alias") {
-                                alias.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string()
-                            } else if let Some(name_node) = import_child.child_by_field_name("name") {
-                                name_node.utf8_text(ctx.source.as_bytes()).unwrap_or("").to_string()
+                            let name = if let Some(alias) =
+                                import_child.child_by_field_name("alias")
+                            {
+                                alias
+                                    .utf8_text(ctx.source.as_bytes())
+                                    .unwrap_or("")
+                                    .to_string()
+                            } else if let Some(name_node) = import_child.child_by_field_name("name")
+                            {
+                                name_node
+                                    .utf8_text(ctx.source.as_bytes())
+                                    .unwrap_or("")
+                                    .to_string()
                             } else {
                                 continue;
                             };
-                            
+
                             let location = Location::from_node(&import_child, ctx.file_path);
-                            
+
                             ctx.symbols.push(Symbol {
                                 name,
                                 kind: SymbolKind::Import,
@@ -733,7 +846,15 @@ impl JavaScriptExtractor {
         }
     }
 
-    fn extract_export(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], language: LanguageId) {
+    fn extract_export(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+        language: LanguageId,
+    ) {
         // Handle different export types
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -745,13 +866,16 @@ impl JavaScriptExtractor {
                     let name = if let Some(alias) = child.child_by_field_name("alias") {
                         alias.utf8_text(source.as_bytes()).unwrap_or("").to_string()
                     } else if let Some(name_node) = child.child_by_field_name("name") {
-                        name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+                        name_node
+                            .utf8_text(source.as_bytes())
+                            .unwrap_or("")
+                            .to_string()
                     } else {
                         continue;
                     };
-                    
+
                     let location = Location::from_node(&child, file_path);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Export,
@@ -768,7 +892,15 @@ impl JavaScriptExtractor {
         }
     }
 
-    fn extract_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], language: LanguageId) {
+    fn extract_variables(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+        language: LanguageId,
+    ) {
         // Find the declaration type (const, let, var)
         let mut decl_type = "var";
         let mut cursor = node.walk();
@@ -778,20 +910,23 @@ impl JavaScriptExtractor {
                 break;
             }
         }
-        
+
         // Process variable declarators
         cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&child, file_path);
-                    
+
                     let kind = match decl_type {
                         "const" => SymbolKind::Constant,
                         _ => SymbolKind::Variable,
                     };
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind,
@@ -948,18 +1083,54 @@ mod tests {
         let extractor = JavaScriptExtractor;
 
         // Test various special tags
-        assert_eq!(extractor.process_jsdoc_tag("@deprecated Use newMethod instead"), "Deprecated: Use newMethod instead");
+        assert_eq!(
+            extractor.process_jsdoc_tag("@deprecated Use newMethod instead"),
+            "Deprecated: Use newMethod instead"
+        );
         assert_eq!(extractor.process_jsdoc_tag("@since 1.0.0"), "Since: 1.0.0");
-        assert_eq!(extractor.process_jsdoc_tag("@author John Doe"), "Author: John Doe");
-        assert_eq!(extractor.process_jsdoc_tag("@version 2.1.0"), "Version: 2.1.0");
-        assert_eq!(extractor.process_jsdoc_tag("@see https://example.com"), "See: https://example.com");
-        assert_eq!(extractor.process_jsdoc_tag("@todo Implement feature"), "TODO: Implement feature");
-        assert_eq!(extractor.process_jsdoc_tag("@override"), "Override: This method overrides a parent method");
-        assert_eq!(extractor.process_jsdoc_tag("@abstract"), "Abstract: This is an abstract method");
-        assert_eq!(extractor.process_jsdoc_tag("@static"), "Static: This is a static method");
-        assert_eq!(extractor.process_jsdoc_tag("@readonly"), "Readonly: This property is read-only");
-        assert_eq!(extractor.process_jsdoc_tag("@private"), "Private: This is a private member");
-        assert_eq!(extractor.process_jsdoc_tag("@protected"), "Protected: This is a protected member");
-        assert_eq!(extractor.process_jsdoc_tag("@public"), "Public: This is a public member");
+        assert_eq!(
+            extractor.process_jsdoc_tag("@author John Doe"),
+            "Author: John Doe"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@version 2.1.0"),
+            "Version: 2.1.0"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@see https://example.com"),
+            "See: https://example.com"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@todo Implement feature"),
+            "TODO: Implement feature"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@override"),
+            "Override: This method overrides a parent method"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@abstract"),
+            "Abstract: This is an abstract method"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@static"),
+            "Static: This is a static method"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@readonly"),
+            "Readonly: This property is read-only"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@private"),
+            "Private: This is a private member"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@protected"),
+            "Protected: This is a protected member"
+        );
+        assert_eq!(
+            extractor.process_jsdoc_tag("@public"),
+            "Public: This is a public member"
+        );
     }
 }

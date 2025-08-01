@@ -1,5 +1,5 @@
 //! Ruby symbol extractor
-//! 
+//!
 //! Extracts symbols from Ruby source code including:
 //! - Classes and modules
 //! - Methods and functions
@@ -23,8 +23,14 @@ impl SymbolExtractor for RubyExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -84,11 +90,18 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_class(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push class as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -96,15 +109,15 @@ impl RubyExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_ruby_doc(node, source);
             let modifiers = self.extract_class_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Ruby,
                 documentation,
                 modifiers,
@@ -113,11 +126,18 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_module(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_module(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push module as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -125,14 +145,14 @@ impl RubyExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_ruby_doc(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Module,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Ruby,
                 documentation,
                 modifiers: vec!["module".to_string()],
@@ -141,15 +161,22 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let signature = self.extract_method_signature(node, source);
             let documentation = self.extract_ruby_doc(node, source);
             let modifiers = self.extract_method_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Method,
@@ -163,16 +190,23 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_singleton_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_singleton_method(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let signature = self.extract_method_signature(node, source);
             let documentation = self.extract_ruby_doc(node, source);
             let mut modifiers = self.extract_method_modifiers(node, source);
             modifiers.push("singleton".to_string());
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Method,
@@ -186,18 +220,29 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_call(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_call(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Check for require/require_relative/include/extend calls
         if let Some(method_node) = node.child_by_field_name("method") {
             let method_name = self.get_node_text(&method_node, source);
 
-            if matches!(method_name.as_str(), "require" | "require_relative" | "include" | "extend" | "prepend") {
+            if matches!(
+                method_name.as_str(),
+                "require" | "require_relative" | "include" | "extend" | "prepend"
+            ) {
                 if let Some(arguments) = node.child_by_field_name("arguments") {
                     // Extract the first argument as the module/file name
                     let mut cursor = arguments.walk();
                     for child in arguments.children(&mut cursor) {
                         if child.kind() == "string" {
-                            let import_name = self.clean_string_literal(&self.get_node_text(&child, source));
+                            let import_name =
+                                self.clean_string_literal(&self.get_node_text(&child, source));
                             let location = Location::from_node(&child, file_path);
 
                             let kind = match method_name.as_str() {
@@ -219,7 +264,10 @@ impl RubyExtractor {
                         }
                     }
                 }
-            } else if matches!(method_name.as_str(), "attr_accessor" | "attr_reader" | "attr_writer") {
+            } else if matches!(
+                method_name.as_str(),
+                "attr_accessor" | "attr_reader" | "attr_writer"
+            ) {
                 // Handle Ruby attribute declarations
                 if let Some(arguments) = node.child_by_field_name("arguments") {
                     let mut cursor = arguments.walk();
@@ -267,10 +315,17 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_constant(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_constant(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         symbols.push(Symbol {
             name,
             kind: SymbolKind::Constant,
@@ -283,10 +338,17 @@ impl RubyExtractor {
         });
     }
 
-    fn extract_instance_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_instance_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         symbols.push(Symbol {
             name,
             kind: SymbolKind::Field,
@@ -299,10 +361,17 @@ impl RubyExtractor {
         });
     }
 
-    fn extract_class_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_class_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         symbols.push(Symbol {
             name,
             kind: SymbolKind::Field,
@@ -315,7 +384,14 @@ impl RubyExtractor {
         });
     }
 
-    fn extract_assignment(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_assignment(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract variable assignments
         if let Some(left) = node.child_by_field_name("left") {
             if left.kind() == "identifier" {
@@ -336,7 +412,14 @@ impl RubyExtractor {
         }
     }
 
-    fn extract_symbol(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_symbol(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Ruby symbols like :symbol_name
         let name = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
@@ -366,9 +449,10 @@ impl RubyExtractor {
 
     fn clean_string_literal(&self, text: &str) -> String {
         // Remove quotes from string literals
-        if (text.starts_with('"') && text.ends_with('"')) || 
-           (text.starts_with('\'') && text.ends_with('\'')) {
-            text[1..text.len()-1].to_string()
+        if (text.starts_with('"') && text.ends_with('"'))
+            || (text.starts_with('\'') && text.ends_with('\''))
+        {
+            text[1..text.len() - 1].to_string()
         } else {
             text.to_string()
         }
@@ -376,7 +460,7 @@ impl RubyExtractor {
 
     fn extract_ruby_doc(&self, node: &Node, source: &str) -> Option<String> {
         // Ruby documentation appears as comments preceding declarations
-        // This is a simplified implementation - in practice, you'd look for 
+        // This is a simplified implementation - in practice, you'd look for
         // comment nodes that appear before the current node
         let mut current = *node;
         let mut doc_comments = Vec::new();
@@ -444,7 +528,7 @@ impl RubyExtractor {
 
     fn extract_method_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["method".to_string()];
-        
+
         // Check for visibility modifiers by looking at siblings or parent context
         // This is a simplified approach - full implementation would track visibility scope
         if let Some(parent) = node.parent() {
@@ -457,18 +541,20 @@ impl RubyExtractor {
                 modifiers.push("public".to_string());
             }
         }
-        
+
         modifiers
     }
 
     fn extract_method_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
-            
-        let params = node.child_by_field_name("parameters")
+
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
-            
+
         Some(format!("def {name}{params}"))
     }
 }

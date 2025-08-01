@@ -1,5 +1,5 @@
 //! Rust-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Rust source code, including:
 //! - Function calls and method invocations
 //! - Variable references and assignments  
@@ -7,9 +7,9 @@
 //! - Trait implementations and inheritance
 //! - Macro invocations
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType, Location};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Rust-specific dependency extractor
@@ -19,7 +19,7 @@ impl DependencyExtractor for RustDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Rust
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -28,11 +28,15 @@ impl DependencyExtractor for RustDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -83,7 +87,7 @@ impl DependencyExtractor for RustDependencyExtractor {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let module_name = self.get_node_text(&name_node, source);
                     let current_scope = context.current_scope();
-                    
+
                     if !module_name.trim().is_empty() {
                         let dependency = self.create_dependency(
                             current_scope,
@@ -101,7 +105,7 @@ impl DependencyExtractor for RustDependencyExtractor {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let crate_name = self.get_node_text(&name_node, source);
                     let current_scope = context.current_scope();
-                    
+
                     if !crate_name.trim().is_empty() {
                         let dependency = self.create_dependency(
                             current_scope,
@@ -117,27 +121,30 @@ impl DependencyExtractor for RustDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "call_expression")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier" | "field_expression")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "use_declaration")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
         matches!(node.kind(), "impl_item")
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
-        matches!(node.kind(), "let_declaration" | "const_item" | "static_item")
+        matches!(
+            node.kind(),
+            "let_declaration" | "const_item" | "static_item"
+        )
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -149,12 +156,12 @@ impl DependencyExtractor for RustDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip empty or invalid function names
             if function_name.trim().is_empty() || function_name.contains('\n') {
                 return;
             }
-            
+
             // Handle different call patterns
             let (caller, callee) = if function_name.contains("::") {
                 // Static method call: Struct::method()
@@ -173,7 +180,7 @@ impl DependencyExtractor for RustDependencyExtractor {
                 // Simple function call
                 (current_scope, function_name)
             };
-            
+
             // Try to resolve the function in known symbols
             let resolved_functions = context.find_symbols(&callee);
             let target_function = if !resolved_functions.is_empty() {
@@ -181,7 +188,7 @@ impl DependencyExtractor for RustDependencyExtractor {
             } else {
                 callee
             };
-            
+
             let dependency = self.create_dependency(
                 caller,
                 target_function,
@@ -189,16 +196,16 @@ impl DependencyExtractor for RustDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
-            
+
             // Also extract arguments for variable references
             if let Some(args_node) = node.child_by_field_name("arguments") {
                 self.extract_argument_references(args_node, source, context, dependencies);
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -210,12 +217,12 @@ impl DependencyExtractor for RustDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords, built-in types, and empty names
             if self.is_rust_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -223,7 +230,7 @@ impl DependencyExtractor for RustDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -231,11 +238,11 @@ impl DependencyExtractor for RustDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -248,7 +255,7 @@ impl DependencyExtractor for RustDependencyExtractor {
             self.extract_use_tree(use_tree, source, context, dependencies);
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -258,7 +265,7 @@ impl DependencyExtractor for RustDependencyExtractor {
     ) {
         self.extract_trait_implementations(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -309,7 +316,10 @@ impl DependencyExtractor for RustDependencyExtractor {
     }
 
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "while_expression" | "for_expression" | "loop_expression")
+        matches!(
+            node.kind(),
+            "while_expression" | "for_expression" | "loop_expression"
+        )
     }
 
     fn is_exception_handling(&self, node: &Node) -> bool {
@@ -346,12 +356,12 @@ impl RustDependencyExtractor {
                 return;
             }
         }
-        
+
         // This is a field access, not a method call
         if let Some(object_node) = node.child_by_field_name("object") {
             let object_name = self.get_node_text(&object_node, source);
             let current_scope = context.current_scope();
-            
+
             if !object_name.trim().is_empty() && !self.is_rust_keyword(&object_name) {
                 let resolved_objects = context.find_symbols(&object_name);
                 let target_object = if !resolved_objects.is_empty() {
@@ -359,7 +369,7 @@ impl RustDependencyExtractor {
                 } else {
                     object_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_object,
@@ -367,12 +377,12 @@ impl RustDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
             }
         }
     }
-    
+
     /// Extract trait implementations from impl blocks
     fn extract_trait_implementations(
         &self,
@@ -386,7 +396,7 @@ impl RustDependencyExtractor {
             if let Some(type_node) = node.child_by_field_name("type") {
                 let trait_name = self.get_node_text(&trait_node, source);
                 let type_name = self.get_node_text(&type_node, source);
-                
+
                 if !trait_name.trim().is_empty() && !type_name.trim().is_empty() {
                     let dependency = self.create_dependency(
                         type_name,
@@ -395,13 +405,13 @@ impl RustDependencyExtractor {
                         &node,
                         context,
                     );
-                    
+
                     dependencies.push(dependency);
                 }
             }
         }
     }
-    
+
     /// Extract macro invocations
     fn extract_macro_invocations(
         &self,
@@ -413,7 +423,7 @@ impl RustDependencyExtractor {
         if let Some(macro_node) = node.child_by_field_name("macro") {
             let macro_name = self.get_node_text(&macro_node, source);
             let current_scope = context.current_scope();
-            
+
             if !macro_name.trim().is_empty() {
                 let dependency = self.create_dependency(
                     current_scope,
@@ -422,12 +432,12 @@ impl RustDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
             }
         }
     }
-    
+
     /// Extract use tree recursively
     fn extract_use_tree(
         &self,
@@ -440,7 +450,7 @@ impl RustDependencyExtractor {
             "scoped_identifier" => {
                 let import_path = self.get_node_text(&node, source);
                 let current_scope = context.current_scope();
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     import_path,
@@ -448,7 +458,7 @@ impl RustDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
             }
             "use_list" => {
@@ -470,7 +480,7 @@ impl RustDependencyExtractor {
                 // Simple identifier in use statement
                 let import_name = self.get_node_text(&node, source);
                 let current_scope = context.current_scope();
-                
+
                 if !self.is_rust_keyword(&import_name) {
                     let dependency = self.create_dependency(
                         current_scope,
@@ -479,7 +489,7 @@ impl RustDependencyExtractor {
                         &node,
                         context,
                     );
-                    
+
                     dependencies.push(dependency);
                 }
             }
@@ -492,7 +502,7 @@ impl RustDependencyExtractor {
             }
         }
     }
-    
+
     /// Extract let assignment dependencies
     fn extract_let_assignment(
         &self,
@@ -521,12 +531,16 @@ impl RustDependencyExtractor {
 
                 // Extract dependencies from the value expression
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
     }
-    
+
     /// Extract const/static assignment dependencies
     fn extract_const_assignment(
         &self,
@@ -538,15 +552,19 @@ impl RustDependencyExtractor {
         if let Some(name_node) = node.child_by_field_name("name") {
             if let Some(value_node) = node.child_by_field_name("value") {
                 let const_name = self.get_node_text(&name_node, source);
-                
+
                 // Extract dependencies from the value expression
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &const_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &const_name,
                 );
             }
         }
     }
-    
+
     /// Extract dependencies from expressions in assignments
     fn extract_expression_dependencies(
         &self,
@@ -578,12 +596,18 @@ impl RustDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
     }
-    
+
     /// Extract argument references from function calls
     fn extract_argument_references(
         &self,
@@ -597,7 +621,7 @@ impl RustDependencyExtractor {
             if child.kind() == "identifier" {
                 let arg_name = self.get_node_text(&child, source);
                 let current_scope = context.current_scope();
-                
+
                 if !self.is_rust_keyword(&arg_name) && !arg_name.trim().is_empty() {
                     let resolved_args = context.find_symbols(&arg_name);
                     let target_arg = if !resolved_args.is_empty() {
@@ -605,7 +629,7 @@ impl RustDependencyExtractor {
                     } else {
                         arg_name
                     };
-                    
+
                     let dependency = self.create_dependency(
                         current_scope,
                         target_arg,
@@ -613,7 +637,7 @@ impl RustDependencyExtractor {
                         &child,
                         context,
                     );
-                    
+
                     dependencies.push(dependency);
                 }
             } else {
@@ -622,18 +646,18 @@ impl RustDependencyExtractor {
             }
         }
     }
-    
+
     /// Check if a node is in a reference context (not declaration)
     fn is_reference_context(&self, node: &Node) -> bool {
         let mut current = *node;
-        
+
         // Walk up the tree to check context
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip identifiers in these declaration contexts
-                "function_item" | "struct_item" | "enum_item" | "trait_item" |
-                "impl_item" | "let_declaration" | "const_item" | "static_item" |
-                "parameter" | "field_declaration" | "variant" => {
+                "function_item" | "struct_item" | "enum_item" | "trait_item" | "impl_item"
+                | "let_declaration" | "const_item" | "static_item" | "parameter"
+                | "field_declaration" | "variant" => {
                     // Check if this identifier is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -648,13 +672,14 @@ impl RustDependencyExtractor {
             }
             current = parent;
         }
-        
+
         true
     }
-    
+
     /// Check if a string is a Rust keyword
     fn is_rust_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "as" | "break" | "const" | "continue" | "crate" | "else" | "enum" |
             "extern" | "false" | "fn" | "for" | "if" | "impl" | "in" | "let" |
             "loop" | "match" | "mod" | "move" | "mut" | "pub" | "ref" | "return" |
@@ -680,7 +705,13 @@ impl RustDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Extract dependencies from then/else blocks
@@ -736,13 +767,25 @@ impl RustDependencyExtractor {
                 }
 
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_expression" => {
                 // while condition
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "loop_expression" => {
@@ -772,7 +815,13 @@ impl RustDependencyExtractor {
 
         // Extract value being matched
         if let Some(value_node) = node.child_by_field_name("value") {
-            self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                value_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Extract match arms
@@ -790,7 +839,13 @@ impl RustDependencyExtractor {
 
                 // Extract pattern variables
                 if let Some(pattern_node) = child.child_by_field_name("pattern") {
-                    self.extract_pattern_variables(pattern_node, source, context, dependencies, &current_scope);
+                    self.extract_pattern_variables(
+                        pattern_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
         }
@@ -810,7 +865,13 @@ impl RustDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -833,7 +894,11 @@ impl RustDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_expression" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_expression" {
+            "break"
+        } else {
+            "continue"
+        };
 
         // Extract label if present
         if let Some(label_node) = node.child_by_field_name("label") {
@@ -947,33 +1012,30 @@ fn calculate(a: i32, b: i32) -> i32 {
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Rust).unwrap();
-        
+
         let symbol_factory = SymbolExtractorFactory::new();
-        let symbols = symbol_factory.extract_symbols(
-            &parse_result.tree,
-            source,
-            "test.rs",
-            LanguageId::Rust,
-        );
-        
+        let symbols =
+            symbol_factory.extract_symbols(&parse_result.tree, source, "test.rs", LanguageId::Rust);
+
         let extractor = RustDependencyExtractor;
         let deps = extractor.extract_dependencies(
             &parse_result.tree,
             source,
             &mut ExtractionContext::new("test.rs".to_string(), LanguageId::Rust, symbols),
         );
-        
+
         // Should find call to calculate and println! macro
         assert!(deps.len() >= 2);
-        
-        let calculate_call = deps.iter().find(|d| 
+
+        let calculate_call = deps.iter().find(|d| {
             d.to_symbol.contains("calculate") && d.relationship_type == DependencyType::Calls
-        );
+        });
         assert!(calculate_call.is_some());
-        
-        let println_call = deps.iter().find(|d| 
-            d.to_symbol.contains("println") && d.relationship_type == DependencyType::MacroInvocation
-        );
+
+        let println_call = deps.iter().find(|d| {
+            d.to_symbol.contains("println")
+                && d.relationship_type == DependencyType::MacroInvocation
+        });
         assert!(println_call.is_some());
     }
 
@@ -991,27 +1053,24 @@ fn main() {
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Rust).unwrap();
-        
+
         let symbol_factory = SymbolExtractorFactory::new();
-        let symbols = symbol_factory.extract_symbols(
-            &parse_result.tree,
-            source,
-            "test.rs",
-            LanguageId::Rust,
-        );
-        
+        let symbols =
+            symbol_factory.extract_symbols(&parse_result.tree, source, "test.rs", LanguageId::Rust);
+
         let extractor = RustDependencyExtractor;
         let deps = extractor.extract_dependencies(
             &parse_result.tree,
             source,
             &mut ExtractionContext::new("test.rs".to_string(), LanguageId::Rust, symbols),
         );
-        
+
         // Should find imports for HashMap, Read, Write
-        let import_deps: Vec<_> = deps.iter().filter(|d| 
-            d.relationship_type == DependencyType::Imports
-        ).collect();
-        
+        let import_deps: Vec<_> = deps
+            .iter()
+            .filter(|d| d.relationship_type == DependencyType::Imports)
+            .collect();
+
         assert!(import_deps.len() >= 3);
     }
 
@@ -1035,49 +1094,46 @@ fn main() {
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Rust).unwrap();
-        
+
         let symbol_factory = SymbolExtractorFactory::new();
-        let symbols = symbol_factory.extract_symbols(
-            &parse_result.tree,
-            source,
-            "test.rs",
-            LanguageId::Rust,
-        );
-        
+        let symbols =
+            symbol_factory.extract_symbols(&parse_result.tree, source, "test.rs", LanguageId::Rust);
+
         let extractor = RustDependencyExtractor;
         let deps = extractor.extract_dependencies(
             &parse_result.tree,
             source,
             &mut ExtractionContext::new("test.rs".to_string(), LanguageId::Rust, symbols),
         );
-        
+
         // Should find module dependencies for extern crates and mod declarations
-        let module_deps: Vec<_> = deps.iter().filter(|d| 
-            d.relationship_type == DependencyType::ModuleDependency
-        ).collect();
-        
+        let module_deps: Vec<_> = deps
+            .iter()
+            .filter(|d| d.relationship_type == DependencyType::ModuleDependency)
+            .collect();
+
         assert!(module_deps.len() >= 4); // serde, tokio, utils, config
-        
+
         // Check for extern crate dependencies
-        let serde_dep = deps.iter().find(|d| 
+        let serde_dep = deps.iter().find(|d| {
             d.to_symbol.contains("serde") && d.relationship_type == DependencyType::ModuleDependency
-        );
+        });
         assert!(serde_dep.is_some());
-        
-        let tokio_dep = deps.iter().find(|d| 
+
+        let tokio_dep = deps.iter().find(|d| {
             d.to_symbol.contains("tokio") && d.relationship_type == DependencyType::ModuleDependency
-        );
+        });
         assert!(tokio_dep.is_some());
-        
+
         // Check for mod dependencies
-        let utils_dep = deps.iter().find(|d| 
+        let utils_dep = deps.iter().find(|d| {
             d.to_symbol == "utils" && d.relationship_type == DependencyType::ModuleDependency
-        );
+        });
         assert!(utils_dep.is_some());
-        
-        let config_dep = deps.iter().find(|d| 
+
+        let config_dep = deps.iter().find(|d| {
             d.to_symbol == "config" && d.relationship_type == DependencyType::ModuleDependency
-        );
+        });
         assert!(config_dep.is_some());
     }
 }

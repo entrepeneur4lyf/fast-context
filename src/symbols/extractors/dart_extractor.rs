@@ -1,5 +1,5 @@
 //! Dart symbol extractor
-//! 
+//!
 //! Extracts symbols from Dart source code including:
 //! - Classes and mixins
 //! - Methods and functions
@@ -24,8 +24,14 @@ impl SymbolExtractor for DartExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -95,16 +101,26 @@ impl DartExtractor {
         }
 
         // Pop scope if we added one for this node
-        if matches!(node.kind(), "class_definition" | "mixin_declaration" | "enum_declaration" | "extension_declaration") {
+        if matches!(
+            node.kind(),
+            "class_definition" | "mixin_declaration" | "enum_declaration" | "extension_declaration"
+        ) {
             scope_stack.pop();
         }
     }
 
-    fn extract_class(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push class as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -112,16 +128,16 @@ impl DartExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_dart_doc(node, source);
             let modifiers = self.extract_class_modifiers(node, source);
             let signature = self.extract_class_signature(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -130,11 +146,18 @@ impl DartExtractor {
         }
     }
 
-    fn extract_mixin(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_mixin(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push mixin as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -142,16 +165,16 @@ impl DartExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_dart_doc(node, source);
             let mut modifiers = vec!["mixin".to_string()];
             modifiers.extend(self.extract_mixin_modifiers(node, source));
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Interface,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -160,11 +183,18 @@ impl DartExtractor {
         }
     }
 
-    fn extract_enum(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_enum(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push enum as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -172,15 +202,15 @@ impl DartExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_dart_doc(node, source);
             let modifiers = self.extract_enum_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Enum,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -189,11 +219,18 @@ impl DartExtractor {
         }
     }
 
-    fn extract_extension(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_extension(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push extension as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -201,16 +238,16 @@ impl DartExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let documentation = self.extract_dart_doc(node, source);
             let mut modifiers = vec!["extension".to_string()];
             modifiers.extend(self.extract_extension_modifiers(node, source));
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Dart,
                 documentation,
                 modifiers,
@@ -219,15 +256,22 @@ impl DartExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let signature = self.extract_function_signature(node, source);
             let documentation = self.extract_dart_doc(node, source);
             let modifiers = self.extract_function_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Function,
@@ -241,15 +285,22 @@ impl DartExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let signature = self.extract_method_signature(node, source);
             let documentation = self.extract_dart_doc(node, source);
             let modifiers = self.extract_method_modifiers(node, source);
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Method,
@@ -263,19 +314,29 @@ impl DartExtractor {
         }
     }
 
-    fn extract_constructor(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_constructor(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let name = if let Some(name_node) = node.child_by_field_name("name") {
             self.get_node_text(&name_node, source)
         } else {
             // Default constructor has no name, use class name
-            scope_stack.last().map(|s| s.name.clone()).unwrap_or_else(|| "constructor".to_string())
+            scope_stack
+                .last()
+                .map(|s| s.name.clone())
+                .unwrap_or_else(|| "constructor".to_string())
         };
-        
+
         let location = Location::from_node(node, file_path);
         let signature = self.extract_constructor_signature(node, source);
         let documentation = self.extract_dart_doc(node, source);
         let modifiers = self.extract_constructor_modifiers(node, source);
-        
+
         symbols.push(Symbol {
             name,
             kind: SymbolKind::Method, // Treat constructors as methods
@@ -288,18 +349,26 @@ impl DartExtractor {
         });
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract variable names from variable declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if child.kind() == "initialized_variable_definition" || child.kind() == "variable_name" {
+            if child.kind() == "initialized_variable_definition" || child.kind() == "variable_name"
+            {
                 if let Some(name_node) = child.child_by_field_name("name") {
                     let name = self.get_node_text(&name_node, source);
                     let location = Location::from_node(&child, file_path);
-                    
+
                     let mut modifiers = vec!["var".to_string()];
                     modifiers.extend(self.extract_variable_modifiers(node, source));
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Variable,
@@ -315,18 +384,26 @@ impl DartExtractor {
         }
     }
 
-    fn extract_field(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_field(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract field names from field declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if child.kind() == "initialized_variable_definition" || child.kind() == "variable_name" {
+            if child.kind() == "initialized_variable_definition" || child.kind() == "variable_name"
+            {
                 if let Some(name_node) = child.child_by_field_name("name") {
                     let name = self.get_node_text(&name_node, source);
                     let location = Location::from_node(&child, file_path);
-                    
+
                     let mut modifiers = vec!["field".to_string()];
                     modifiers.extend(self.extract_field_modifiers(node, source));
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Field,
@@ -342,19 +419,26 @@ impl DartExtractor {
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(uri_node) = node.child_by_field_name("uri") {
             let import_path = self.clean_string_literal(&self.get_node_text(&uri_node, source));
             let location = Location::from_node(&uri_node, file_path);
-            
+
             let mut modifiers = vec!["import".to_string()];
-            
+
             // Check for 'as' clause
             if let Some(as_node) = node.child_by_field_name("as") {
                 let as_name = self.get_node_text(&as_node, source);
                 modifiers.push(format!("as {as_name}"));
             }
-            
+
             // Check for 'show' or 'hide' clauses
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
@@ -364,7 +448,7 @@ impl DartExtractor {
                     modifiers.push("hide".to_string());
                 }
             }
-            
+
             symbols.push(Symbol {
                 name: import_path,
                 kind: SymbolKind::Import,
@@ -378,13 +462,20 @@ impl DartExtractor {
         }
     }
 
-    fn extract_export(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_export(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(uri_node) = node.child_by_field_name("uri") {
             let export_path = self.clean_string_literal(&self.get_node_text(&uri_node, source));
             let location = Location::from_node(&uri_node, file_path);
-            
+
             let mut modifiers = vec!["export".to_string()];
-            
+
             // Check for 'show' or 'hide' clauses
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
@@ -394,7 +485,7 @@ impl DartExtractor {
                     modifiers.push("hide".to_string());
                 }
             }
-            
+
             symbols.push(Symbol {
                 name: export_path,
                 kind: SymbolKind::Import, // Treat exports as imports
@@ -408,7 +499,14 @@ impl DartExtractor {
         }
     }
 
-    fn extract_typedef(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_typedef(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -426,7 +524,14 @@ impl DartExtractor {
         }
     }
 
-    fn extract_getter(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_getter(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -449,7 +554,14 @@ impl DartExtractor {
         }
     }
 
-    fn extract_setter(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_setter(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -472,7 +584,14 @@ impl DartExtractor {
         }
     }
 
-    fn extract_enum_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_enum_value(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
@@ -498,9 +617,10 @@ impl DartExtractor {
 
     fn clean_string_literal(&self, text: &str) -> String {
         // Remove quotes from string literals
-        if (text.starts_with('"') && text.ends_with('"')) || 
-           (text.starts_with('\'') && text.ends_with('\'')) {
-            text[1..text.len()-1].to_string()
+        if (text.starts_with('"') && text.ends_with('"'))
+            || (text.starts_with('\'') && text.ends_with('\''))
+        {
+            text[1..text.len() - 1].to_string()
         } else {
             text.to_string()
         }
@@ -525,8 +645,10 @@ impl DartExtractor {
                     } else if comment_text.starts_with("/**") && comment_text.ends_with("*/") {
                         // Multi-line doc comment
                         let content = comment_text
-                            .strip_prefix("/**").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/**")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())
@@ -573,7 +695,10 @@ impl DartExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
                 let modifier_text = self.get_node_text(&child, source);
-                if matches!(modifier_text.as_str(), "abstract" | "final" | "sealed" | "base" | "interface" | "mixin") {
+                if matches!(
+                    modifier_text.as_str(),
+                    "abstract" | "final" | "sealed" | "base" | "interface" | "mixin"
+                ) {
                     modifiers.push(modifier_text);
                 }
             }
@@ -597,7 +722,7 @@ impl DartExtractor {
 
     fn extract_mixin_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for mixin modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -608,18 +733,18 @@ impl DartExtractor {
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_enum_modifiers(&self, node: &Node, _source: &str) -> Vec<String> {
         let mut modifiers = vec!["enum".to_string()];
-        
+
         // Check for enhanced enum features
         if node.child_by_field_name("body").is_some() {
             modifiers.push("enhanced".to_string());
         }
-        
+
         modifiers
     }
 
@@ -635,7 +760,10 @@ impl DartExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
                 let modifier_text = self.get_node_text(&child, source);
-                if matches!(modifier_text.as_str(), "static" | "async" | "sync" | "external") {
+                if matches!(
+                    modifier_text.as_str(),
+                    "static" | "async" | "sync" | "external"
+                ) {
                     modifiers.push(modifier_text);
                 }
             } else if child.kind() == "async_modifier" {
@@ -657,24 +785,27 @@ impl DartExtractor {
 
     fn extract_method_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["method".to_string()];
-        
+
         // Check for method modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
                 let modifier_text = self.get_node_text(&child, source);
-                if matches!(modifier_text.as_str(), "static" | "abstract" | "override" | "async" | "sync" | "external") {
+                if matches!(
+                    modifier_text.as_str(),
+                    "static" | "abstract" | "override" | "async" | "sync" | "external"
+                ) {
                     modifiers.push(modifier_text);
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_constructor_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = vec!["constructor".to_string()];
-        
+
         // Check for constructor modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -685,79 +816,95 @@ impl DartExtractor {
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_variable_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for variable modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
                 let modifier_text = self.get_node_text(&child, source);
-                if matches!(modifier_text.as_str(), "static" | "final" | "const" | "late") {
+                if matches!(
+                    modifier_text.as_str(),
+                    "static" | "final" | "const" | "late"
+                ) {
                     modifiers.push(modifier_text);
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_field_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for field modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
                 let modifier_text = self.get_node_text(&child, source);
-                if matches!(modifier_text.as_str(), "static" | "final" | "const" | "late" | "abstract") {
+                if matches!(
+                    modifier_text.as_str(),
+                    "static" | "final" | "const" | "late" | "abstract"
+                ) {
                     modifiers.push(modifier_text);
                 }
             }
         }
-        
+
         modifiers
     }
 
     fn extract_class_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
-        
-        let type_params = node.child_by_field_name("type_parameters")
+
+        let type_params = node
+            .child_by_field_name("type_parameters")
             .map(|tp| self.get_node_text(&tp, source))
             .unwrap_or_default();
-        
-        let extends_clause = node.child_by_field_name("superclass")
+
+        let extends_clause = node
+            .child_by_field_name("superclass")
             .map(|e| format!(" extends {}", self.get_node_text(&e, source)))
             .unwrap_or_default();
-        
-        let implements_clause = node.child_by_field_name("interfaces")
+
+        let implements_clause = node
+            .child_by_field_name("interfaces")
             .map(|i| format!(" implements {}", self.get_node_text(&i, source)))
             .unwrap_or_default();
-        
-        Some(format!("class {name}{type_params}{extends_clause}{implements_clause}"))
+
+        Some(format!(
+            "class {name}{type_params}{extends_clause}{implements_clause}"
+        ))
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
-        
-        let type_params = node.child_by_field_name("type_parameters")
+
+        let type_params = node
+            .child_by_field_name("type_parameters")
             .map(|tp| self.get_node_text(&tp, source))
             .unwrap_or_default();
-        
-        let params = node.child_by_field_name("parameters")
+
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
-        
-        let return_type = node.child_by_field_name("return_type")
+
+        let return_type = node
+            .child_by_field_name("return_type")
             .map(|rt| format!("{} ", self.get_node_text(&rt, source)))
             .unwrap_or_default();
-        
+
         Some(format!("{return_type}{name}{type_params}{params}"))
     }
 
@@ -772,7 +919,8 @@ impl DartExtractor {
             "constructor".to_string()
         };
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
 
@@ -780,10 +928,12 @@ impl DartExtractor {
     }
 
     fn extract_getter_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
 
-        let return_type = node.child_by_field_name("return_type")
+        let return_type = node
+            .child_by_field_name("return_type")
             .map(|rt| format!("{} ", self.get_node_text(&rt, source)))
             .unwrap_or_default();
 
@@ -791,10 +941,12 @@ impl DartExtractor {
     }
 
     fn extract_setter_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "(value)".to_string());
 

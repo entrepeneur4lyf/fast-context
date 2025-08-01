@@ -1,5 +1,5 @@
 //! PHP-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from PHP source code, including:
 //! - Function calls and method invocations
 //! - Variable references and property access
@@ -10,9 +10,9 @@
 //! - Control flow (if/else, loops, switch)
 //! - Magic methods and constants
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// PHP-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::PHP
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for PhpDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -56,7 +60,10 @@ impl DependencyExtractor for PhpDependencyExtractor {
             "variable_name" => {
                 self.extract_variable_references(node, source, context, dependencies);
             }
-            "include_expression" | "include_once_expression" | "require_expression" | "require_once_expression" => {
+            "include_expression"
+            | "include_once_expression"
+            | "require_expression"
+            | "require_once_expression" => {
                 self.extract_includes(node, source, context, dependencies);
             }
             "namespace_use_declaration" => {
@@ -90,28 +97,45 @@ impl DependencyExtractor for PhpDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
-        matches!(node.kind(), "function_call_expression" | "member_call_expression" | "scoped_call_expression")
+        matches!(
+            node.kind(),
+            "function_call_expression" | "member_call_expression" | "scoped_call_expression"
+        )
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
-        matches!(node.kind(), "variable_name" | "member_access_expression" | "scoped_property_access_expression")
+        matches!(
+            node.kind(),
+            "variable_name" | "member_access_expression" | "scoped_property_access_expression"
+        )
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "namespace_use_declaration" | "include_expression" | "include_once_expression" | "require_expression" | "require_once_expression")
+        matches!(
+            node.kind(),
+            "namespace_use_declaration"
+                | "include_expression"
+                | "include_once_expression"
+                | "require_expression"
+                | "require_once_expression"
+        )
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        matches!(node.kind(), "class_declaration" | "interface_declaration") && 
-        (node.child_by_field_name("base_clause").is_some() || node.child_by_field_name("implements_clause").is_some())
+        matches!(node.kind(), "class_declaration" | "interface_declaration")
+            && (node.child_by_field_name("base_clause").is_some()
+                || node.child_by_field_name("implements_clause").is_some())
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
-        matches!(node.kind(), "assignment_expression" | "property_declaration")
+        matches!(
+            node.kind(),
+            "assignment_expression" | "property_declaration"
+        )
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -122,7 +146,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 // Try to resolve the function in known symbols
                 let resolved_functions = context.find_symbols_global(&function_name);
@@ -131,7 +155,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -139,9 +163,9 @@ impl DependencyExtractor for PhpDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -149,7 +173,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -161,12 +185,12 @@ impl DependencyExtractor for PhpDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip superglobals and built-ins
             if self.is_php_builtin(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -174,7 +198,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -182,11 +206,11 @@ impl DependencyExtractor for PhpDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -195,7 +219,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // use Namespace\Class; or use Namespace\Class as Alias;
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -213,7 +237,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
                         dependencies.push(dependency);
                     }
                 }
-                
+
                 // Extract alias if present
                 if let Some(alias_node) = child.child_by_field_name("alias") {
                     let alias_name = self.get_node_text(&alias_node, source);
@@ -231,7 +255,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -241,7 +265,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -259,7 +283,7 @@ impl DependencyExtractor for PhpDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -289,27 +313,33 @@ impl DependencyExtractor for PhpDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "foreach_statement" | "while_statement" | "do_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "foreach_statement" | "while_statement" | "do_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
-        matches!(node.kind(), "try_statement" | "catch_clause" | "finally_clause")
+        matches!(
+            node.kind(),
+            "try_statement" | "catch_clause" | "finally_clause"
+        )
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -420,7 +450,8 @@ impl PhpDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "string" || child.kind() == "encapsed_string" {
-                let file_path = self.get_node_text(&child, source)
+                let file_path = self
+                    .get_node_text(&child, source)
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
@@ -428,7 +459,9 @@ impl PhpDependencyExtractor {
                 if !file_path.trim().is_empty() {
                     let dependency_type = match node.kind() {
                         "include_expression" | "include_once_expression" => DependencyType::Imports,
-                        "require_expression" | "require_once_expression" => DependencyType::ModuleDependency,
+                        "require_expression" | "require_once_expression" => {
+                            DependencyType::ModuleDependency
+                        }
                         _ => DependencyType::Imports,
                     };
 
@@ -520,7 +553,8 @@ impl PhpDependencyExtractor {
 
     /// Check if a string is a PHP built-in or superglobal
     fn is_php_builtin(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             // Superglobals
             "$GLOBALS" | "$_SERVER" | "$_GET" | "$_POST" | "$_FILES" | "$_COOKIE" |
             "$_SESSION" | "$_REQUEST" | "$_ENV" |
@@ -559,7 +593,11 @@ impl PhpDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -582,7 +620,11 @@ impl PhpDependencyExtractor {
 
                         // Extract dependencies from the default value expression
                         self.extract_expression_dependencies(
-                            value_node, source, context, dependencies, &var_name
+                            value_node,
+                            source,
+                            context,
+                            dependencies,
+                            &var_name,
                         );
                     }
                 }
@@ -602,7 +644,13 @@ impl PhpDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as conditional execution
@@ -647,7 +695,13 @@ impl PhpDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -733,8 +787,12 @@ impl PhpDependencyExtractor {
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip variables in these declaration contexts
-                "function_definition" | "method_declaration" | "class_declaration" |
-                "property_declaration" | "parameter" | "namespace_use_declaration" => {
+                "function_definition"
+                | "method_declaration"
+                | "class_declaration"
+                | "property_declaration"
+                | "parameter"
+                | "namespace_use_declaration" => {
                     // Check if this variable is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -772,19 +830,43 @@ impl PhpDependencyExtractor {
             "for_statement" => {
                 // for ($i = 0; $i < 10; $i++)
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(init_node) = node.child_by_field_name("initializer") {
-                    self.extract_condition_variables(init_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        init_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(update_node) = node.child_by_field_name("update") {
-                    self.extract_condition_variables(update_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        update_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "foreach_statement" => {
                 // foreach ($array as $key => $value)
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
 
                 if let Some(key_node) = node.child_by_field_name("key") {
@@ -818,7 +900,13 @@ impl PhpDependencyExtractor {
             "while_statement" | "do_statement" => {
                 // while ($condition) or do { } while ($condition)
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -891,7 +979,13 @@ impl PhpDependencyExtractor {
 
         // Extract switch expression
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -918,7 +1012,13 @@ impl PhpDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -941,7 +1041,11 @@ impl PhpDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

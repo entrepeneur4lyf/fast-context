@@ -1,35 +1,87 @@
 // TypeScript usage example for Fast-Context
 // This demonstrates the auto-generated TypeScript types in action
 
-import { 
-    FastContextAnalyzer, 
-    AnalyzerConfig, 
-    AnalysisResultJs, 
+// Import the runtime exports
+import {
+    FastContextAnalyzer,
+    getSupportedLanguages,
+    detectLanguage,
+    checkConfiguration,
+    getVersion
+} from '../index.js';
+
+// Import types for TypeScript checking (these are compile-time only)
+import type {
+    AnalyzerConfig,
+    AnalysisResultJs,
     SymbolInfoJs,
     FileChangeBatchJs,
     QueryResultJs,
     StreamingOptionsJs,
     QueryChunkJs,
     ExportOptionsJs
-} from '../index';
+} from '../index.js';
 
 // Example 1: Basic Configuration with Type Safety
 function createAnalyzer(): FastContextAnalyzer {
+    console.log('🚀 Fast-Context TypeScript Example\n');
+
+    // Show version and supported languages with type safety
+    console.log(`📦 Version: ${getVersion()}`);
+    console.log(`🔧 Supported Languages: ${getSupportedLanguages().join(', ')}\n`);
+
     const config: AnalyzerConfig = {
         projectRoot: process.cwd(),
         languages: ['javascript', 'typescript', 'rust'],
         ignorePatterns: ['node_modules/**', 'target/**', '.git/**'],
         enableCaching: true,
         cachePolicy: 'adaptive',
-        enableWatching: true,
-        maxFiles: 10000,
+        enableWatching: false, // Disable for this example
+        maxFiles: 1000,
         parallelProcessing: true
     };
+
+    console.log('⚙️ Configuration:');
+    console.log(JSON.stringify(config, null, 2));
+
+    // Type-safe configuration validation
+    try {
+        const isValid = checkConfiguration();
+        console.log(`✅ Configuration check: ${isValid}`);
+    } catch (error) {
+        console.error(`❌ Configuration error: ${error}`);
+        throw error;
+    }
 
     return new FastContextAnalyzer(config);
 }
 
-// Example 2: Type-Safe Analysis Result Processing
+// Example 2: Type-Safe Language Detection
+function demonstrateLanguageDetection(): void {
+    console.log('\n🔍 Language Detection Examples:');
+
+    const testFiles: string[] = [
+        'src/main.rs',
+        'src/index.js',
+        'src/app.ts',
+        'src/main.py',
+        'src/Main.java',
+        'src/main.go',
+        'README.md',
+        'package.json'
+    ];
+
+    testFiles.forEach((file: string) => {
+        try {
+            const language: string | null = detectLanguage(file);
+            console.log(`  ${file} -> ${language || 'unknown'}`);
+        } catch (error) {
+            console.log(`  ${file} -> Error: ${error}`);
+        }
+    });
+}
+
+// Example 3: Type-Safe Analysis Result Processing
 function processAnalysisResult(result: AnalysisResultJs): void {
     console.log(`📊 Analysis Results:`);
     console.log(`  Files: ${result.fileCount}`);
@@ -37,7 +89,7 @@ function processAnalysisResult(result: AnalysisResultJs): void {
     console.log(`  Relationships: ${result.relationshipCount}`);
     console.log(`  Languages: ${result.languages.join(', ')}`);
     console.log(`  Duration: ${result.durationMs}ms`);
-    
+
     if (result.memoryUsageMb) {
         console.log(`  Memory: ${result.memoryUsageMb}MB`);
     }
@@ -190,35 +242,34 @@ function generateProjectReport(analyzer: FastContextAnalyzer): ProjectStats | nu
 
 // Example 9: Main Demo Function
 async function runTypeScriptDemo(): Promise<void> {
-    console.log('🚀 Fast-Context TypeScript Demo\n');
-    
-    // Create analyzer with type safety
-    const analyzer = createAnalyzer();
-    
-    // Perform analysis
-    const result = await safeAnalysis();
-    if (!result) {
-        console.error('Failed to analyze project');
-        return;
+    try {
+        // Create analyzer with type safety
+        const _analyzer = createAnalyzer();
+
+        // Demonstrate language detection
+        demonstrateLanguageDetection();
+
+        // Show export configuration
+        const exportConfig = configureExport();
+        console.log('\n📤 Export Configuration:');
+        console.log(JSON.stringify(exportConfig, null, 2));
+
+        // Demonstrate error handling
+        console.log('\n🛡️ Error Handling Examples:');
+        const result = await safeAnalysis();
+        if (result) {
+            processAnalysisResult(result);
+        }
+
+        console.log('\n✅ TypeScript Demo completed successfully!');
+        console.log('🎯 This example demonstrates type-safe usage of Fast-Context');
+
+    } catch (error) {
+        console.error(`\n💥 Demo failed: ${error}`);
+        if (error instanceof Error) {
+            console.error(error.stack);
+        }
     }
-    
-    // Process results with type safety
-    processAnalysisResult(result);
-    
-    // Set up file watching
-    setupFileWatching(analyzer);
-    
-    // Configure export options
-    const exportConfig = configureExport();
-    console.log('\n📤 Export Configuration:', exportConfig);
-    
-    console.log('\n✅ Demo completed! File watching is active...');
-    
-    // Clean shutdown after demo
-    setTimeout(() => {
-        analyzer.stopWatching();
-        console.log('🛑 File watching stopped');
-    }, 30000); // 30 seconds
 }
 
 // Example 10: Type Guards for Runtime Safety

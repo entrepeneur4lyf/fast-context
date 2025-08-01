@@ -1,5 +1,5 @@
 //! JSDoc symbol extractor
-//! 
+//!
 //! Extracts symbols from JSDoc comments including:
 //! - @param annotations
 //! - @returns annotations  
@@ -24,8 +24,14 @@ impl SymbolExtractor for JSDocExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -47,7 +53,7 @@ impl JSDocExtractor {
                     if !name.is_empty() {
                         let location = Location::from_node(&name_node, file_path);
                         let type_info = self.extract_type_info(&node, source);
-                        
+
                         symbols.push(Symbol {
                             name: name.clone(),
                             kind: SymbolKind::Type,
@@ -61,14 +67,14 @@ impl JSDocExtractor {
                     }
                 }
             }
-            
+
             // @namespace declarations
             "namespace" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let name = self.get_node_text(name_node, source);
                     if !name.is_empty() {
                         let location = Location::from_node(&name_node, file_path);
-                        
+
                         // Push namespace as scope
                         let scope = Scope {
                             name: name.clone(),
@@ -76,7 +82,7 @@ impl JSDocExtractor {
                             location: location.clone(),
                         };
                         scope_stack.push(scope);
-                        
+
                         symbols.push(Symbol {
                             name: name.clone(),
                             kind: SymbolKind::Namespace,
@@ -90,14 +96,14 @@ impl JSDocExtractor {
                     }
                 }
             }
-            
+
             // @class definitions
             "class" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let name = self.get_node_text(name_node, source);
                     if !name.is_empty() {
                         let location = Location::from_node(&name_node, file_path);
-                        
+
                         // Push class as scope
                         let scope = Scope {
                             name: name.clone(),
@@ -105,7 +111,7 @@ impl JSDocExtractor {
                             location: location.clone(),
                         };
                         scope_stack.push(scope);
-                        
+
                         symbols.push(Symbol {
                             name: name.clone(),
                             kind: SymbolKind::Class,
@@ -119,7 +125,7 @@ impl JSDocExtractor {
                     }
                 }
             }
-            
+
             // @function declarations
             "function" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
@@ -127,7 +133,7 @@ impl JSDocExtractor {
                     if !name.is_empty() {
                         let location = Location::from_node(&name_node, file_path);
                         let signature = self.extract_function_signature(&node, source);
-                        
+
                         symbols.push(Symbol {
                             name: name.clone(),
                             kind: SymbolKind::Function,
@@ -141,7 +147,7 @@ impl JSDocExtractor {
                     }
                 }
             }
-            
+
             // @param annotations
             "param" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
@@ -149,7 +155,7 @@ impl JSDocExtractor {
                     if !name.is_empty() {
                         let location = Location::from_node(&name_node, file_path);
                         let type_info = self.extract_type_info(&node, source);
-                        
+
                         symbols.push(Symbol {
                             name: name.clone(),
                             kind: SymbolKind::Parameter,
@@ -163,13 +169,13 @@ impl JSDocExtractor {
                     }
                 }
             }
-            
+
             // @type annotations
             "type" => {
                 let type_text = self.get_node_text(node, source);
                 if !type_text.is_empty() {
                     let location = Location::from_node(&node, file_path);
-                    
+
                     symbols.push(Symbol {
                         name: type_text.clone(),
                         kind: SymbolKind::Type,
@@ -182,7 +188,7 @@ impl JSDocExtractor {
                     });
                 }
             }
-            
+
             _ => {}
         }
 
@@ -196,7 +202,7 @@ impl JSDocExtractor {
     fn get_node_text(&self, node: Node, source: &str) -> String {
         source[node.byte_range()].to_string()
     }
-    
+
     fn extract_description(&self, node: &Node, source: &str) -> Option<String> {
         // Look for description field or text content
         if let Some(desc_node) = node.child_by_field_name("description") {
@@ -207,7 +213,7 @@ impl JSDocExtractor {
         }
         None
     }
-    
+
     fn extract_type_info(&self, node: &Node, source: &str) -> Option<String> {
         // Look for type field
         if let Some(type_node) = node.child_by_field_name("type") {
@@ -218,11 +224,11 @@ impl JSDocExtractor {
         }
         None
     }
-    
+
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
         // Extract function signature from JSDoc
         let mut signature_parts = Vec::new();
-        
+
         // Look for parameters
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -230,7 +236,7 @@ impl JSDocExtractor {
                 if let Some(param_name) = child.child_by_field_name("name") {
                     let name = self.get_node_text(param_name, source);
                     let type_info = self.extract_type_info(&child, source);
-                    
+
                     if let Some(type_str) = type_info {
                         signature_parts.push(format!("{name}: {type_str}"));
                     } else {
@@ -239,7 +245,7 @@ impl JSDocExtractor {
                 }
             }
         }
-        
+
         if !signature_parts.is_empty() {
             Some(format!("({})", signature_parts.join(", ")))
         } else {

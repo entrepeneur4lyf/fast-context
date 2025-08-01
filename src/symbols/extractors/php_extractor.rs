@@ -1,5 +1,5 @@
 //! PHP symbol extractor
-//! 
+//!
 //! Extracts symbols from PHP source code including:
 //! - Functions and methods
 //! - Classes, interfaces, and traits
@@ -26,7 +26,13 @@ impl SymbolExtractor for PhpExtractor {
         let root_node = tree.root_node();
         let mut scope_stack = Vec::new();
 
-        self.traverse_node(&root_node, source, file_path, &mut symbols, &mut scope_stack);
+        self.traverse_node(
+            &root_node,
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -41,7 +47,10 @@ impl PhpExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         match node.kind() {
-            "include_expression" | "include_once_expression" | "require_expression" | "require_once_expression" => {
+            "include_expression"
+            | "include_once_expression"
+            | "require_expression"
+            | "require_once_expression" => {
                 self.extract_include(node, source, file_path, symbols, scope_stack);
             }
             "function_definition" => {
@@ -85,8 +94,11 @@ impl PhpExtractor {
 
         // Pop scope if we added one for this node
         match node.kind() {
-            "function_definition" | "class_declaration" | "interface_declaration" |
-            "trait_declaration" | "namespace_definition" => {
+            "function_definition"
+            | "class_declaration"
+            | "interface_declaration"
+            | "trait_declaration"
+            | "namespace_definition" => {
                 scope_stack.pop();
             }
             _ => {}
@@ -107,7 +119,7 @@ impl PhpExtractor {
             if child.kind() == "string" {
                 if let Ok(include_path) = child.utf8_text(source.as_bytes()) {
                     let clean_path = include_path.trim_matches('"').trim_matches('\'');
-                    
+
                     let symbol = Symbol {
                         name: clean_path.to_string(),
                         kind: SymbolKind::Import,
@@ -116,7 +128,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec![node.kind().to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
                 }
@@ -143,7 +157,9 @@ impl PhpExtractor {
                     // Check for visibility modifiers (public, private, protected, static)
                     let mut modifier_cursor = node.walk();
                     for modifier_child in node.children(&mut modifier_cursor) {
-                        if modifier_child.kind() == "visibility_modifier" || modifier_child.kind() == "static_modifier" {
+                        if modifier_child.kind() == "visibility_modifier"
+                            || modifier_child.kind() == "static_modifier"
+                        {
                             if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
                                 modifiers.push(modifier_text.to_string());
                             }
@@ -160,7 +176,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation,
                         modifiers,
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -194,7 +212,9 @@ impl PhpExtractor {
                     // Check for class modifiers (abstract, final)
                     let mut modifier_cursor = node.walk();
                     for modifier_child in node.children(&mut modifier_cursor) {
-                        if modifier_child.kind() == "abstract_modifier" || modifier_child.kind() == "final_modifier" {
+                        if modifier_child.kind() == "abstract_modifier"
+                            || modifier_child.kind() == "final_modifier"
+                        {
                             if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
                                 modifiers.push(modifier_text.to_string());
                             }
@@ -211,7 +231,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation,
                         modifiers,
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -248,7 +270,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["interface".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -285,7 +309,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["trait".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -320,8 +346,13 @@ impl PhpExtractor {
                     let mut modifier_cursor = node.walk();
                     for modifier_child in node.children(&mut modifier_cursor) {
                         match modifier_child.kind() {
-                            "visibility_modifier" | "static_modifier" | "abstract_modifier" | "final_modifier" => {
-                                if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
+                            "visibility_modifier"
+                            | "static_modifier"
+                            | "abstract_modifier"
+                            | "final_modifier" => {
+                                if let Ok(modifier_text) =
+                                    modifier_child.utf8_text(source.as_bytes())
+                                {
                                     modifiers.push(modifier_text.to_string());
                                 }
                             }
@@ -339,7 +370,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation,
                         modifiers,
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
                 }
@@ -365,14 +398,18 @@ impl PhpExtractor {
                     if prop_child.kind() == "variable_name" {
                         if let Ok(property_name) = prop_child.utf8_text(source.as_bytes()) {
                             let clean_name = property_name.trim_start_matches('$');
-                            
+
                             let mut modifiers = vec!["property".to_string()];
 
                             // Check for visibility modifiers
                             let mut modifier_cursor = node.walk();
                             for modifier_child in node.children(&mut modifier_cursor) {
-                                if modifier_child.kind() == "visibility_modifier" || modifier_child.kind() == "static_modifier" {
-                                    if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
+                                if modifier_child.kind() == "visibility_modifier"
+                                    || modifier_child.kind() == "static_modifier"
+                                {
+                                    if let Ok(modifier_text) =
+                                        modifier_child.utf8_text(source.as_bytes())
+                                    {
                                         modifiers.push(modifier_text.to_string());
                                     }
                                 }
@@ -386,7 +423,9 @@ impl PhpExtractor {
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers,
-                                signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                                signature: Some(
+                                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                ),
                             };
                             symbols.push(symbol);
                         }
@@ -420,7 +459,9 @@ impl PhpExtractor {
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers: vec!["const".to_string()],
-                                signature: Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                                signature: Some(
+                                    child.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                ),
                             };
                             symbols.push(symbol);
                         }
@@ -444,7 +485,7 @@ impl PhpExtractor {
             if child.kind() == "variable_name" {
                 if let Ok(var_name) = child.utf8_text(source.as_bytes()) {
                     let clean_name = var_name.trim_start_matches('$');
-                    
+
                     let symbol = Symbol {
                         name: clean_name.to_string(),
                         kind: SymbolKind::Variable,
@@ -453,7 +494,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["variable".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
                 }
@@ -483,7 +526,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["namespace".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -524,7 +569,9 @@ impl PhpExtractor {
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers: vec!["use".to_string()],
-                                signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                                signature: Some(
+                                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                ),
                             };
                             symbols.push(symbol);
                         }
@@ -559,8 +606,10 @@ impl PhpExtractor {
                     if comment_text.starts_with("/**") && comment_text.ends_with("*/") {
                         // PHPDoc comment
                         let content = comment_text
-                            .strip_prefix("/**").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/**")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())
@@ -641,7 +690,10 @@ mod tests {
         // Test PHPDoc tag removal
         let php_content = "@param string $name The name parameter @return bool The result";
         let cleaned = extractor.clean_php_doc(php_content);
-        assert_eq!(cleaned, "Parameter: string $name The name parameter Returns: bool The result");
+        assert_eq!(
+            cleaned,
+            "Parameter: string $name The name parameter Returns: bool The result"
+        );
 
         // Test variable documentation
         let var_content = "@var int $count The count variable";
@@ -651,7 +703,10 @@ mod tests {
         // Test throws documentation
         let throws_content = "@throws Exception When something goes wrong";
         let cleaned_throws = extractor.clean_php_doc(throws_content);
-        assert_eq!(cleaned_throws, "Throws: Exception When something goes wrong");
+        assert_eq!(
+            cleaned_throws,
+            "Throws: Exception When something goes wrong"
+        );
     }
 
     #[test]

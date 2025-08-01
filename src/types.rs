@@ -1,5 +1,5 @@
-use ts_rs::TS;
 use std::io;
+use ts_rs::TS;
 
 // Re-export main structs for type generation
 pub use crate::{RustworkxDiGraph, RustworkxGraph};
@@ -16,8 +16,7 @@ pub enum TypeExportError {
 /// Export all TypeScript types to a bindings directory with proper error handling
 pub fn export_types() -> Result<(), TypeExportError> {
     // Create bindings directory with proper error handling
-    std::fs::create_dir_all("bindings")
-        .map_err(TypeExportError::DirectoryCreation)?;
+    std::fs::create_dir_all("bindings").map_err(TypeExportError::DirectoryCreation)?;
 
     // Export RustworkxGraph types with error handling
     RustworkxGraph::export()
@@ -42,7 +41,7 @@ mod tests {
             Err(e) => {
                 // In tests, we might not have write permissions or the types might not be available
                 // So we just log the error instead of panicking
-                eprintln!("Type export failed (this may be expected in test environment): {}", e);
+                eprintln!("Type export failed (this may be expected in test environment): {e}");
             }
         }
     }
@@ -52,11 +51,15 @@ mod tests {
         // Test that our error types work correctly
         let dir_error = TypeExportError::DirectoryCreation(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
-            "Permission denied"
+            "Permission denied",
         ));
-        assert!(dir_error.to_string().contains("Failed to create bindings directory"));
+        assert!(dir_error
+            .to_string()
+            .contains("Failed to create bindings directory"));
 
         let export_error = TypeExportError::TypeExport("Test error".to_string());
-        assert!(export_error.to_string().contains("Failed to export TypeScript types"));
+        assert!(export_error
+            .to_string()
+            .contains("Failed to export TypeScript types"));
     }
 }

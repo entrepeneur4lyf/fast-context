@@ -1,5 +1,5 @@
 //! Ruby-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Ruby source code, including:
 //! - Method calls and message sending
 //! - Variable references and instance variables
@@ -10,9 +10,9 @@
 //! - Control flow (if/unless, loops, case)
 //! - Metaprogramming patterns
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Ruby-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Ruby
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for RubyDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -88,28 +92,31 @@ impl DependencyExtractor for RubyDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "call" | "method_call")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
-        matches!(node.kind(), "identifier" | "instance_variable" | "class_variable" | "global_variable")
+        matches!(
+            node.kind(),
+            "identifier" | "instance_variable" | "class_variable" | "global_variable"
+        )
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         node.kind() == "call" && self.is_require_call(node, "")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        (node.kind() == "class" && node.child_by_field_name("superclass").is_some()) ||
-        (node.kind() == "module" && self.has_include_extend(node))
+        (node.kind() == "class" && node.child_by_field_name("superclass").is_some())
+            || (node.kind() == "module" && self.has_include_extend(node))
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "assignment" | "operator_assignment")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -120,7 +127,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
         if let Some(method_node) = node.child_by_field_name("method") {
             let method_name = self.get_node_text(&method_node, source);
             let current_scope = context.current_scope();
-            
+
             if !method_name.trim().is_empty() && !method_name.contains('\n') {
                 // Try to resolve the method in known symbols
                 let resolved_methods = context.find_symbols_global(&method_name);
@@ -129,7 +136,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
                 } else {
                     method_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_method,
@@ -137,9 +144,9 @@ impl DependencyExtractor for RubyDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -147,7 +154,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -159,12 +166,12 @@ impl DependencyExtractor for RubyDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords and built-ins
             if self.is_ruby_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -172,7 +179,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -180,11 +187,11 @@ impl DependencyExtractor for RubyDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -194,7 +201,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
     ) {
         self.extract_requires(node, source, context, dependencies);
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -204,7 +211,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -222,7 +229,7 @@ impl DependencyExtractor for RubyDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -252,27 +259,27 @@ impl DependencyExtractor for RubyDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if" | "unless")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "for" | "while" | "until")
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
         matches!(node.kind(), "begin" | "rescue" | "ensure")
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "case")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break" | "next")
     }
@@ -340,7 +347,10 @@ impl RubyDependencyExtractor {
     fn is_require_call(&self, node: &Node, source: &str) -> bool {
         if let Some(method_node) = node.child_by_field_name("method") {
             let method_name = self.get_node_text(&method_node, source);
-            matches!(method_name.as_str(), "require" | "require_relative" | "load" | "gem")
+            matches!(
+                method_name.as_str(),
+                "require" | "require_relative" | "load" | "gem"
+            )
         } else {
             false
         }
@@ -364,7 +374,8 @@ impl RubyDependencyExtractor {
                 let mut cursor = args_node.walk();
                 for child in args_node.children(&mut cursor) {
                     if child.kind() == "string" || child.kind() == "simple_symbol" {
-                        let required_name = self.get_node_text(&child, source)
+                        let required_name = self
+                            .get_node_text(&child, source)
                             .trim_matches('"')
                             .trim_matches('\'')
                             .trim_matches(':')
@@ -528,7 +539,8 @@ impl RubyDependencyExtractor {
 
     /// Check if a string is a Ruby keyword
     fn is_ruby_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "alias" | "and" | "begin" | "break" | "case" | "class" | "def" | "defined?" |
             "do" | "else" | "elsif" | "end" | "ensure" | "false" | "for" | "if" |
             "in" | "module" | "next" | "nil" | "not" | "or" | "redo" | "rescue" |
@@ -555,7 +567,11 @@ impl RubyDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -585,7 +601,11 @@ impl RubyDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -603,7 +623,13 @@ impl RubyDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as conditional execution
@@ -648,7 +674,13 @@ impl RubyDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -697,7 +729,10 @@ impl RubyDependencyExtractor {
     ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if matches!(child.kind(), "identifier" | "instance_variable" | "class_variable" | "global_variable") {
+            if matches!(
+                child.kind(),
+                "identifier" | "instance_variable" | "class_variable" | "global_variable"
+            ) {
                 let arg_name = self.get_node_text(&child, source);
                 let current_scope = context.current_scope();
 
@@ -783,13 +818,25 @@ impl RubyDependencyExtractor {
                 }
 
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while" | "until" => {
                 // while condition or until condition
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -867,7 +914,13 @@ impl RubyDependencyExtractor {
 
         // Extract case expression
         if let Some(value_node) = node.child_by_field_name("value") {
-            self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                value_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -894,7 +947,13 @@ impl RubyDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -917,7 +976,11 @@ impl RubyDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break" { "break" } else { "next" };
+        let flow_type = if node.kind() == "break" {
+            "break"
+        } else {
+            "next"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

@@ -1,12 +1,12 @@
 //! Performance benchmarks for fast-context
 //! Measures core algorithm performance and graph operations
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use std::time::Duration;
 
 // Since this is a NAPI crate, we'll benchmark the core graph algorithms
 // that are available through the rustworkx-core dependency
-use petgraph::{Graph, Directed};
+use petgraph::{Directed, Graph};
 
 type TestGraph = Graph<i32, f64, Directed>;
 
@@ -31,14 +31,14 @@ fn benchmark_graph_creation(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     let sizes = vec![
-        (10, 20),    // Small graph
-        (100, 200),  // Medium graph
+        (10, 20),     // Small graph
+        (100, 200),   // Medium graph
         (1000, 2000), // Large graph
     ];
 
     for (nodes, edges) in sizes {
         group.bench_with_input(
-            BenchmarkId::new("create_graph", format!("{}n_{}e", nodes, edges)),
+            BenchmarkId::new("create_graph", format!("{nodes}n_{edges}e")),
             &(nodes, edges),
             |b, &(nodes, edges)| {
                 b.iter(|| {
@@ -95,7 +95,8 @@ fn benchmark_memory_usage(c: &mut Criterion) {
             |b, &size| {
                 b.iter(|| {
                     for i in 0..size {
-                        let graph = create_test_graph(black_box(10 + i % 10), black_box(20 + i % 20));
+                        let graph =
+                            create_test_graph(black_box(10 + i % 10), black_box(20 + i % 20));
                         black_box(graph);
                     }
                 });

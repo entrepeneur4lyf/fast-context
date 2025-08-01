@@ -1,20 +1,20 @@
 //! # Fast-Context: Intelligent Codebase Analysis Engine
-//! 
+//!
 //! Fast-Context transforms complex codebases into comprehensive knowledge graphs that empower
 //! coding assistants with deep semantic understanding, causal analysis, and real-time intelligence.
-//! 
+//!
 //! ## Core Architecture
-//! 
+//!
 //! ### Graph Algorithm Foundation (80+ Algorithms)
 //! The comprehensive graph algorithm suite provides the computational engine for code analysis:
-//! 
+//!
 //! **Shortest Path Algorithms**: A*, Bellman-Ford, K-shortest paths, all paths enumeration
 //! **Centrality Measures**: Betweenness, eigenvector, Katz centrality for code importance analysis
 //! **Graph Operations**: Union, complement, tensor/cartesian products for code relationship modeling
 //! **Traversal Algorithms**: Complete BFS/DFS suites for dependency tracing and impact analysis
 //! **Specialized Algorithms**: SCC condensation, ancestors/descendants for call graph analysis
 //! **Performance Optimizations**: Parallel algorithms, memory-efficient streaming, intelligent caching
-//! 
+//!
 //! ### Codebase Analysis Engine (In Development)
 //! - **Multi-language Parsing**: 20+ programming languages via Tree-sitter
 //! - **Symbol Extraction**: Functions, classes, variables, imports with full context
@@ -22,23 +22,23 @@
 //! - **Real-time Updates**: File watching with incremental graph updates
 //! - **Intelligent Caching**: Adaptive caching strategies from small projects to large monorepos
 //! - **AI Assistant APIs**: Query interfaces designed for coding assistants and LLMs
-//! 
+//!
 //! ## Intelligent Caching Strategy
-//! 
+//!
 //! | Project Size | Files | Memory | Disk Cache | Features |
 //! |--------------|-------|--------|------------|----------|
 //! | Small | <1K | <200MB | <100MB | LRU + selective disk |
 //! | Medium | 1K-10K | <500MB | <500MB | Multi-level cache |
 //! | Large | >10K | <1GB | <1GB | Basic disk persistence |
-//! 
+//!
 //! ## Use Cases
-//! 
+//!
 //! - **Impact Analysis**: Trace how code changes propagate through the codebase
 //! - **Semantic Search**: Find symbols, references, and usage patterns across languages
 //! - **Dependency Visualization**: Understand complex code relationships and architecture
 //! - **Refactoring Safety**: Identify all affected code before making changes
 //! - **Code Intelligence**: Power AI assistants with deep codebase understanding
-//! 
+//!
 //! The existing graph algorithms serve as the high-performance foundation that enables
 //! sophisticated code relationship modeling, dependency analysis, and impact assessment.
 
@@ -56,25 +56,25 @@ use std::sync::Arc;
 use ts_rs::TS;
 
 // Fast-Context imports
-use crate::parsers::{ParserFactory, LanguageId};
-use crate::query::{QueryResult, CodeQueryEngine};
-use crate::export::{ExportOptions, JsonExporter, LspExporter};
-use crate::symbols::{SymbolKind, SymbolExtractorFactory};
 use crate::analysis::{AnalysisResult, CodeGraphBuilder};
 use crate::cache::AdaptiveCacheManager;
+use crate::export::{ExportOptions, JsonExporter, LspExporter};
+use crate::parsers::{LanguageId, ParserFactory};
+use crate::query::{CodeQueryEngine, QueryResult};
+use crate::symbols::{SymbolExtractorFactory, SymbolKind};
 use crate::watcher::CodebaseWatcher;
 use tokio::runtime::Runtime;
 
 pub mod types;
 
 // Fast-Context analysis modules
-pub mod parsers;    // Tree-sitter language parsers
-pub mod symbols;    // Symbol extraction and management
-pub mod analysis;   // Code analysis and graph construction
-pub mod watcher;    // File system monitoring
-pub mod query;      // Query interface for AI assistants
-pub mod cache;      // Intelligent caching system
-pub mod export;     // Export & serialization system
+pub mod analysis; // Code analysis and graph construction
+pub mod cache; // Intelligent caching system
+pub mod export;
+pub mod parsers; // Tree-sitter language parsers
+pub mod query; // Query interface for AI assistants
+pub mod symbols; // Symbol extraction and management
+pub mod watcher; // File system monitoring // Export & serialization system
 
 #[napi]
 #[derive(TS)]
@@ -602,13 +602,7 @@ impl RustworkxGraph {
 
             // Recursively search from this neighbor
             self.find_paths_iterative_deepening(
-                neighbor,
-                target,
-                path,
-                visited,
-                all_paths,
-                max_depth,
-                min_depth,
+                neighbor, target, path, visited, all_paths, max_depth, min_depth,
             );
 
             // Backtrack: remove neighbor from path and visited set
@@ -1741,7 +1735,7 @@ impl RustworkxGraph {
 
     fn all_pairs_shortest_paths_parallel(&self) -> Vec<Vec<f64>> {
         use rayon::prelude::*;
-        
+
         let node_count = self.inner.node_count();
         let mut matrix = vec![vec![f64::INFINITY; node_count]; node_count];
 
@@ -1937,11 +1931,11 @@ impl RustworkxGraph {
     // #[napi]
     pub fn parallel_betweenness_centrality(&self, normalized: Option<bool>) -> Vec<f64> {
         use rayon::prelude::*;
-        
+
         let normalized = normalized.unwrap_or(false);
         let node_count = self.inner.node_count();
         let mut centrality = vec![0.0; node_count];
-        
+
         if node_count <= 1 {
             return centrality;
         }
@@ -1952,20 +1946,20 @@ impl RustworkxGraph {
             .par_iter()
             .map(|&source| {
                 let mut local_centrality = vec![0.0; node_count];
-                
+
                 // Brandes' algorithm for single source
                 let mut stack = Vec::new();
                 let mut predecessors = vec![Vec::new(); node_count];
                 let mut sigma = vec![0.0; node_count];
                 let mut distance = vec![-1.0; node_count];
                 let mut delta = vec![0.0; node_count];
-                
+
                 sigma[source.index()] = 1.0;
                 distance[source.index()] = 0.0;
-                
+
                 let mut queue = VecDeque::new();
                 queue.push_back(source);
-                
+
                 // Forward BFS
                 while let Some(v) = queue.pop_front() {
                     stack.push(v);
@@ -1980,17 +1974,18 @@ impl RustworkxGraph {
                         }
                     }
                 }
-                
+
                 // Backward accumulation
                 while let Some(w) = stack.pop() {
                     for &v in &predecessors[w.index()] {
-                        delta[v.index()] += (sigma[v.index()] / sigma[w.index()]) * (1.0 + delta[w.index()]);
+                        delta[v.index()] +=
+                            (sigma[v.index()] / sigma[w.index()]) * (1.0 + delta[w.index()]);
                     }
                     if w != source {
                         local_centrality[w.index()] += delta[w.index()];
                     }
                 }
-                
+
                 local_centrality
             })
             .collect();
@@ -2033,14 +2028,14 @@ impl RustworkxGraph {
     pub fn memory_usage(&self) -> String {
         let node_count = self.inner.node_count();
         let edge_count = self.inner.edge_count();
-        
+
         // Rough estimation of memory usage
         let node_memory = node_count * (std::mem::size_of::<String>() + 32); // Node data + overhead
         let edge_memory = edge_count * (std::mem::size_of::<f64>() + 16); // Edge weight + indices
         let graph_overhead = 1024; // Graph structure overhead
-        
+
         let total_bytes = node_memory + edge_memory + graph_overhead;
-        
+
         if total_bytes < 1024 {
             format!("{total_bytes} bytes")
         } else if total_bytes < 1024 * 1024 {
@@ -2531,7 +2526,8 @@ impl RustworkxDiGraph {
         }
 
         // Get outgoing neighbors for directed graph
-        let neighbors: Vec<NodeIndex> = self.inner
+        let neighbors: Vec<NodeIndex> = self
+            .inner
             .neighbors_directed(current, Direction::Outgoing)
             .collect();
 
@@ -2551,13 +2547,7 @@ impl RustworkxDiGraph {
             path.push(neighbor);
 
             self.find_paths_directed_optimized(
-                neighbor,
-                target,
-                path,
-                visited,
-                all_paths,
-                max_depth,
-                min_depth,
+                neighbor, target, path, visited, all_paths, max_depth, min_depth,
             );
 
             // Backtrack
@@ -3629,7 +3619,7 @@ impl RustworkxDiGraph {
 
     fn all_pairs_shortest_paths_parallel(&self) -> Vec<Vec<f64>> {
         use rayon::prelude::*;
-        
+
         let node_count = self.inner.node_count();
         let mut matrix = vec![vec![f64::INFINITY; node_count]; node_count];
 
@@ -3963,11 +3953,11 @@ impl RustworkxDiGraph {
     // #[napi]
     pub fn parallel_betweenness_centrality(&self, normalized: Option<bool>) -> Vec<f64> {
         use rayon::prelude::*;
-        
+
         let normalized = normalized.unwrap_or(false);
         let node_count = self.inner.node_count();
         let mut centrality = vec![0.0; node_count];
-        
+
         if node_count <= 1 {
             return centrality;
         }
@@ -3978,20 +3968,20 @@ impl RustworkxDiGraph {
             .par_iter()
             .map(|&source| {
                 let mut local_centrality = vec![0.0; node_count];
-                
+
                 // Brandes' algorithm for single source (directed)
                 let mut stack = Vec::new();
                 let mut predecessors = vec![Vec::new(); node_count];
                 let mut sigma = vec![0.0; node_count];
                 let mut distance = vec![-1.0; node_count];
                 let mut delta = vec![0.0; node_count];
-                
+
                 sigma[source.index()] = 1.0;
                 distance[source.index()] = 0.0;
-                
+
                 let mut queue = VecDeque::new();
                 queue.push_back(source);
-                
+
                 // Forward BFS (directed)
                 while let Some(v) = queue.pop_front() {
                     stack.push(v);
@@ -4006,17 +3996,18 @@ impl RustworkxDiGraph {
                         }
                     }
                 }
-                
+
                 // Backward accumulation
                 while let Some(w) = stack.pop() {
                     for &v in &predecessors[w.index()] {
-                        delta[v.index()] += (sigma[v.index()] / sigma[w.index()]) * (1.0 + delta[w.index()]);
+                        delta[v.index()] +=
+                            (sigma[v.index()] / sigma[w.index()]) * (1.0 + delta[w.index()]);
                     }
                     if w != source {
                         local_centrality[w.index()] += delta[w.index()];
                     }
                 }
-                
+
                 local_centrality
             })
             .collect();
@@ -4064,14 +4055,14 @@ impl RustworkxDiGraph {
     pub fn memory_usage(&self) -> String {
         let node_count = self.inner.node_count();
         let edge_count = self.inner.edge_count();
-        
+
         // Rough estimation of memory usage
         let node_memory = node_count * (std::mem::size_of::<String>() + 32); // Node data + overhead
         let edge_memory = edge_count * (std::mem::size_of::<f64>() + 16); // Edge weight + indices
         let graph_overhead = 1024; // Graph structure overhead
-        
+
         let total_bytes = node_memory + edge_memory + graph_overhead;
-        
+
         if total_bytes < 1024 {
             format!("{total_bytes} bytes")
         } else if total_bytes < 1024 * 1024 {
@@ -4291,25 +4282,25 @@ pub struct FastContextAnalyzerType {}
 pub struct AnalyzerConfig {
     /// Project root directory path
     pub project_root: String,
-    
+
     /// Languages to analyze (empty = auto-detect all)
     pub languages: Option<Vec<String>>,
-    
+
     /// File patterns to ignore
     pub ignore_patterns: Option<Vec<String>>,
-    
+
     /// Enable intelligent caching
     pub enable_caching: Option<bool>,
-    
+
     /// Cache policy (auto, minimal, balanced, adaptive, persistent)
     pub cache_policy: Option<String>,
-    
+
     /// Enable file watching for real-time updates
     pub enable_watching: Option<bool>,
-    
+
     /// Maximum files to analyze (0 = no limit)
     pub max_files: Option<u32>,
-    
+
     /// Enable parallel processing
     pub parallel_processing: Option<bool>,
 }
@@ -4321,19 +4312,19 @@ pub struct AnalyzerConfig {
 pub struct AnalysisResultJs {
     /// Total number of files analyzed
     pub file_count: u32,
-    
+
     /// Total number of symbols found
     pub symbol_count: u32,
-    
+
     /// Total number of relationships found
     pub relationship_count: u32,
-    
+
     /// Languages detected in the project
     pub languages: Vec<String>,
-    
+
     /// Analysis duration in milliseconds
     pub duration_ms: u32,
-    
+
     /// Memory usage in MB
     pub memory_usage_mb: Option<f64>,
 }
@@ -4345,13 +4336,13 @@ pub struct AnalysisResultJs {
 pub struct QueryResultJs {
     /// Matching symbols
     pub symbols: Vec<SymbolInfoJs>,
-    
+
     /// Context information
     pub context: ContextInfoJs,
-    
+
     /// Suggestions for the user
     pub suggestions: Vec<String>,
-    
+
     /// Total results available
     pub total_results: u32,
 }
@@ -4363,40 +4354,40 @@ pub struct QueryResultJs {
 pub struct SymbolInfoJs {
     /// Symbol name
     pub name: String,
-    
+
     /// Qualified name (full path)
     pub qualified_name: String,
-    
+
     /// Symbol kind (Function, Class, Variable, etc.)
     pub kind: String,
-    
+
     /// File path
     pub file_path: String,
-    
+
     /// Programming language
     pub language: String,
-    
+
     /// Start line (1-based)
     pub start_line: u32,
-    
+
     /// End line (1-based)
     pub end_line: u32,
-    
+
     /// Cyclomatic complexity
     pub complexity: u32,
-    
+
     /// Dependencies (symbols this symbol uses)
     pub dependencies: Vec<String>,
-    
+
     /// Dependents (symbols that use this symbol)
     pub dependents: Vec<String>,
-    
+
     /// Signature/declaration
     pub signature: Option<String>,
-    
+
     /// Documentation
     pub documentation: Option<String>,
-    
+
     /// Symbol modifiers (pub, static, etc.)
     pub modifiers: Vec<String>,
 }
@@ -4408,16 +4399,16 @@ pub struct SymbolInfoJs {
 pub struct ContextInfoJs {
     /// Total symbols in context
     pub total_symbols: u32,
-    
+
     /// Files involved
     pub files_involved: u32,
-    
+
     /// Average complexity score
     pub complexity_score: f64,
-    
+
     /// Architectural patterns detected
     pub architectural_patterns: Vec<String>,
-    
+
     /// Potential issues
     pub potential_issues: Vec<String>,
 }
@@ -4429,19 +4420,19 @@ pub struct ContextInfoJs {
 pub struct ExportOptionsJs {
     /// Pretty print JSON output
     pub pretty_print: Option<bool>,
-    
+
     /// Include detailed symbol information
     pub include_details: Option<bool>,
-    
+
     /// Include relationships
     pub include_relationships: Option<bool>,
-    
+
     /// Maximum symbols to export (0 = no limit)
     pub max_symbols: Option<u32>,
-    
+
     /// Export format (json, lsp, embedding)
     pub format: Option<String>,
-    
+
     /// Enable streaming for large exports
     pub streaming: Option<bool>,
 }
@@ -4453,13 +4444,13 @@ pub struct ExportOptionsJs {
 pub struct PaginationOptionsJs {
     /// Page number (0-based)
     pub page: u32,
-    
+
     /// Items per page
     pub page_size: u32,
-    
+
     /// Sort field (name, complexity, etc.)
     pub sort_field: Option<String>,
-    
+
     /// Sort direction (asc, desc)
     pub sort_direction: Option<String>,
 }
@@ -4471,19 +4462,19 @@ pub struct PaginationOptionsJs {
 pub struct FilterOptionsJs {
     /// Symbol kinds to include
     pub symbol_kinds: Option<Vec<String>>,
-    
+
     /// Languages to include
     pub languages: Option<Vec<String>>,
-    
+
     /// File patterns to include
     pub file_patterns: Option<Vec<String>>,
-    
+
     /// Minimum complexity
     pub min_complexity: Option<u32>,
-    
+
     /// Maximum complexity
     pub max_complexity: Option<u32>,
-    
+
     /// Only documented symbols
     pub documented_only: Option<bool>,
 }
@@ -4495,19 +4486,19 @@ pub struct FilterOptionsJs {
 pub struct FileChangeEventJs {
     /// Type of change (created, modified, deleted, renamed)
     pub change_type: String,
-    
+
     /// Path of the changed file
     pub file_path: String,
-    
+
     /// Old path (for rename operations)
     pub old_path: Option<String>,
-    
+
     /// Timestamp of the change
     pub timestamp: f64,
-    
+
     /// Language of the changed file
     pub language: Option<String>,
-    
+
     /// Whether this change affects the analysis
     pub affects_analysis: bool,
 }
@@ -4519,16 +4510,16 @@ pub struct FileChangeEventJs {
 pub struct FileChangeBatchJs {
     /// All changes in this batch
     pub changes: Vec<FileChangeEventJs>,
-    
+
     /// Total number of changes
     pub change_count: u32,
-    
+
     /// Batch timestamp
     pub batch_timestamp: f64,
-    
+
     /// Whether re-analysis is recommended
     pub requires_reanalysis: bool,
-    
+
     /// Estimated impact level (low, medium, high)
     pub impact_level: String,
 }
@@ -4540,13 +4531,13 @@ pub struct FileChangeBatchJs {
 pub struct StreamingOptionsJs {
     /// Enable streaming mode
     pub enabled: bool,
-    
+
     /// Chunk size for streaming results
     pub chunk_size: u32,
-    
+
     /// Include progress callbacks
     pub include_progress: Option<bool>,
-    
+
     /// Timeout for each chunk in milliseconds
     pub chunk_timeout_ms: Option<u32>,
 }
@@ -4558,19 +4549,19 @@ pub struct StreamingOptionsJs {
 pub struct QueryChunkJs {
     /// Results in this chunk
     pub symbols: Vec<SymbolInfoJs>,
-    
+
     /// Chunk index (0-based)
     pub chunk_index: u32,
-    
+
     /// Total number of chunks
     pub total_chunks: u32,
-    
+
     /// Whether this is the last chunk
     pub is_last: bool,
-    
+
     /// Progress percentage (0-100)
     pub progress: f64,
-    
+
     /// Processing time for this chunk in milliseconds
     pub processing_time_ms: u32,
 }
@@ -4580,8 +4571,12 @@ impl FastContextAnalyzer {
     /// Create a new Fast-Context analyzer
     #[napi(constructor)]
     pub fn new(config: AnalyzerConfig) -> napi::Result<Self> {
-        let runtime = Runtime::new()
-            .map_err(|e| napi::Error::from_reason(format!("Failed to create async runtime: {e}")))?;
+        // Validate configuration
+        Self::validate_config(&config)?;
+
+        let runtime = Runtime::new().map_err(|e| {
+            napi::Error::from_reason(format!("Failed to create async runtime: {e}"))
+        })?;
 
         Ok(Self {
             runtime,
@@ -4594,32 +4589,107 @@ impl FastContextAnalyzer {
             cache_access_order: VecDeque::new(),
         })
     }
-    
+
+    /// Validate analyzer configuration
+    fn validate_config(config: &AnalyzerConfig) -> napi::Result<()> {
+        // Validate project root
+        if config.project_root.trim().is_empty() {
+            return Err(napi::Error::from_reason("Project root cannot be empty"));
+        }
+
+        // Check if project root exists
+        if !std::path::Path::new(&config.project_root).exists() {
+            return Err(napi::Error::from_reason(format!(
+                "Project root does not exist: {}",
+                config.project_root
+            )));
+        }
+
+        // Validate languages
+        if let Some(ref languages) = config.languages {
+            if languages.is_empty() {
+                return Err(napi::Error::from_reason("Languages list cannot be empty"));
+            }
+
+            // Validate each language
+            let valid_languages = [
+                "rust",
+                "python",
+                "javascript",
+                "typescript",
+                "java",
+                "go",
+                "csharp",
+                "cpp",
+                "swift",
+                "objectivec",
+                "php",
+                "ruby",
+                "scala",
+                "zig",
+                "dart",
+                "lua",
+                "bash",
+            ];
+            for lang in languages {
+                if !valid_languages.contains(&lang.to_lowercase().as_str()) {
+                    return Err(napi::Error::from_reason(format!(
+                        "Unsupported language: {lang}"
+                    )));
+                }
+            }
+        }
+
+        // Validate max files
+        if let Some(max_files) = config.max_files {
+            if max_files == 0 {
+                return Err(napi::Error::from_reason("Max files must be greater than 0"));
+            }
+        }
+
+        // Validate cache policy
+        if let Some(ref cache_policy) = config.cache_policy {
+            let valid_policies = ["none", "basic", "adaptive", "aggressive"];
+            if !valid_policies.contains(&cache_policy.as_str()) {
+                return Err(napi::Error::from_reason(format!(
+                    "Invalid cache policy: {}. Valid options: {}",
+                    cache_policy,
+                    valid_policies.join(", ")
+                )));
+            }
+        }
+
+        // Note: memory_limit and analysis_timeout are not part of AnalyzerConfig
+        // They would be added in future versions if needed
+
+        Ok(())
+    }
+
     /// Analyze the codebase
     #[napi]
     pub fn analyze(&mut self, config: Option<AnalyzerConfig>) -> napi::Result<AnalysisResultJs> {
         let start_time = std::time::Instant::now();
-        
+
         // Use provided config or default
         let project_root = if let Some(ref cfg) = config {
             cfg.project_root.clone()
         } else {
             self.project_root.clone()
         };
-        
+
         // Create analyzer components
         let mut parser_factory = ParserFactory::new();
         let extractor_factory = SymbolExtractorFactory::new();
         let mut graph_builder = CodeGraphBuilder::new();
-        
+
         // Track analysis results
         let mut file_count = 0;
         let mut symbol_count = 0;
         let mut languages_found = std::collections::HashSet::new();
-        
+
         // Find all source files in project
-        let source_files = self.find_source_files(&project_root)?;
-        
+        let source_files = self.find_source_files(&project_root, config.as_ref())?;
+
         // Process each file with memory management and error recovery
         let mut processed_files = 0;
         let mut failed_files = Vec::new();
@@ -4629,7 +4699,8 @@ impl FastContextAnalyzer {
             // Memory pressure check every 100 files
             if processed_files % 100 == 0 && processed_files > 0 {
                 if let Some(memory_usage) = self.check_memory_usage() {
-                    if memory_usage > 0.8 { // 80% memory usage threshold
+                    if memory_usage > 0.8 {
+                        // 80% memory usage threshold
                         memory_warnings += 1;
                         eprintln!("Warning: High memory usage ({:.1}%) detected after processing {} files",
                                 memory_usage * 100.0, processed_files);
@@ -4647,13 +4718,18 @@ impl FastContextAnalyzer {
             }
 
             // Process file with comprehensive error handling
-            match self.process_single_file(&file_path, &mut parser_factory, &extractor_factory,
-                                         &mut graph_builder, &mut languages_found) {
+            match self.process_single_file(
+                &file_path,
+                &mut parser_factory,
+                &extractor_factory,
+                &mut graph_builder,
+                &mut languages_found,
+            ) {
                 Ok(symbols_added) => {
                     symbol_count += symbols_added;
                     file_count += 1;
                     processed_files += 1;
-                },
+                }
                 Err(e) => {
                     failed_files.push((file_path.clone(), e.to_string()));
                     // Continue processing other files instead of failing completely
@@ -4664,25 +4740,28 @@ impl FastContextAnalyzer {
 
         // Report processing statistics
         if !failed_files.is_empty() {
-            eprintln!("Analysis completed with {} failed files out of {} total",
-                     failed_files.len(), processed_files + failed_files.len());
+            eprintln!(
+                "Analysis completed with {} failed files out of {} total",
+                failed_files.len(),
+                processed_files + failed_files.len()
+            );
         }
 
         if memory_warnings > 0 {
             eprintln!("Memory pressure detected {memory_warnings} times during analysis");
         }
-        
+
         // Build the final code graph
         let code_graph = graph_builder.build();
         let relationship_count = code_graph.edge_count();
-        
+
         // Convert languages for analysis result and JS response
         let languages_vec: Vec<LanguageId> = languages_found.iter().cloned().collect();
         let language_names: Vec<String> = languages_found
             .into_iter()
             .map(|lang| format!("{lang:?}"))
             .collect();
-        
+
         // Create analysis result and store it
         let analysis_result = AnalysisResult {
             graph: code_graph,
@@ -4691,19 +4770,19 @@ impl FastContextAnalyzer {
             relationship_count,
             languages: languages_vec,
         };
-        
+
         // Create query engine from the analysis
         let query_engine = CodeQueryEngine::new(analysis_result.clone());
-        
+
         // Store results
         self.analysis = Some(analysis_result);
         self.query_engine = Some(query_engine);
-        
+
         let duration = start_time.elapsed();
-        
+
         // Calculate memory usage estimate
         let memory_usage_mb = Some(self.estimate_memory_usage(file_count, symbol_count) as f64);
-        
+
         let result = AnalysisResultJs {
             file_count: file_count as u32,
             symbol_count: symbol_count as u32,
@@ -4712,10 +4791,10 @@ impl FastContextAnalyzer {
             duration_ms: duration.as_millis() as u32,
             memory_usage_mb,
         };
-        
+
         Ok(result)
     }
-    
+
     /// Query symbols by name pattern with regex support and comprehensive filtering
     #[napi]
     pub fn find_symbols(&self, pattern: String) -> napi::Result<QueryResultJs> {
@@ -4723,10 +4802,12 @@ impl FastContextAnalyzer {
             let result = query_engine.find_symbols(&pattern);
             Ok(self.convert_query_result(result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Query symbols by kind with validation and comprehensive results
     #[napi]
     pub fn find_symbols_by_kind(&self, kind: String) -> napi::Result<QueryResultJs> {
@@ -4736,11 +4817,16 @@ impl FastContextAnalyzer {
         }
 
         if kind.len() > 100 {
-            return Err(napi::Error::from_reason("Symbol kind too long (max 100 characters)"));
+            return Err(napi::Error::from_reason(
+                "Symbol kind too long (max 100 characters)",
+            ));
         }
 
         // Check for valid characters (alphanumeric, underscore, hyphen)
-        if !kind.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-') {
+        if !kind
+            .chars()
+            .all(|c| c.is_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(napi::Error::from_reason("Symbol kind contains invalid characters. Use only alphanumeric, underscore, or hyphen"));
         }
 
@@ -4749,10 +4835,12 @@ impl FastContextAnalyzer {
             let result = query_engine.find_symbols_by_kind(symbol_kind);
             Ok(self.convert_query_result(result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Find symbols in a specific file with path validation and detailed results
     #[napi]
     pub fn find_symbols_in_file(&mut self, file_path: String) -> napi::Result<QueryResultJs> {
@@ -4762,12 +4850,16 @@ impl FastContextAnalyzer {
         }
 
         if file_path.len() > 4096 {
-            return Err(napi::Error::from_reason("File path too long (max 4096 characters)"));
+            return Err(napi::Error::from_reason(
+                "File path too long (max 4096 characters)",
+            ));
         }
 
         // Check for path traversal attempts
         if file_path.contains("..") || file_path.contains("//") {
-            return Err(napi::Error::from_reason("Invalid file path: path traversal not allowed"));
+            return Err(napi::Error::from_reason(
+                "Invalid file path: path traversal not allowed",
+            ));
         }
 
         // Normalize path separators
@@ -4792,10 +4884,12 @@ impl FastContextAnalyzer {
 
             Ok(self.convert_query_result(result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Find symbols that depend on the given symbol with transitive analysis
     #[napi]
     pub fn find_dependents(&self, symbol_name: String) -> napi::Result<QueryResultJs> {
@@ -4805,7 +4899,9 @@ impl FastContextAnalyzer {
         }
 
         if symbol_name.len() > 500 {
-            return Err(napi::Error::from_reason("Symbol name too long (max 500 characters)"));
+            return Err(napi::Error::from_reason(
+                "Symbol name too long (max 500 characters)",
+            ));
         }
 
         if let Some(ref query_engine) = self.query_engine {
@@ -4820,10 +4916,12 @@ impl FastContextAnalyzer {
 
             Ok(self.convert_query_result(merged_result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Find symbols that the given symbol depends on with comprehensive dependency analysis
     #[napi]
     pub fn find_dependencies(&self, symbol_name: String) -> napi::Result<QueryResultJs> {
@@ -4833,7 +4931,9 @@ impl FastContextAnalyzer {
         }
 
         if symbol_name.len() > 500 {
-            return Err(napi::Error::from_reason("Symbol name too long (max 500 characters)"));
+            return Err(napi::Error::from_reason(
+                "Symbol name too long (max 500 characters)",
+            ));
         }
 
         if let Some(ref query_engine) = self.query_engine {
@@ -4841,17 +4941,20 @@ impl FastContextAnalyzer {
             let direct_result = query_engine.find_dependencies(&symbol_name);
 
             // Perform transitive analysis
-            let transitive_result = self.find_transitive_dependencies(&symbol_name, query_engine)?;
+            let transitive_result =
+                self.find_transitive_dependencies(&symbol_name, query_engine)?;
 
             // Merge results with impact analysis
             let merged_result = self.merge_dependency_results(direct_result, transitive_result);
 
             Ok(self.convert_query_result(merged_result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Find the most complex symbols with configurable complexity metrics
     #[napi]
     pub fn find_complex_symbols(&self, limit: u32) -> napi::Result<QueryResultJs> {
@@ -4859,10 +4962,12 @@ impl FastContextAnalyzer {
             let result = query_engine.find_complex_symbols(limit as usize);
             Ok(self.convert_query_result(result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Find architectural issues in the codebase with comprehensive analysis
     #[napi]
     pub fn find_architectural_issues(&self) -> napi::Result<QueryResultJs> {
@@ -4870,38 +4975,46 @@ impl FastContextAnalyzer {
             let result = query_engine.find_architectural_issues();
             Ok(self.convert_query_result(result))
         } else {
-            Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "Analyzer not initialized. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Export analysis results to JSON with comprehensive formatting options
     #[napi]
     pub fn export_json(&self, options: Option<ExportOptionsJs>) -> napi::Result<String> {
         if let Some(ref analysis) = self.analysis {
             let export_options = self.convert_export_options(options);
             let exporter = JsonExporter::new(analysis.clone(), self.project_root.clone());
-            
-            exporter.export_to_string(&export_options)
+
+            exporter
+                .export_to_string(&export_options)
                 .map_err(|e| napi::Error::from_reason(format!("Export failed: {e}")))
         } else {
-            Err(napi::Error::from_reason("No analysis results available. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "No analysis results available. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Export analysis results in LSP format with Language Server Protocol compliance
     #[napi]
     pub fn export_lsp(&self, options: Option<ExportOptionsJs>) -> napi::Result<String> {
         if let Some(ref analysis) = self.analysis {
             let export_options = self.convert_export_options(options);
             let exporter = LspExporter::new(analysis.clone(), self.project_root.clone());
-            
-            exporter.export_to_json(&export_options)
+
+            exporter
+                .export_to_json(&export_options)
                 .map_err(|e| napi::Error::from_reason(format!("LSP export failed: {e}")))
         } else {
-            Err(napi::Error::from_reason("No analysis results available. Call analyze() first."))
+            Err(napi::Error::from_reason(
+                "No analysis results available. Call analyze() first.",
+            ))
         }
     }
-    
+
     /// Start file watching for real-time updates with callback support
     #[napi]
     pub fn start_watching(&mut self, callback: napi::JsFunction) -> napi::Result<()> {
@@ -4917,21 +5030,21 @@ impl FastContextAnalyzer {
             batch_size: 50,
             ..Default::default()
         };
-        
+
         match CodebaseWatcher::new(config) {
             Ok(watcher) => {
                 // Subscribe to file change events
                 let mut receiver = watcher.subscribe();
-                
+
                 // Create threadsafe function with explicit error handling type
-                use napi::threadsafe_function::{ThreadsafeFunction, ErrorStrategy};
+                use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction};
                 let tsfn: ThreadsafeFunction<Vec<FileChangeEventJs>, ErrorStrategy::Fatal> = callback
                     .create_threadsafe_function(0, |ctx| {
                         let changes: Vec<FileChangeEventJs> = ctx.value;
-                        
+
                         // Create the batch object that matches our JavaScript interface
                         let mut js_batch = ctx.env.create_object()?;
-                        
+
                         // Convert changes to JavaScript array
                         let mut js_changes_array = ctx.env.create_array_with_length(changes.len())?;
                         for (i, change) in changes.iter().enumerate() {
@@ -4945,7 +5058,7 @@ impl FastContextAnalyzer {
                             js_change.set("affectsAnalysis", change.affects_analysis)?;
                             js_changes_array.set_element(i as u32, js_change)?;
                         }
-                        
+
                         js_batch.set("changes", js_changes_array)?;
                         js_batch.set("changeCount", changes.len() as u32)?;
                         js_batch.set("batchTimestamp", std::time::SystemTime::now()
@@ -4956,23 +5069,23 @@ impl FastContextAnalyzer {
                                 0.0
                             }))?;
                         js_batch.set("requiresReanalysis", changes.iter().any(|c| c.affects_analysis))?;
-                        
-                        let impact_level = if changes.len() > 10 { 
-                            "high" 
-                        } else if changes.len() > 3 { 
-                            "medium" 
-                        } else { 
-                            "low" 
+
+                        let impact_level = if changes.len() > 10 {
+                            "high"
+                        } else if changes.len() > 3 {
+                            "medium"
+                        } else {
+                            "low"
                         };
                         js_batch.set("impactLevel", impact_level)?;
-                        
+
                         Ok(vec![js_batch])
                     })
                     .map_err(|e| napi::Error::from_reason(format!("Failed to create threadsafe function: {e}")))?;
-                    
-                    // Spawn background task to handle real file changes
-                    let rt_handle = self.runtime.handle().clone();
-                    rt_handle.spawn(async move {
+
+                // Spawn background task to handle real file changes
+                let rt_handle = self.runtime.handle().clone();
+                rt_handle.spawn(async move {
                         // Integrate with the watcher's actual change receiver
                         while let Ok(changes) = receiver.recv().await {
                             if !changes.is_empty() {
@@ -4980,17 +5093,17 @@ impl FastContextAnalyzer {
                                 let js_changes: Vec<FileChangeEventJs> = changes.into_iter().map(|change| {
                                     let change_type = match change.change_type {
                                         crate::watcher::ChangeType::Created => "created",
-                                        crate::watcher::ChangeType::Modified => "modified", 
+                                        crate::watcher::ChangeType::Modified => "modified",
                                         crate::watcher::ChangeType::Deleted => "deleted",
                                         crate::watcher::ChangeType::Renamed { .. } => "renamed",
                                     }.to_string();
-                                    
+
                                     let language = change.path.extension()
                                         .and_then(|ext| crate::parsers::LanguageId::from_extension(&ext.to_string_lossy()))
                                         .map(|lang| format!("{lang:?}"));
-                                    
+
                                     let affects_analysis = language.is_some();
-                                    
+
                                     FileChangeEventJs {
                                         change_type,
                                         file_path: change.path.to_string_lossy().to_string(),
@@ -5006,28 +5119,30 @@ impl FastContextAnalyzer {
                                         affects_analysis,
                                     }
                                 }).collect();
-                                
+
                                 // Call the JavaScript callback through the threadsafe function
                                 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
                                 let _status = tsfn.call(js_changes, ThreadsafeFunctionCallMode::NonBlocking);
                             }
                         }
                     });
-                
+
                 self.watcher = Some(watcher);
                 Ok(())
-            },
-            Err(e) => Err(napi::Error::from_reason(format!("Failed to start watcher: {e}")))
+            }
+            Err(e) => Err(napi::Error::from_reason(format!(
+                "Failed to start watcher: {e}"
+            ))),
         }
     }
-    
+
     /// Stop file watching
     #[napi]
     pub fn stop_watching(&mut self) -> napi::Result<()> {
         self.watcher = None;
         Ok(())
     }
-    
+
     /// Get cache statistics with detailed performance metrics
     #[napi]
     pub fn get_cache_stats(&self) -> napi::Result<String> {
@@ -5039,18 +5154,20 @@ impl FastContextAnalyzer {
                 "cache_type": "adaptive",
                 "note": "Use get_cache_stats_async for detailed statistics"
             });
-            serde_json::to_string_pretty(&basic_stats)
-                .map_err(|e| napi::Error::from_reason(format!("Failed to serialize cache stats: {e}")))
+            serde_json::to_string_pretty(&basic_stats).map_err(|e| {
+                napi::Error::from_reason(format!("Failed to serialize cache stats: {e}"))
+            })
         } else {
             let no_cache_stats = serde_json::json!({
                 "cache_enabled": false,
                 "message": "No cache manager initialized"
             });
-            serde_json::to_string_pretty(&no_cache_stats)
-                .map_err(|e| napi::Error::from_reason(format!("Failed to serialize cache stats: {e}")))
+            serde_json::to_string_pretty(&no_cache_stats).map_err(|e| {
+                napi::Error::from_reason(format!("Failed to serialize cache stats: {e}"))
+            })
         }
     }
-    
+
     /// Clear all caches with detailed reporting
     #[napi]
     pub fn clear_cache(&mut self) -> napi::Result<String> {
@@ -5066,9 +5183,9 @@ impl FastContextAnalyzer {
             let analysis = self.analysis.take();
             if let Some(analysis_data) = analysis {
                 // Estimate memory usage based on graph size
-                let estimated_mb = (analysis_data.symbol_count as f64 * 0.001) +
-                                  (analysis_data.relationship_count as f64 * 0.0005) +
-                                  (analysis_data.file_count as f64 * 0.01);
+                let estimated_mb = (analysis_data.symbol_count as f64 * 0.001)
+                    + (analysis_data.relationship_count as f64 * 0.0005)
+                    + (analysis_data.file_count as f64 * 0.01);
                 cleared_size_mb += estimated_mb;
                 cleared_items += 1;
             }
@@ -5111,66 +5228,79 @@ impl FastContextAnalyzer {
                 })
         });
 
-        serde_json::to_string_pretty(&result)
-            .map_err(|e| napi::Error::from_reason(format!("Failed to serialize cache clear result: {e}")))
+        serde_json::to_string_pretty(&result).map_err(|e| {
+            napi::Error::from_reason(format!("Failed to serialize cache clear result: {e}"))
+        })
     }
-    
+
     /// Find symbols with streaming support for large datasets and memory optimization
-    // TODO: Implement streaming functionality when NAPI callback issues are resolved
-    /*
     #[napi]
     pub fn find_symbols_streaming(
         &self,
         pattern: String,
         options: StreamingOptionsJs,
-        chunk_callback: napi::JsFunction
+        callback: napi::JsFunction
     ) -> napi::Result<()> {
+        use napi::threadsafe_function::{ThreadsafeFunction, ErrorStrategy, ThreadsafeFunctionCallMode};
+
+        // Create threadsafe function that can be called from any thread
+        let tsfn: ThreadsafeFunction<QueryChunkJs, ErrorStrategy::Fatal> = callback
+            .create_threadsafe_function(0, |ctx| {
+                // This closure runs in the JavaScript thread with proper env context
+                let chunk: QueryChunkJs = ctx.value;
+
+                // Now we have access to ctx.env to create JavaScript objects
+                let mut js_chunk = ctx.env.create_object()?;
+                js_chunk.set("symbols", chunk.symbols)?;
+                js_chunk.set("chunkIndex", chunk.chunk_index)?;
+                js_chunk.set("totalChunks", chunk.total_chunks)?;
+                js_chunk.set("isLast", chunk.is_last)?;
+                js_chunk.set("progress", chunk.progress)?;
+                js_chunk.set("processingTimeMs", chunk.processing_time_ms)?;
+
+                // Return the JavaScript object to be passed to the callback
+                Ok(vec![js_chunk])
+            })?;
+
         if let Some(ref query_engine) = self.query_engine {
             let result = query_engine.find_symbols(&pattern);
             let symbols: Vec<SymbolInfoJs> = result.symbols.into_iter()
                 .map(|s| self.convert_symbol_info(s))
                 .collect();
-            
+
             let symbols_len = symbols.len();
+
             if options.enabled && symbols_len > options.chunk_size as usize {
-                // Stream results in chunks
+                // Spawn background thread for streaming
                 let chunk_size = options.chunk_size as usize;
                 let total_chunks = symbols_len.div_ceil(chunk_size);
-                
-                for (chunk_index, chunk) in symbols.chunks(chunk_size).enumerate() {
-                    let start_time = std::time::Instant::now();
-                    
-                    let chunk_data = QueryChunkJs {
-                        symbols: chunk.to_vec(),
-                        chunk_index: chunk_index as u32,
-                        total_chunks: total_chunks as u32,
-                        is_last: chunk_index == total_chunks - 1,
-                        progress: ((chunk_index + 1) as f64 / total_chunks as f64) * 100.0,
-                        processing_time_ms: start_time.elapsed().as_millis() as u32,
-                    };
-                    
-                    // Call JavaScript callback with chunk data
-                    let mut js_chunk = env.create_object()?;
-                    
-                    // Set chunk properties
-                    js_chunk.set("symbols", chunk_data.symbols)?;
-                    js_chunk.set("chunk_index", chunk_data.chunk_index)?;
-                    js_chunk.set("total_chunks", chunk_data.total_chunks)?;
-                    js_chunk.set("is_last", chunk_data.is_last)?;
-                    js_chunk.set("progress", chunk_data.progress)?;
-                    js_chunk.set("processing_time_ms", chunk_data.processing_time_ms)?;
-                    
-                    if let Err(_e) = chunk_callback.call(None, &[js_chunk]) {
-                        // Continue streaming unless it's a critical error
+
+                std::thread::spawn(move || {
+                    for (chunk_index, chunk) in symbols.chunks(chunk_size).enumerate() {
+                        let start_time = std::time::Instant::now();
+
+                        let chunk_data = QueryChunkJs {
+                            symbols: chunk.to_vec(),
+                            chunk_index: chunk_index as u32,
+                            total_chunks: total_chunks as u32,
+                            is_last: chunk_index == total_chunks - 1,
+                            progress: ((chunk_index + 1) as f64 / total_chunks as f64) * 100.0,
+                            processing_time_ms: start_time.elapsed().as_millis() as u32,
+                        };
+
+                        // Call the threadsafe function - this is safe from any thread!
+                        if tsfn.call(chunk_data, ThreadsafeFunctionCallMode::NonBlocking) != napi::Status::Ok {
+                            break; // Stop streaming if callback fails
+                        }
+
+                        // Non-blocking delay
+                        if let Some(timeout) = options.chunk_timeout_ms {
+                            std::thread::sleep(std::time::Duration::from_millis(timeout as u64));
+                        }
                     }
-                    
-                    // Small delay to prevent overwhelming the JavaScript thread
-                    if let Some(timeout) = options.chunk_timeout_ms {
-                        std::thread::sleep(std::time::Duration::from_millis(timeout as u64));
-                    }
-                }
+                });
             } else {
-                // Send all results as a single chunk
+                // Send all results as single chunk
                 let chunk_data = QueryChunkJs {
                     symbols,
                     chunk_index: 0,
@@ -5179,29 +5309,17 @@ impl FastContextAnalyzer {
                     progress: 100.0,
                     processing_time_ms: 0,
                 };
-                
-                // Call JavaScript callback with all data as single chunk
-                let mut js_chunk = env.create_object()?;
-                
-                // Set chunk properties
-                js_chunk.set("symbols", chunk_data.symbols)?;
-                js_chunk.set("chunk_index", chunk_data.chunk_index)?;
-                js_chunk.set("total_chunks", chunk_data.total_chunks)?;
-                js_chunk.set("is_last", chunk_data.is_last)?;
-                js_chunk.set("progress", chunk_data.progress)?;
-                js_chunk.set("processing_time_ms", chunk_data.processing_time_ms)?;
-                
-                if let Err(e) = chunk_callback.call(None, &[js_chunk]) {
-                    return Err(napi::Error::from_reason(format!("Callback failed: {e}")));
+
+                if tsfn.call(chunk_data, ThreadsafeFunctionCallMode::NonBlocking) != napi::Status::Ok {
+                    return Err(napi::Error::from_reason("Failed to call streaming callback"));
                 }
             }
-            
+
             Ok(())
         } else {
             Err(napi::Error::from_reason("Analyzer not initialized. Call analyze() first."))
         }
     }
-    */
     /// Configure file watching with custom patterns and callbacks
     // #[napi]
     pub fn configure_watching(
@@ -5210,7 +5328,7 @@ impl FastContextAnalyzer {
         watch_patterns: Option<Vec<String>>,
         debounce_ms: Option<u32>,
         on_change: Option<napi::JsFunction>,
-        on_batch: Option<napi::JsFunction>
+        on_batch: Option<napi::JsFunction>,
     ) -> napi::Result<()> {
         let default_ignore = vec![
             "node_modules/**".to_string(),
@@ -5221,14 +5339,14 @@ impl FastContextAnalyzer {
             "**/dist/**".to_string(),
             "**/build/**".to_string(),
         ];
-        
+
         let ignore_patterns = ignore_patterns.unwrap_or(default_ignore);
         let watch_paths = if let Some(patterns) = watch_patterns {
             patterns.into_iter().map(std::path::PathBuf::from).collect()
         } else {
             vec![std::path::PathBuf::from(&self.project_root)]
         };
-        
+
         let config = crate::watcher::WatcherConfig {
             watch_dirs: watch_paths,
             ignore_patterns,
@@ -5236,7 +5354,7 @@ impl FastContextAnalyzer {
             batch_size: 50,
             ..Default::default()
         };
-        
+
         match CodebaseWatcher::new(config) {
             Ok(watcher) => {
                 // Set up event handlers if provided
@@ -5244,95 +5362,101 @@ impl FastContextAnalyzer {
                     // This would integrate with the watcher's event system
                     // For now, we store the callbacks for future integration
                 }
-                
+
                 self.watcher = Some(watcher);
                 Ok(())
-            },
-            Err(e) => Err(napi::Error::from_reason(format!("Failed to configure watcher: {e}")))
+            }
+            Err(e) => Err(napi::Error::from_reason(format!(
+                "Failed to configure watcher: {e}"
+            ))),
         }
     }
-    
+
     /// Get detailed error information with suggestions
     // #[napi]
     pub async fn get_last_error(&self) -> napi::Result<String> {
         // Check for errors in async runtime
         let mut errors = Vec::new();
-        
+
         // Check if query engine has errors
         if let Some(ref _query_engine) = self.query_engine {
             // In a real implementation, query_engine would track errors
             // For now, we simulate checking common error conditions
         }
-        
+
         // Check file watcher status
         if self.watcher.is_none() {
             errors.push("File watcher is not active".to_string());
         }
-        
+
         // Check cache status
         if self.cache_manager.is_none() {
             errors.push("Cache manager is not initialized".to_string());
         }
-        
+
         if errors.is_empty() {
             Ok("No recent errors".to_string())
         } else {
             Ok(format!("Errors found: {}", errors.join("; ")))
         }
     }
-    
+
     /// Validate configuration and return detailed status
     // #[napi]
     pub async fn validate_configuration(&self) -> napi::Result<String> {
         let mut status = Vec::new();
-        
+
         // Check project root exists
         if std::path::Path::new(&self.project_root).exists() {
             status.push("✓ Project root exists".to_string());
         } else {
             status.push("✗ Project root does not exist".to_string());
         }
-        
+
         // Check for supported languages
         let supported = get_supported_languages();
         status.push(format!("✓ {} languages supported", supported.len()));
-        
+
         // Check cache availability
         if self.cache_manager.is_some() {
             status.push("✓ Cache manager initialized".to_string());
         } else {
             status.push("○ Cache manager not initialized".to_string());
         }
-        
+
         // Check watcher status
         if self.watcher.is_some() {
             status.push("✓ File watcher available".to_string());
         } else {
             status.push("○ File watcher not started".to_string());
         }
-        
+
         // Check analysis status
         if self.analysis.is_some() && self.query_engine.is_some() {
             status.push("✓ Analysis completed, query engine ready".to_string());
         } else {
             status.push("○ Analysis not completed".to_string());
         }
-        
+
         Ok(status.join("\n"))
     }
-    
+
     // Helper methods
-    
+
     fn convert_query_result(&self, result: QueryResult) -> QueryResultJs {
         let total_results = result.symbols.len() as u32;
         QueryResultJs {
-            symbols: result.symbols.into_iter().map(|s| self.convert_symbol_info(s)).collect(),
+            symbols: result
+                .symbols
+                .into_iter()
+                .map(|s| self.convert_symbol_info(s))
+                .collect(),
             context: self.convert_context_info(result.context),
             suggestions: result.suggestions,
             total_results,
         }
     }
-    
+
     fn convert_symbol_info(&self, symbol: crate::query::SymbolInfo) -> SymbolInfoJs {
         let qualified_name = symbol.symbol.qualified_name();
         SymbolInfoJs {
@@ -5351,7 +5475,7 @@ impl FastContextAnalyzer {
             modifiers: symbol.symbol.modifiers,
         }
     }
-    
+
     fn convert_context_info(&self, context: crate::query::ContextInfo) -> ContextInfoJs {
         ContextInfoJs {
             total_symbols: context.total_symbols as u32,
@@ -5361,7 +5485,7 @@ impl FastContextAnalyzer {
             potential_issues: context.potential_issues,
         }
     }
-    
+
     fn convert_export_options(&self, options: Option<ExportOptionsJs>) -> ExportOptions {
         if let Some(opts) = options {
             ExportOptions {
@@ -5384,7 +5508,7 @@ impl FastContextAnalyzer {
             ExportOptions::default()
         }
     }
-    
+
     fn parse_symbol_kind(&self, kind: &str) -> napi::Result<SymbolKind> {
         match kind.to_lowercase().as_str() {
             "function" => Ok(SymbolKind::Function),
@@ -5402,67 +5526,103 @@ impl FastContextAnalyzer {
             "module" => Ok(SymbolKind::Module),
             "import" => Ok(SymbolKind::Import),
             "export" => Ok(SymbolKind::Export),
-            _ => Err(napi::Error::from_reason(format!("Unknown symbol kind: {kind}")))
+            _ => Err(napi::Error::from_reason(format!(
+                "Unknown symbol kind: {kind}"
+            ))),
         }
     }
-    
+
     /// Find all source files in the project directory
-    fn find_source_files(&self, project_root: &str) -> napi::Result<Vec<String>> {
+    fn find_source_files(&self, project_root: &str, config: Option<&AnalyzerConfig>) -> napi::Result<Vec<String>> {
         use std::path::Path;
-        
+
         let mut files = Vec::new();
         let root_path = Path::new(project_root);
-        
+
         if !root_path.exists() {
-            return Err(napi::Error::from_reason(format!("Project root does not exist: {project_root}")));
+            return Err(napi::Error::from_reason(format!(
+                "Project root does not exist: {project_root}"
+            )));
         }
-        
-        self.collect_files_recursive(root_path, &mut files)?;
+
+        self.collect_files_recursive(root_path, &mut files, config)?;
         Ok(files)
     }
-    
+
     /// Recursively collect source files from directory
-    fn collect_files_recursive(&self, dir: &std::path::Path, files: &mut Vec<String>) -> napi::Result<()> {
+    #[allow(clippy::only_used_in_recursion)]
+    fn collect_files_recursive(
+        &self,
+        dir: &std::path::Path,
+        files: &mut Vec<String>,
+        config: Option<&AnalyzerConfig>,
+    ) -> napi::Result<()> {
         use std::fs;
-        
+
         if let Ok(entries) = fs::read_dir(dir) {
             for entry in entries.flatten() {
                 let path = entry.path();
-                
+
                 if path.is_dir() {
                     // Skip common directories that don't contain source code
                     if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
-                        if !matches!(dir_name, 
-                            "target" | "node_modules" | ".git" | ".cache" | "dist" | "build" | 
-                            "__pycache__" | ".pytest_cache" | ".vscode" | ".idea" | "coverage"
+                        if !matches!(
+                            dir_name,
+                            "target"
+                                | "node_modules"
+                                | ".git"
+                                | ".cache"
+                                | "dist"
+                                | "build"
+                                | "__pycache__"
+                                | ".pytest_cache"
+                                | ".vscode"
+                                | ".idea"
+                                | "coverage"
                         ) {
-                            self.collect_files_recursive(&path, files)?;
+                            self.collect_files_recursive(&path, files, config)?;
                         }
                     }
                 } else if let Some(extension) = path.extension() {
                     // Check if this is a supported file type
-                    if LanguageId::from_extension(&extension.to_string_lossy()).is_some() {
-                        if let Some(path_str) = path.to_str() {
-                            files.push(path_str.to_string());
+                    if let Some(language) = LanguageId::from_extension(&extension.to_string_lossy()) {
+                        // Apply language filtering if configured
+                        let should_include = if let Some(config) = config {
+                            if let Some(ref languages) = config.languages {
+                                // Convert configured language strings to LanguageId and check
+                                languages.iter().any(|lang| {
+                                    LanguageId::from_string(lang) == Some(language)
+                                })
+                            } else {
+                                true // No language filter, include all supported languages
+                            }
+                        } else {
+                            true // No config, include all supported languages
+                        };
+
+                        if should_include {
+                            if let Some(path_str) = path.to_str() {
+                                files.push(path_str.to_string());
+                            }
                         }
                     }
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Estimate memory usage based on file and symbol count
     fn estimate_memory_usage(&self, file_count: usize, symbol_count: usize) -> u32 {
         // Rough estimate: base overhead + per-file overhead + per-symbol overhead
         let base_mb = 10; // Base analyzer overhead
         let file_overhead_kb = 5; // Per file overhead in KB
         let symbol_overhead_bytes = 200; // Per symbol overhead in bytes
-        
+
         let file_overhead_mb = (file_count * file_overhead_kb) / 1024;
         let symbol_overhead_mb = (symbol_count * symbol_overhead_bytes) / (1024 * 1024);
-        
+
         (base_mb + file_overhead_mb + symbol_overhead_mb) as u32
     }
 
@@ -5473,10 +5633,8 @@ impl FastContextAnalyzer {
 
         // For now, we'll estimate based on analysis size
         if let Some(ref analysis) = self.analysis {
-            let estimated_memory_mb = self.estimate_memory_usage(
-                analysis.file_count,
-                analysis.symbol_count
-            );
+            let estimated_memory_mb =
+                self.estimate_memory_usage(analysis.file_count, analysis.symbol_count);
 
             // Assume 4GB system memory as baseline (this should be configurable)
             let system_memory_mb = std::env::var("RUSTWORKX_SYSTEM_MEMORY_MB")
@@ -5504,8 +5662,11 @@ impl FastContextAnalyzer {
             .map_err(|e| format!("Failed to read file {file_path}: {e}"))?;
 
         // Check file size limits
-        if content.len() > 10_000_000 { // 10MB limit
-            return Err(format!("File {} is too large ({} bytes)", file_path, content.len()).into());
+        if content.len() > 10_000_000 {
+            // 10MB limit
+            return Err(
+                format!("File {} is too large ({} bytes)", file_path, content.len()).into(),
+            );
         }
 
         // Detect language from file extension
@@ -5520,16 +5681,13 @@ impl FastContextAnalyzer {
         languages_found.insert(language);
 
         // Parse the file with timeout protection
-        let parse_result = parser_factory.parse(&content, language)
+        let parse_result = parser_factory
+            .parse(&content, language)
             .ok_or_else(|| format!("Failed to parse {file_path} as {language:?}"))?;
 
         // Extract symbols with error handling
-        let symbols = extractor_factory.extract_symbols(
-            &parse_result.tree,
-            &content,
-            file_path,
-            language
-        );
+        let symbols =
+            extractor_factory.extract_symbols(&parse_result.tree, &content, file_path, language);
 
         let symbol_count = symbols.len();
 
@@ -5578,7 +5736,8 @@ impl FastContextAnalyzer {
         }
 
         // Add new entry
-        self.file_query_cache.insert(file_path.clone(), (result, std::time::Instant::now()));
+        self.file_query_cache
+            .insert(file_path.clone(), (result, std::time::Instant::now()));
         self.cache_access_order.push_back(file_path);
 
         // Evict oldest entries if cache is too large
@@ -5590,7 +5749,11 @@ impl FastContextAnalyzer {
     }
 
     /// Find transitive dependents (symbols that depend on dependents of the given symbol)
-    fn find_transitive_dependents(&self, symbol_name: &str, query_engine: &CodeQueryEngine) -> napi::Result<QueryResult> {
+    fn find_transitive_dependents(
+        &self,
+        symbol_name: &str,
+        query_engine: &CodeQueryEngine,
+    ) -> napi::Result<QueryResult> {
         let mut all_dependents = std::collections::HashSet::new();
         let mut to_process = std::collections::VecDeque::new();
         let mut processed = std::collections::HashSet::new();
@@ -5617,7 +5780,9 @@ impl FastContextAnalyzer {
                     let dependents_result = query_engine.find_dependents(&current_symbol);
 
                     for symbol in &dependents_result.symbols {
-                        if !all_dependents.contains(&symbol.symbol.name) && symbol.symbol.name != symbol_name {
+                        if !all_dependents.contains(&symbol.symbol.name)
+                            && symbol.symbol.name != symbol_name
+                        {
                             all_dependents.insert(symbol.symbol.name.clone());
                             to_process.push_back(symbol.symbol.name.clone());
                         }
@@ -5629,7 +5794,8 @@ impl FastContextAnalyzer {
         }
 
         // Convert to QueryResult
-        let symbols: Vec<_> = all_dependents.into_iter()
+        let symbols: Vec<_> = all_dependents
+            .into_iter()
             .filter_map(|name| {
                 // Get symbol details from the analysis
                 if let Some(ref analysis) = self.analysis {
@@ -5641,7 +5807,7 @@ impl FastContextAnalyzer {
                                     file_path: node.file_path.clone(),
                                     complexity: node.metrics.cyclomatic_complexity,
                                     dependencies: vec![], // Simplified for transitive analysis
-                                    dependents: vec![], // Simplified for transitive analysis
+                                    dependents: vec![],   // Simplified for transitive analysis
                                     related_files: vec![node.file_path.clone()],
                                 });
                             }
@@ -5654,14 +5820,13 @@ impl FastContextAnalyzer {
 
         // Calculate context before moving symbols
         let total_symbols = symbols.len();
-        let files_involved = symbols.iter()
+        let files_involved = symbols
+            .iter()
             .map(|s| s.file_path.clone())
             .collect::<std::collections::HashSet<_>>()
             .len();
         let complexity_score = if !symbols.is_empty() {
-            symbols.iter()
-                .map(|s| s.complexity as f32)
-                .sum::<f32>() / symbols.len() as f32
+            symbols.iter().map(|s| s.complexity as f32).sum::<f32>() / symbols.len() as f32
         } else {
             0.0
         };
@@ -5684,7 +5849,11 @@ impl FastContextAnalyzer {
     }
 
     /// Find transitive dependencies (symbols that the dependencies of the given symbol depend on)
-    fn find_transitive_dependencies(&self, symbol_name: &str, query_engine: &CodeQueryEngine) -> napi::Result<QueryResult> {
+    fn find_transitive_dependencies(
+        &self,
+        symbol_name: &str,
+        query_engine: &CodeQueryEngine,
+    ) -> napi::Result<QueryResult> {
         let mut all_dependencies = std::collections::HashSet::new();
         let mut to_process = std::collections::VecDeque::new();
         let mut processed = std::collections::HashSet::new();
@@ -5711,7 +5880,9 @@ impl FastContextAnalyzer {
                     let dependencies_result = query_engine.find_dependencies(&current_symbol);
 
                     for symbol in &dependencies_result.symbols {
-                        if !all_dependencies.contains(&symbol.symbol.name) && symbol.symbol.name != symbol_name {
+                        if !all_dependencies.contains(&symbol.symbol.name)
+                            && symbol.symbol.name != symbol_name
+                        {
                             all_dependencies.insert(symbol.symbol.name.clone());
                             to_process.push_back(symbol.symbol.name.clone());
                         }
@@ -5723,7 +5894,8 @@ impl FastContextAnalyzer {
         }
 
         // Convert to QueryResult
-        let symbols: Vec<_> = all_dependencies.into_iter()
+        let symbols: Vec<_> = all_dependencies
+            .into_iter()
             .filter_map(|name| {
                 // Get symbol details from the analysis
                 if let Some(ref analysis) = self.analysis {
@@ -5735,7 +5907,7 @@ impl FastContextAnalyzer {
                                     file_path: node.file_path.clone(),
                                     complexity: node.metrics.cyclomatic_complexity,
                                     dependencies: vec![], // Simplified for transitive analysis
-                                    dependents: vec![], // Simplified for transitive analysis
+                                    dependents: vec![],   // Simplified for transitive analysis
                                     related_files: vec![node.file_path.clone()],
                                 });
                             }
@@ -5748,14 +5920,13 @@ impl FastContextAnalyzer {
 
         // Calculate context before moving symbols
         let total_symbols = symbols.len();
-        let files_involved = symbols.iter()
+        let files_involved = symbols
+            .iter()
             .map(|s| s.file_path.clone())
             .collect::<std::collections::HashSet<_>>()
             .len();
         let complexity_score = if !symbols.is_empty() {
-            symbols.iter()
-                .map(|s| s.complexity as f32)
-                .sum::<f32>() / symbols.len() as f32
+            symbols.iter().map(|s| s.complexity as f32).sum::<f32>() / symbols.len() as f32
         } else {
             0.0
         };
@@ -5778,7 +5949,11 @@ impl FastContextAnalyzer {
     }
 
     /// Merge direct and transitive dependency results
-    fn merge_dependency_results(&self, direct: QueryResult, transitive: QueryResult) -> QueryResult {
+    fn merge_dependency_results(
+        &self,
+        direct: QueryResult,
+        transitive: QueryResult,
+    ) -> QueryResult {
         let mut all_symbols = direct.symbols;
         let mut seen_names = std::collections::HashSet::new();
 
@@ -5817,14 +5992,13 @@ impl FastContextAnalyzer {
 
         // Calculate combined context
         let total_symbols = all_symbols.len();
-        let files_involved = all_symbols.iter()
+        let files_involved = all_symbols
+            .iter()
             .map(|s| s.file_path.clone())
             .collect::<std::collections::HashSet<_>>()
             .len();
         let complexity_score = if !all_symbols.is_empty() {
-            all_symbols.iter()
-                .map(|s| s.complexity as f32)
-                .sum::<f32>() / all_symbols.len() as f32
+            all_symbols.iter().map(|s| s.complexity as f32).sum::<f32>() / all_symbols.len() as f32
         } else {
             0.0
         };
@@ -5856,6 +6030,7 @@ pub fn get_supported_languages() -> Vec<String> {
         "Java".to_string(),
         "Go".to_string(),
         "CSharp".to_string(),
+        "Cpp".to_string(),
         "Swift".to_string(),
         "ObjectiveC".to_string(),
         "PHP".to_string(),
@@ -5868,36 +6043,87 @@ pub fn get_supported_languages() -> Vec<String> {
     ]
 }
 
-/// Detect language from file extension
+/// Detect language from file extension and filename
 #[napi]
 pub fn detect_language(file_path: String) -> Option<String> {
     let path = std::path::Path::new(&file_path);
-    if let Some(ext) = path.extension() {
-        let ext_str = ext.to_string_lossy().to_lowercase();
-        let language = match ext_str.as_str() {
-            "rs" => Some(LanguageId::Rust),
-            "py" | "pyw" => Some(LanguageId::Python),
-            "js" | "mjs" => Some(LanguageId::JavaScript),
-            "ts" | "tsx" => Some(LanguageId::TypeScript),
-            "java" => Some(LanguageId::Java),
-            "go" => Some(LanguageId::Go),
-            "cs" => Some(LanguageId::CSharp),
-            "swift" => Some(LanguageId::Swift),
-            "m" | "mm" => Some(LanguageId::ObjectiveC),
-            "php" => Some(LanguageId::PHP),
-            "rb" => Some(LanguageId::Ruby),
-            "scala" | "sc" => Some(LanguageId::Scala),
-            "zig" => Some(LanguageId::Zig),
-            "dart" => Some(LanguageId::Dart),
-            "lua" => Some(LanguageId::Lua),
-            "sh" | "bash" => Some(LanguageId::Bash),
-            _ => None,
-        };
-        
-        language.map(|lang| format!("{lang:?}"))
-    } else {
-        None
-    }
+    let filename = path.file_name()?.to_string_lossy().to_lowercase();
+
+    // First check for special filenames (without extensions)
+    let language = match filename.as_str() {
+        // Package managers and build files
+        "package.json" | "package-lock.json" | "tsconfig.json" | ".eslintrc.json" => Some("JSON"),
+        "cargo.toml" | "pyproject.toml" | "poetry.lock" => Some("TOML"),
+        "pom.xml" | "build.gradle" | "settings.gradle" => Some("XML"),
+        "requirements.txt" | "requirements-dev.txt" => Some("Text"),
+        "go.mod" | "go.sum" => Some("Go Module"),
+        "dockerfile" | "dockerfile.dev" | "dockerfile.prod" => Some("Dockerfile"),
+        "makefile" | "makefile.am" | "makefile.in" => Some("Makefile"),
+        "cmakelists.txt" => Some("CMake"),
+        "readme.md" | "readme.rst" | "changelog.md" | "license.md" => Some("Markdown"),
+        "license" | "license.txt" | "copying" => Some("Text"),
+        ".gitignore" | ".dockerignore" | ".npmignore" => Some("Ignore File"),
+        ".env" | ".env.local" | ".env.development" | ".env.production" => Some("Environment"),
+        "yarn.lock" | "composer.lock" | "gemfile.lock" => Some("Lock File"),
+        "gemfile" | "rakefile" | "guardfile" => Some("Ruby"),
+        "pipfile" | "pipfile.lock" => Some("Python"),
+        "webpack.config.js" | "rollup.config.js" | "vite.config.js" => Some("JavaScript"),
+        _ => {
+            // If no special filename match, check extension
+            if let Some(ext) = path.extension() {
+                let ext_str = ext.to_string_lossy().to_lowercase();
+                match ext_str.as_str() {
+                    "rs" => Some("Rust"),
+                    "py" | "pyw" => Some("Python"),
+                    "js" | "mjs" | "cjs" => Some("JavaScript"),
+                    "ts" | "tsx" => Some("TypeScript"),
+                    "java" => Some("Java"),
+                    "go" => Some("Go"),
+                    "cs" => Some("CSharp"),
+                    "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hxx" | "h++" => Some("Cpp"),
+                    "swift" => Some("Swift"),
+                    "m" | "mm" => Some("ObjectiveC"),
+                    "php" => Some("PHP"),
+                    "rb" => Some("Ruby"),
+                    "scala" | "sc" => Some("Scala"),
+                    "zig" => Some("Zig"),
+                    "dart" => Some("Dart"),
+                    "lua" => Some("Lua"),
+                    "sh" | "bash" => Some("Bash"),
+                    "json" => Some("JSON"),
+                    "toml" => Some("TOML"),
+                    "yaml" | "yml" => Some("YAML"),
+                    "xml" => Some("XML"),
+                    "html" | "htm" => Some("HTML"),
+                    "css" => Some("CSS"),
+                    "md" | "markdown" => Some("Markdown"),
+                    "txt" => Some("Text"),
+                    "sql" => Some("SQL"),
+                    "c" => Some("C"),
+                    "h" => Some("C Header"),
+                    "r" => Some("R"),
+                    "jl" => Some("Julia"),
+                    "kt" => Some("Kotlin"),
+                    "clj" | "cljs" => Some("Clojure"),
+                    "ex" | "exs" => Some("Elixir"),
+                    "erl" | "hrl" => Some("Erlang"),
+                    "hs" => Some("Haskell"),
+                    "ml" | "mli" => Some("OCaml"),
+                    "fs" | "fsx" => Some("F#"),
+                    "pas" | "pp" => Some("Pascal"),
+                    "pl" | "pm" => Some("Perl"),
+                    "vim" => Some("Vim Script"),
+                    "ps1" => Some("PowerShell"),
+                    "bat" | "cmd" => Some("Batch"),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+    };
+
+    language.map(|lang| lang.to_string())
 }
 
 /// Check if Fast-Context is properly configured
@@ -5924,42 +6150,76 @@ mod tests {
         // Generate TypeScript definitions for all exported types
         let output_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let types_path = Path::new(&output_dir).join("types").join("generated.d.ts");
-        
+
         // Create types directory if it doesn't exist
         if let Some(parent) = types_path.parent() {
             fs::create_dir_all(parent).ok();
         }
-        
+
         // Generate individual TypeScript type definitions
         let type_definitions = vec![
-            ("FastContextAnalyzer", FastContextAnalyzerType::export_to_string().unwrap()),
-            ("AnalyzerConfig", AnalyzerConfig::export_to_string().unwrap()),
-            ("AnalysisResultJs", AnalysisResultJs::export_to_string().unwrap()),
+            (
+                "FastContextAnalyzer",
+                FastContextAnalyzerType::export_to_string().unwrap(),
+            ),
+            (
+                "AnalyzerConfig",
+                AnalyzerConfig::export_to_string().unwrap(),
+            ),
+            (
+                "AnalysisResultJs",
+                AnalysisResultJs::export_to_string().unwrap(),
+            ),
             ("QueryResultJs", QueryResultJs::export_to_string().unwrap()),
             ("SymbolInfoJs", SymbolInfoJs::export_to_string().unwrap()),
             ("ContextInfoJs", ContextInfoJs::export_to_string().unwrap()),
-            ("ExportOptionsJs", ExportOptionsJs::export_to_string().unwrap()),
-            ("PaginationOptionsJs", PaginationOptionsJs::export_to_string().unwrap()),
-            ("FilterOptionsJs", FilterOptionsJs::export_to_string().unwrap()),
-            ("FileChangeEventJs", FileChangeEventJs::export_to_string().unwrap()),
-            ("FileChangeBatchJs", FileChangeBatchJs::export_to_string().unwrap()),
-            ("StreamingOptionsJs", StreamingOptionsJs::export_to_string().unwrap()),
+            (
+                "ExportOptionsJs",
+                ExportOptionsJs::export_to_string().unwrap(),
+            ),
+            (
+                "PaginationOptionsJs",
+                PaginationOptionsJs::export_to_string().unwrap(),
+            ),
+            (
+                "FilterOptionsJs",
+                FilterOptionsJs::export_to_string().unwrap(),
+            ),
+            (
+                "FileChangeEventJs",
+                FileChangeEventJs::export_to_string().unwrap(),
+            ),
+            (
+                "FileChangeBatchJs",
+                FileChangeBatchJs::export_to_string().unwrap(),
+            ),
+            (
+                "StreamingOptionsJs",
+                StreamingOptionsJs::export_to_string().unwrap(),
+            ),
             ("QueryChunkJs", QueryChunkJs::export_to_string().unwrap()),
-            ("RustworkxGraph", RustworkxGraph::export_to_string().unwrap()),
-            ("RustworkxDiGraph", RustworkxDiGraph::export_to_string().unwrap()),
+            (
+                "RustworkxGraph",
+                RustworkxGraph::export_to_string().unwrap(),
+            ),
+            (
+                "RustworkxDiGraph",
+                RustworkxDiGraph::export_to_string().unwrap(),
+            ),
         ];
-        
+
         // Create clean TypeScript definitions
         let mut combined_types = String::new();
         combined_types.push_str("// Auto-generated TypeScript types for Fast-Context\n");
-        combined_types.push_str("// Generated by ts-rs from Rust structs - DO NOT EDIT MANUALLY\n\n");
-        
+        combined_types
+            .push_str("// Generated by ts-rs from Rust structs - DO NOT EDIT MANUALLY\n\n");
+
         for (type_name, type_def) in type_definitions {
             // Clean up the generated types - remove import statements and duplicate headers
             let lines: Vec<&str> = type_def.lines().collect();
             let mut clean_lines = Vec::new();
             let mut in_interface = false;
-            
+
             for line in lines {
                 if line.starts_with("// This file was generated") {
                     continue;
@@ -5973,7 +6233,7 @@ mod tests {
                 if line.starts_with("export interface") {
                     in_interface = true;
                     // Add proper JSDoc comment
-                    clean_lines.push(format!("/** {} type definition */", type_name));
+                    clean_lines.push(format!("/** {type_name} type definition */"));
                 }
                 clean_lines.push(line.to_string());
                 if line == "}" && in_interface {
@@ -5981,16 +6241,16 @@ mod tests {
                     clean_lines.push("".to_string()); // Add spacing after interface
                 }
             }
-            
+
             for line in clean_lines {
                 combined_types.push_str(&line);
                 combined_types.push('\n');
             }
         }
-        
+
         // Write to types/generated.d.ts
         fs::write(&types_path, combined_types).expect("Failed to write TypeScript types");
-        
+
         println!("Generated TypeScript types at: {}", types_path.display());
     }
 }

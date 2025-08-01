@@ -1,5 +1,5 @@
 //! Objective-C symbol extractor
-//! 
+//!
 //! Extracts symbols from Objective-C source code including:
 //! - Classes (interfaces and implementations)
 //! - Methods (instance and class methods)
@@ -22,8 +22,14 @@ impl SymbolExtractor for ObjectiveCExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -72,27 +78,42 @@ impl ObjectiveCExtractor {
         }
 
         // Pop scope if we added one for this node
-        if matches!(node.kind(), "class_interface" | "class_implementation" | "protocol_declaration" | "category_interface" | "category_implementation") {
+        if matches!(
+            node.kind(),
+            "class_interface"
+                | "class_implementation"
+                | "protocol_declaration"
+                | "category_interface"
+                | "category_implementation"
+        ) {
             scope_stack.pop();
         }
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Objective-C imports: #import <Foundation/Foundation.h> or #import "MyClass.h"
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "string_literal" || child.kind() == "system_lib_string" {
                 let import_text = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 // Extract the actual import name from quotes or angle brackets
-                let import_name = if (import_text.starts_with('"') && import_text.ends_with('"')) ||
-                                     (import_text.starts_with('<') && import_text.ends_with('>')) {
-                    import_text[1..import_text.len()-1].to_string()
+                let import_name = if (import_text.starts_with('"') && import_text.ends_with('"'))
+                    || (import_text.starts_with('<') && import_text.ends_with('>'))
+                {
+                    import_text[1..import_text.len() - 1].to_string()
                 } else {
                     import_text
                 };
-                
+
                 symbols.push(Symbol {
                     name: import_name,
                     kind: SymbolKind::Import,
@@ -108,16 +129,23 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_class_interface(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class_interface(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // In Objective-C, class_interface has identifier child instead of name field
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
                 let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 let modifiers = self.extract_class_modifiers(node, source);
-                
+
                 // Push class as scope for nested items
                 let scope = Scope {
                     name: name.clone(),
@@ -125,14 +153,14 @@ impl ObjectiveCExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 let documentation = self.extract_objc_doc(node, source);
 
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Class,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::ObjectiveC,
                     documentation,
                     modifiers,
@@ -143,16 +171,23 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_class_implementation(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class_implementation(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // In Objective-C, class_implementation has identifier child instead of name field
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
                 let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 let modifiers = vec!["implementation".to_string()];
-                
+
                 // Push class as scope for nested items
                 let scope = Scope {
                     name: name.clone(),
@@ -160,14 +195,14 @@ impl ObjectiveCExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 let documentation = self.extract_objc_doc(node, source);
 
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Class,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::ObjectiveC,
                     documentation,
                     modifiers,
@@ -178,14 +213,21 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_protocol(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_protocol(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // In Objective-C, protocol_declaration has identifier child instead of name field
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
                 let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(node, file_path);
-                
+
                 // Push protocol as scope for nested items
                 let scope = Scope {
                     name: name.clone(),
@@ -193,14 +235,14 @@ impl ObjectiveCExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 let documentation = self.extract_objc_doc(node, source);
 
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Interface,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::ObjectiveC,
                     documentation,
                     modifiers: vec!["protocol".to_string()],
@@ -211,7 +253,14 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_method(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Objective-C methods can be instance (-) or class (+) methods
         let mut is_class_method = false;
 
@@ -227,18 +276,18 @@ impl ObjectiveCExtractor {
                 _ => {}
             }
         }
-        
+
         if !method_name.is_empty() {
             let location = Location::from_node(node, file_path);
             let signature = self.extract_method_signature(node, source);
-            
+
             let mut modifiers = vec!["method".to_string()];
             if is_class_method {
                 modifiers.push("class".to_string());
             } else {
                 modifiers.push("instance".to_string());
             }
-            
+
             let documentation = self.extract_objc_doc(node, source);
 
             symbols.push(Symbol {
@@ -254,7 +303,14 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_property(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_property(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Look for property in struct_declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -264,16 +320,17 @@ impl ObjectiveCExtractor {
                 for struct_child in child.children(&mut struct_cursor) {
                     if struct_child.kind() == "struct_declarator" {
                         // Extract the property name from the struct_declarator
-                        let declarator_text = struct_child.utf8_text(source.as_bytes()).unwrap_or("");
+                        let declarator_text =
+                            struct_child.utf8_text(source.as_bytes()).unwrap_or("");
                         // Remove pointer asterisk and get just the name
                         let name = declarator_text.trim_start_matches('*').trim();
-                        
+
                         if !name.is_empty() {
                             let location = Location::from_node(&struct_child, file_path);
-                            
+
                             let mut modifiers = vec!["property".to_string()];
                             modifiers.extend(self.extract_property_attributes(node, source));
-                            
+
                             symbols.push(Symbol {
                                 name: name.to_string(),
                                 kind: SymbolKind::Field,
@@ -293,14 +350,21 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_instance_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_instance_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Instance variables in Objective-C
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
                 let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                 let location = Location::from_node(&child, file_path);
-                
+
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Field,
@@ -351,7 +415,7 @@ impl ObjectiveCExtractor {
 
     fn extract_property_attributes(&self, node: &Node, source: &str) -> Vec<String> {
         let mut attributes = Vec::new();
-        
+
         // Look for property attributes like (nonatomic, strong, weak, etc.)
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -364,7 +428,7 @@ impl ObjectiveCExtractor {
                 }
             }
         }
-        
+
         attributes
     }
 
@@ -394,8 +458,10 @@ impl ObjectiveCExtractor {
                     if comment_text.starts_with("/**") && comment_text.ends_with("*/") {
                         // Objective-C documentation comment
                         let content = comment_text
-                            .strip_prefix("/**").unwrap_or("")
-                            .strip_suffix("*/").unwrap_or("")
+                            .strip_prefix("/**")
+                            .unwrap_or("")
+                            .strip_suffix("*/")
+                            .unwrap_or("")
                             .lines()
                             .map(|line| line.trim().trim_start_matches('*').trim())
                             .filter(|line| !line.is_empty())
@@ -475,7 +541,14 @@ impl ObjectiveCExtractor {
         }
     }
 
-    fn extract_category(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_category(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // Objective-C categories: @interface ClassName (CategoryName) or @implementation ClassName (CategoryName)
         let mut class_name = String::new();
         let mut category_name = String::new();
@@ -484,7 +557,10 @@ impl ObjectiveCExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" && class_name.is_empty() {
                 class_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
-            } else if child.kind() == "identifier" && !class_name.is_empty() && category_name.is_empty() {
+            } else if child.kind() == "identifier"
+                && !class_name.is_empty()
+                && category_name.is_empty()
+            {
                 category_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
             }
         }
@@ -513,7 +589,7 @@ impl ObjectiveCExtractor {
                 name: full_name,
                 kind: SymbolKind::Class,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::ObjectiveC,
                 documentation,
                 modifiers,

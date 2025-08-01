@@ -1,5 +1,5 @@
 //! Regex symbol extractor
-//! 
+//!
 //! Extracts symbols from regular expressions including:
 //! - Named capture groups
 //! - Character classes  
@@ -22,8 +22,14 @@ impl SymbolExtractor for RegexExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -57,7 +63,7 @@ impl RegexExtractor {
                     }
                 }
             }
-            
+
             // Character classes: [abc], [a-z], [^abc]
             "character_class" => {
                 let class_text = self.get_node_text(node, source);
@@ -75,7 +81,7 @@ impl RegexExtractor {
                     });
                 }
             }
-            
+
             // Quantifiers: *, +, ?, {n}, {n,m}
             "quantifier" => {
                 let quantifier_text = self.get_node_text(node, source);
@@ -93,7 +99,7 @@ impl RegexExtractor {
                     });
                 }
             }
-            
+
             // Anchors: ^, $, \b, \B
             "anchor" => {
                 let anchor_text = self.get_node_text(node, source);
@@ -111,7 +117,7 @@ impl RegexExtractor {
                     });
                 }
             }
-            
+
             // Backreferences: \1, \2, etc.
             "backreference" => {
                 let backref_text = self.get_node_text(node, source);
@@ -129,7 +135,7 @@ impl RegexExtractor {
                     });
                 }
             }
-            
+
             _ => {}
         }
 
@@ -149,14 +155,13 @@ impl RegexExtractor {
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_regex_symbol_extraction() {
         let extractor = RegexExtractor;
-        
+
         // Test regex with named capture groups
         let _regex_code = r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})";
-        
+
         // Note: This test would need actual tree-sitter-regex parsing
         // For now, we'll just test the extractor structure
         assert_eq!(extractor.language(), LanguageId::Regex);

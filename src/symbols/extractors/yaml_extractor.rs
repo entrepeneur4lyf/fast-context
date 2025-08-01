@@ -24,7 +24,13 @@ impl SymbolExtractor for YamlExtractor {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
 
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -71,9 +77,10 @@ impl YamlExtractor {
 
         // Pop scope if we added one for this node
         if matches!(node.kind(), "block_mapping_pair" | "flow_mapping_pair")
-            && self.should_create_scope(&node, source) {
-                scope_stack.pop();
-            }
+            && self.should_create_scope(&node, source)
+        {
+            scope_stack.pop();
+        }
     }
 
     fn extract_mapping_pair(
@@ -133,7 +140,12 @@ impl YamlExtractor {
                     name: key_text,
                     kind,
                     location,
-                    scope_chain: scope_stack[..if is_complex { scope_stack.len()-1 } else { scope_stack.len() }].to_vec(),
+                    scope_chain: scope_stack[..if is_complex {
+                        scope_stack.len() - 1
+                    } else {
+                        scope_stack.len()
+                    }]
+                        .to_vec(),
                     language: LanguageId::YAML,
                     documentation: self.extract_yaml_comment(node, source),
                     modifiers,
@@ -247,7 +259,12 @@ impl YamlExtractor {
             // Generate a name based on the content or position
             let name = if item_text.contains(':') {
                 // If it's a mapping, use the first key as name
-                item_text.split(':').next().unwrap_or("item").trim().to_string()
+                item_text
+                    .split(':')
+                    .next()
+                    .unwrap_or("item")
+                    .trim()
+                    .to_string()
             } else {
                 // Use the content itself if short, otherwise use position
                 if item_text.len() < 30 {
@@ -329,12 +346,18 @@ impl YamlExtractor {
 
     /// Helper methods for YAML processing
     fn extract_node_text(&self, node: &Node, source: &str) -> String {
-        node.utf8_text(source.as_bytes()).unwrap_or("").trim().to_string()
+        node.utf8_text(source.as_bytes())
+            .unwrap_or("")
+            .trim()
+            .to_string()
     }
 
     fn is_complex_value(&self, node: &Node) -> bool {
         // Check if the value is a complex structure (mapping, sequence)
-        matches!(node.kind(), "block_mapping" | "flow_mapping" | "block_sequence" | "flow_sequence")
+        matches!(
+            node.kind(),
+            "block_mapping" | "flow_mapping" | "block_sequence" | "flow_sequence"
+        )
     }
 
     fn has_anchor(&self, node: &Node, source: &str) -> bool {

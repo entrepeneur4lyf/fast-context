@@ -1,5 +1,5 @@
 //! JSON symbol extractor
-//! 
+//!
 //! Extracts symbols from JSON source code including:
 //! - Objects and their properties
 //! - Arrays and their elements
@@ -24,8 +24,15 @@ impl SymbolExtractor for JsonExtractor {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
         let mut path_stack = Vec::new(); // Track JSON path for properties
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack, &mut path_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+            &mut path_stack,
+        );
         symbols
     }
 }
@@ -51,10 +58,24 @@ impl JsonExtractor {
                 self.extract_pair(&node, source, file_path, symbols, scope_stack, path_stack);
             }
             "string" => {
-                self.extract_string_value(&node, source, file_path, symbols, scope_stack, path_stack);
+                self.extract_string_value(
+                    &node,
+                    source,
+                    file_path,
+                    symbols,
+                    scope_stack,
+                    path_stack,
+                );
             }
             "number" => {
-                self.extract_number_value(&node, source, file_path, symbols, scope_stack, path_stack);
+                self.extract_number_value(
+                    &node,
+                    source,
+                    file_path,
+                    symbols,
+                    scope_stack,
+                    path_stack,
+                );
             }
             _ => {}
         }
@@ -71,16 +92,24 @@ impl JsonExtractor {
         }
     }
 
-    fn extract_object(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>, path_stack: &[String]) {
+    fn extract_object(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+        path_stack: &[String],
+    ) {
         let location = Location::from_node(node, file_path);
-        
+
         // Create object path
         let object_path = if path_stack.is_empty() {
             "root".to_string()
         } else {
             path_stack.join(".")
         };
-        
+
         // Push object as scope
         let scope = Scope {
             name: object_path.clone(),
@@ -88,15 +117,15 @@ impl JsonExtractor {
             location: location.clone(),
         };
         scope_stack.push(scope);
-        
+
         let mut modifiers = vec!["object".to_string()];
-        
+
         // Count properties for additional metadata
         let property_count = self.count_properties(node);
         if property_count > 0 {
             modifiers.push(format!("properties={property_count}"));
         }
-        
+
         // Detect common JSON patterns
         if self.is_package_json(&object_path, node, source) {
             modifiers.push("package.json".to_string());
@@ -123,12 +152,12 @@ impl JsonExtractor {
             modifiers.push("semantic".to_string());
             modifiers.push("linked-data".to_string());
         }
-        
+
         symbols.push(Symbol {
             name: object_path,
             kind: SymbolKind::Class,
             location,
-            scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+            scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
             language: LanguageId::JSON,
             documentation: None,
             modifiers,
@@ -136,16 +165,24 @@ impl JsonExtractor {
         });
     }
 
-    fn extract_array(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>, path_stack: &[String]) {
+    fn extract_array(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+        path_stack: &[String],
+    ) {
         let location = Location::from_node(node, file_path);
-        
+
         // Create array path
         let array_path = if path_stack.is_empty() {
             "root[]".to_string()
         } else {
             format!("{}[]", path_stack.join("."))
         };
-        
+
         // Push array as scope
         let scope = Scope {
             name: array_path.clone(),
@@ -153,58 +190,70 @@ impl JsonExtractor {
             location: location.clone(),
         };
         scope_stack.push(scope);
-        
+
         let mut modifiers = vec!["array".to_string()];
-        
+
         // Count elements and determine array type
         let element_count = self.count_array_elements(node);
         if element_count > 0 {
             modifiers.push(format!("elements={element_count}"));
         }
-        
+
         let array_type = self.determine_array_type(node, source);
         if let Some(arr_type) = &array_type {
             modifiers.push(format!("type={arr_type}"));
         }
-        
+
         // Detect homogeneous arrays
         if self.is_homogeneous_array(node, source) {
             modifiers.push("homogeneous".to_string());
         } else {
             modifiers.push("mixed".to_string());
         }
-        
+
         symbols.push(Symbol {
             name: array_path,
             kind: SymbolKind::Variable,
             location,
-            scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+            scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
             language: LanguageId::JSON,
             documentation: None,
             modifiers,
-            signature: Some(format!("array[{}] of {}", element_count, array_type.unwrap_or_else(|| "mixed".to_string()))),
+            signature: Some(format!(
+                "array[{}] of {}",
+                element_count,
+                array_type.unwrap_or_else(|| "mixed".to_string())
+            )),
         });
     }
 
-    fn extract_pair(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], path_stack: &mut Vec<String>) {
+    fn extract_pair(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+        path_stack: &mut Vec<String>,
+    ) {
         // Extract key-value pair
         if let Some(key_node) = node.child_by_field_name("key") {
             if let Some(value_node) = node.child_by_field_name("value") {
                 let key = self.clean_json_string(&self.get_node_text(&key_node, source));
                 let location = Location::from_node(node, file_path);
-                
+
                 // Build full property path
                 let mut full_path = path_stack.clone();
                 full_path.push(key.clone());
                 let property_path = full_path.join(".");
-                
+
                 // Push key to path stack for nested processing
                 path_stack.push(key.clone());
-                
+
                 let mut modifiers = vec!["property".to_string()];
                 let value_type = self.get_value_type(&value_node, source);
                 modifiers.push(format!("type={value_type}"));
-                
+
                 // Special handling for common JSON patterns
                 match key.as_str() {
                     "name" | "title" | "id" => {
@@ -216,7 +265,10 @@ impl JsonExtractor {
                     "description" | "summary" => {
                         modifiers.push("documentation".to_string());
                     }
-                    "dependencies" | "devDependencies" | "peerDependencies" | "optionalDependencies" => {
+                    "dependencies"
+                    | "devDependencies"
+                    | "peerDependencies"
+                    | "optionalDependencies" => {
                         modifiers.push("dependencies".to_string());
                     }
                     "scripts" => {
@@ -264,16 +316,16 @@ impl JsonExtractor {
                     }
                     _ => {}
                 }
-                
+
                 // Detect required/optional fields
                 if self.is_required_field(&key, scope_stack) {
                     modifiers.push("required".to_string());
                 } else {
                     modifiers.push("optional".to_string());
                 }
-                
+
                 let signature = self.get_value_signature(&value_node, source);
-                
+
                 symbols.push(Symbol {
                     name: property_path,
                     kind: SymbolKind::Field,
@@ -284,21 +336,36 @@ impl JsonExtractor {
                     modifiers,
                     signature,
                 });
-                
+
                 // Process the value
                 let mut cloned_scope_stack = scope_stack.to_vec();
-                self.extract_from_node(value_node, source, file_path, symbols, &mut cloned_scope_stack, path_stack);
-                
+                self.extract_from_node(
+                    value_node,
+                    source,
+                    file_path,
+                    symbols,
+                    &mut cloned_scope_stack,
+                    path_stack,
+                );
+
                 // Pop key from path stack
                 path_stack.pop();
             }
         }
     }
 
-    fn extract_string_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], path_stack: &[String]) {
+    fn extract_string_value(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+        path_stack: &[String],
+    ) {
         // Only extract strings that might be significant (URLs, file paths, etc.)
         let string_value = self.clean_json_string(&self.get_node_text(node, source));
-        
+
         if self.is_significant_string(&string_value) {
             let location = Location::from_node(node, file_path);
             let value_path = if path_stack.is_empty() {
@@ -306,14 +373,17 @@ impl JsonExtractor {
             } else {
                 format!("{}.\"{}\"", path_stack.join("."), string_value)
             };
-            
+
             let mut modifiers = vec!["string".to_string()];
-            
+
             // Classify string types
             if string_value.starts_with("http://") || string_value.starts_with("https://") {
                 modifiers.push("url".to_string());
                 modifiers.push("external".to_string());
-            } else if string_value.starts_with("file://") || string_value.contains('/') || string_value.contains('\\') {
+            } else if string_value.starts_with("file://")
+                || string_value.contains('/')
+                || string_value.contains('\\')
+            {
                 modifiers.push("path".to_string());
             } else if string_value.contains('@') && string_value.contains('.') {
                 modifiers.push("email".to_string());
@@ -322,7 +392,7 @@ impl JsonExtractor {
             } else if string_value.len() > 50 {
                 modifiers.push("long-text".to_string());
             }
-            
+
             symbols.push(Symbol {
                 name: value_path,
                 kind: SymbolKind::Constant,
@@ -336,9 +406,17 @@ impl JsonExtractor {
         }
     }
 
-    fn extract_number_value(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope], path_stack: &[String]) {
+    fn extract_number_value(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+        path_stack: &[String],
+    ) {
         let number_value = self.get_node_text(node, source);
-        
+
         // Only extract significant numbers (versions, ports, etc.)
         if self.is_significant_number(&number_value) {
             let location = Location::from_node(node, file_path);
@@ -347,9 +425,9 @@ impl JsonExtractor {
             } else {
                 format!("{}.{}", path_stack.join("."), number_value)
             };
-            
+
             let mut modifiers = vec!["number".to_string()];
-            
+
             // Classify number types
             if let Ok(num) = number_value.parse::<i32>() {
                 if (1000..=65535).contains(&num) {
@@ -364,7 +442,7 @@ impl JsonExtractor {
                     modifiers.push("decimal".to_string());
                 }
             }
-            
+
             symbols.push(Symbol {
                 name: value_path,
                 kind: SymbolKind::Constant,
@@ -385,7 +463,7 @@ impl JsonExtractor {
     fn clean_json_string(&self, value: &str) -> String {
         // Remove quotes from JSON strings
         if value.starts_with('"') && value.ends_with('"') {
-            value[1..value.len()-1].to_string()
+            value[1..value.len() - 1].to_string()
         } else {
             value.to_string()
         }
@@ -441,7 +519,11 @@ impl JsonExtractor {
             "array" => {
                 let elements = self.count_array_elements(node);
                 let array_type = self.determine_array_type(node, source);
-                Some(format!("array[{}] of {}", elements, array_type.unwrap_or_else(|| "mixed".to_string())))
+                Some(format!(
+                    "array[{}] of {}",
+                    elements,
+                    array_type.unwrap_or_else(|| "mixed".to_string())
+                ))
             }
             "string" => {
                 let text = self.clean_json_string(&self.get_node_text(node, source));
@@ -460,13 +542,13 @@ impl JsonExtractor {
     fn determine_array_type(&self, node: &Node, source: &str) -> Option<String> {
         let mut types = std::collections::HashSet::new();
         let mut cursor = node.walk();
-        
+
         for child in node.children(&mut cursor) {
             if !matches!(child.kind(), "[" | "]" | ",") {
                 types.insert(self.get_value_type(&child, source));
             }
         }
-        
+
         if types.len() == 1 {
             types.iter().next().cloned()
         } else if types.is_empty() {
@@ -487,7 +569,7 @@ impl JsonExtractor {
             let mut cursor = node.walk();
             let mut has_name = false;
             let mut has_version = false;
-            
+
             for child in node.children(&mut cursor) {
                 if child.kind() == "pair" {
                     if let Some(key_node) = child.child_by_field_name("key") {
@@ -500,7 +582,7 @@ impl JsonExtractor {
                     }
                 }
             }
-            
+
             has_name && has_version
         } else {
             false
@@ -528,7 +610,10 @@ impl JsonExtractor {
             if child.kind() == "pair" {
                 if let Some(key_node) = child.child_by_field_name("key") {
                     let key = self.clean_json_string(&self.get_node_text(&key_node, source));
-                    if matches!(key.as_str(), "data" | "status" | "error" | "message" | "code") {
+                    if matches!(
+                        key.as_str(),
+                        "data" | "status" | "error" | "message" | "code"
+                    ) {
                         return true;
                     }
                 }
@@ -543,7 +628,16 @@ impl JsonExtractor {
             if child.kind() == "pair" {
                 if let Some(key_node) = child.child_by_field_name("key") {
                     let key = self.clean_json_string(&self.get_node_text(&key_node, source));
-                    if matches!(key.as_str(), "compilerOptions" | "include" | "exclude" | "extends" | "files" | "typeRoots" | "types") {
+                    if matches!(
+                        key.as_str(),
+                        "compilerOptions"
+                            | "include"
+                            | "exclude"
+                            | "extends"
+                            | "files"
+                            | "typeRoots"
+                            | "types"
+                    ) {
                         return true;
                     }
                 }
@@ -558,7 +652,16 @@ impl JsonExtractor {
             if child.kind() == "pair" {
                 if let Some(key_node) = child.child_by_field_name("key") {
                     let key = self.clean_json_string(&self.get_node_text(&key_node, source));
-                    if matches!(key.as_str(), "rules" | "extends" | "plugins" | "env" | "parser" | "parserOptions" | "globals") {
+                    if matches!(
+                        key.as_str(),
+                        "rules"
+                            | "extends"
+                            | "plugins"
+                            | "env"
+                            | "parser"
+                            | "parserOptions"
+                            | "globals"
+                    ) {
                         return true;
                     }
                 }
@@ -573,7 +676,16 @@ impl JsonExtractor {
             if child.kind() == "pair" {
                 if let Some(key_node) = child.child_by_field_name("key") {
                     let key = self.clean_json_string(&self.get_node_text(&key_node, source));
-                    if matches!(key.as_str(), "openapi" | "swagger" | "info" | "paths" | "components" | "servers" | "tags") {
+                    if matches!(
+                        key.as_str(),
+                        "openapi"
+                            | "swagger"
+                            | "info"
+                            | "paths"
+                            | "components"
+                            | "servers"
+                            | "tags"
+                    ) {
                         return true;
                     }
                 }
@@ -588,7 +700,10 @@ impl JsonExtractor {
             if child.kind() == "pair" {
                 if let Some(key_node) = child.child_by_field_name("key") {
                     let key = self.clean_json_string(&self.get_node_text(&key_node, source));
-                    if matches!(key.as_str(), "@context" | "@type" | "@id" | "@graph" | "@vocab" | "@base") {
+                    if matches!(
+                        key.as_str(),
+                        "@context" | "@type" | "@id" | "@graph" | "@vocab" | "@base"
+                    ) {
                         return true;
                     }
                 }
@@ -605,13 +720,12 @@ impl JsonExtractor {
 
     fn is_significant_string(&self, value: &str) -> bool {
         // Only extract strings that are likely to be meaningful
-        value.len() >= 3 && (
-            value.starts_with("http") ||
-            value.contains('/') ||
-            value.contains('@') ||
-            value.matches('.').count() >= 2 ||
-            value.len() > 20
-        )
+        value.len() >= 3
+            && (value.starts_with("http")
+                || value.contains('/')
+                || value.contains('@')
+                || value.matches('.').count() >= 2
+                || value.len() > 20)
     }
 
     fn is_significant_number(&self, value: &str) -> bool {

@@ -1,5 +1,5 @@
 //! Bash-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Bash shell scripts, including:
 //! - Command invocations and function calls
 //! - Variable references and expansions
@@ -8,9 +8,9 @@
 //! - Pipeline operations and command substitution
 //! - Environment variable usage
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Bash-specific dependency extractor
@@ -20,7 +20,7 @@ impl DependencyExtractor for BashDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Bash
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -29,11 +29,15 @@ impl DependencyExtractor for BashDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -79,27 +83,30 @@ impl DependencyExtractor for BashDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "command")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
-        matches!(node.kind(), "variable_name" | "simple_expansion" | "expansion")
+        matches!(
+            node.kind(),
+            "variable_name" | "simple_expansion" | "expansion"
+        )
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "source_command")
     }
-    
+
     fn is_inheritance(&self, _node: &Node) -> bool {
         false // Bash doesn't have inheritance
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "variable_assignment")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -110,7 +117,7 @@ impl DependencyExtractor for BashDependencyExtractor {
         if let Some(name_node) = node.child_by_field_name("name") {
             let command_name = self.get_node_text(&name_node, source);
             let current_scope = context.current_scope();
-            
+
             if !command_name.trim().is_empty() && !command_name.contains('\n') {
                 // Skip common shell built-ins unless they're user-defined functions
                 if !self.is_common_builtin(&command_name) {
@@ -120,7 +127,7 @@ impl DependencyExtractor for BashDependencyExtractor {
                     } else {
                         command_name
                     };
-                    
+
                     let dependency = self.create_dependency(
                         current_scope,
                         target_command,
@@ -128,10 +135,10 @@ impl DependencyExtractor for BashDependencyExtractor {
                         &node,
                         context,
                     );
-                    
+
                     dependencies.push(dependency);
                 }
-                
+
                 // Extract arguments for variable references
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
@@ -142,7 +149,7 @@ impl DependencyExtractor for BashDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -151,25 +158,26 @@ impl DependencyExtractor for BashDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         if self.is_reference_context(&node) {
-            let var_name = self.get_node_text(&node, source)
+            let var_name = self
+                .get_node_text(&node, source)
                 .trim_start_matches('$')
                 .trim_start_matches('{')
                 .trim_end_matches('}')
                 .to_string();
-            
+
             let current_scope = context.current_scope();
-            
+
             if self.is_bash_builtin_var(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
                 resolved_vars[0].qualified_name()
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -177,11 +185,11 @@ impl DependencyExtractor for BashDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -190,16 +198,17 @@ impl DependencyExtractor for BashDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // source script.sh or . script.sh
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "word" || child.kind() == "string" {
-                let script_path = self.get_node_text(&child, source)
+                let script_path = self
+                    .get_node_text(&child, source)
                     .trim_matches('"')
                     .trim_matches('\'')
                     .to_string();
-                
+
                 if !script_path.trim().is_empty() && script_path != "source" && script_path != "." {
                     let dependency = self.create_dependency(
                         current_scope.clone(),
@@ -213,7 +222,7 @@ impl DependencyExtractor for BashDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         _node: Node,
@@ -223,7 +232,7 @@ impl DependencyExtractor for BashDependencyExtractor {
     ) {
         // Bash doesn't have inheritance
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -235,12 +244,16 @@ impl DependencyExtractor for BashDependencyExtractor {
             if let Some(value_node) = node.child_by_field_name("value") {
                 let var_name = self.get_node_text(&name_node, source);
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -273,27 +286,30 @@ impl DependencyExtractor for BashDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "while_statement" | "until_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "while_statement" | "until_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, _node: &Node) -> bool {
         false // Bash doesn't have traditional exception handling
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "case_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -360,23 +376,84 @@ impl BashDependencyExtractor {
 
     /// Check if a command is a common shell builtin
     fn is_common_builtin(&self, command: &str) -> bool {
-        matches!(command,
+        matches!(
+            command,
             // Common shell built-ins
-            "echo" | "printf" | "read" | "cd" | "pwd" | "ls" | "cp" | "mv" | "rm" |
-            "mkdir" | "rmdir" | "touch" | "cat" | "grep" | "sed" | "awk" | "sort" |
-            "uniq" | "head" | "tail" | "wc" | "find" | "xargs" | "test" | "[" | "[[" |
-            "true" | "false" | "exit" | "return" | "break" | "continue" | "shift" |
-            "export" | "unset" | "declare" | "local" | "readonly" | "typeset" |
-            "alias" | "unalias" | "history" | "fc" | "jobs" | "bg" | "fg" | "wait" |
-            "kill" | "trap" | "exec" | "eval" | "source" | "." | "type" | "which" |
-            "command" | "builtin" | "enable" | "help" | "set" | "shopt" |
-            "ulimit" | "umask" | "getopts" | "let" | "expr" | "basename" | "dirname"
+            "echo"
+                | "printf"
+                | "read"
+                | "cd"
+                | "pwd"
+                | "ls"
+                | "cp"
+                | "mv"
+                | "rm"
+                | "mkdir"
+                | "rmdir"
+                | "touch"
+                | "cat"
+                | "grep"
+                | "sed"
+                | "awk"
+                | "sort"
+                | "uniq"
+                | "head"
+                | "tail"
+                | "wc"
+                | "find"
+                | "xargs"
+                | "test"
+                | "["
+                | "[["
+                | "true"
+                | "false"
+                | "exit"
+                | "return"
+                | "break"
+                | "continue"
+                | "shift"
+                | "export"
+                | "unset"
+                | "declare"
+                | "local"
+                | "readonly"
+                | "typeset"
+                | "alias"
+                | "unalias"
+                | "history"
+                | "fc"
+                | "jobs"
+                | "bg"
+                | "fg"
+                | "wait"
+                | "kill"
+                | "trap"
+                | "exec"
+                | "eval"
+                | "source"
+                | "."
+                | "type"
+                | "which"
+                | "command"
+                | "builtin"
+                | "enable"
+                | "help"
+                | "set"
+                | "shopt"
+                | "ulimit"
+                | "umask"
+                | "getopts"
+                | "let"
+                | "expr"
+                | "basename"
+                | "dirname"
         )
     }
 
     /// Check if a variable is a bash built-in variable
     fn is_bash_builtin_var(&self, var_name: &str) -> bool {
-        matches!(var_name,
+        matches!(
+            var_name,
             // Special parameters
             "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" |
             "*" | "@" | "#" | "?" | "-" | "$" | "!" | "_" |
@@ -410,7 +487,13 @@ impl BashDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -434,7 +517,8 @@ impl BashDependencyExtractor {
     ) {
         match node.kind() {
             "simple_expansion" | "expansion" => {
-                let referenced_var = self.get_node_text(&node, source)
+                let referenced_var = self
+                    .get_node_text(&node, source)
                     .trim_start_matches('$')
                     .trim_start_matches('{')
                     .trim_end_matches('}')
@@ -460,7 +544,13 @@ impl BashDependencyExtractor {
             _ => {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -477,7 +567,8 @@ impl BashDependencyExtractor {
     ) {
         match node.kind() {
             "simple_expansion" | "expansion" => {
-                let var_name = self.get_node_text(&node, source)
+                let var_name = self
+                    .get_node_text(&node, source)
                     .trim_start_matches('$')
                     .trim_start_matches('{')
                     .trim_end_matches('}')
@@ -612,12 +703,24 @@ impl BashDependencyExtractor {
                 }
 
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_statement" | "until_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -635,7 +738,13 @@ impl BashDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(word_node) = node.child_by_field_name("word") {
-            self.extract_condition_variables(word_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                word_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -662,7 +771,13 @@ impl BashDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -685,7 +800,11 @@ impl BashDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

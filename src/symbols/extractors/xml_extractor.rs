@@ -1,5 +1,5 @@
 //! XML symbol extractor
-//! 
+//!
 //! Extracts symbols from XML source code including:
 //! - Elements and tags
 //! - Attributes and namespaces
@@ -23,8 +23,14 @@ impl SymbolExtractor for XmlExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -87,16 +93,23 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_element(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_element(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         // Extract element name from start tag
         if let Some(start_tag) = node.child_by_field_name("start_tag") {
             if let Some(name_node) = start_tag.child_by_field_name("name") {
                 let element_name = self.get_node_text(&name_node, source);
                 let location = Location::from_node(&start_tag, file_path);
-                
+
                 // Handle namespaced elements
                 let (namespace, local_name) = self.parse_namespaced_name(&element_name);
-                
+
                 // Push element as scope for nested items
                 let scope = Scope {
                     name: local_name.clone(),
@@ -104,7 +117,7 @@ impl XmlExtractor {
                     location: location.clone(),
                 };
                 scope_stack.push(scope);
-                
+
                 let mut modifiers = vec!["element".to_string()];
 
                 // Add namespace information
@@ -129,19 +142,21 @@ impl XmlExtractor {
                     modifiers.push("svg".to_string());
                     modifiers.push("graphics".to_string());
                 }
-                
+
                 // Extract important attributes for additional context
                 let mut id_attr = None;
                 let mut type_attr = None;
                 let mut name_attr = None;
-                
+
                 let mut cursor = start_tag.walk();
                 for child in start_tag.children(&mut cursor) {
                     if child.kind() == "attribute" {
                         if let Some(attr_name) = child.child_by_field_name("name") {
                             let attr_name_text = self.get_node_text(&attr_name, source);
                             if let Some(attr_value) = child.child_by_field_name("value") {
-                                let value = self.clean_attribute_value(&self.get_node_text(&attr_value, source));
+                                let value = self.clean_attribute_value(
+                                    &self.get_node_text(&attr_value, source),
+                                );
                                 match attr_name_text.as_str() {
                                     "id" => id_attr = Some(value),
                                     "type" => type_attr = Some(value),
@@ -152,7 +167,7 @@ impl XmlExtractor {
                         }
                     }
                 }
-                
+
                 // Add attribute info to modifiers
                 if let Some(id) = &id_attr {
                     modifiers.push(format!("id={id}"));
@@ -163,7 +178,7 @@ impl XmlExtractor {
                 if let Some(name) = &name_attr {
                     modifiers.push(format!("name={name}"));
                 }
-                
+
                 // Create element name with id for uniqueness
                 let symbol_name = if let Some(id) = id_attr {
                     format!("{element_name}#{id}")
@@ -172,12 +187,12 @@ impl XmlExtractor {
                 } else {
                     element_name.clone()
                 };
-                
+
                 symbols.push(Symbol {
                     name: symbol_name,
                     kind: SymbolKind::Class,
                     location,
-                    scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                    scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                     language: LanguageId::XML,
                     documentation: self.extract_xml_doc(node, source),
                     modifiers,
@@ -187,11 +202,18 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_self_closing_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_self_closing_tag(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let element_name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Handle namespaced elements
             let (namespace, local_name) = self.parse_namespaced_name(&element_name);
 
@@ -219,19 +241,20 @@ impl XmlExtractor {
                 modifiers.push("svg".to_string());
                 modifiers.push("graphics".to_string());
             }
-            
+
             // Extract important attributes
             let mut id_attr = None;
             let mut src_attr = None;
             let mut href_attr = None;
-            
+
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 if child.kind() == "attribute" {
                     if let Some(attr_name) = child.child_by_field_name("name") {
                         let attr_name_text = self.get_node_text(&attr_name, source);
                         if let Some(attr_value) = child.child_by_field_name("value") {
-                            let value = self.clean_attribute_value(&self.get_node_text(&attr_value, source));
+                            let value = self
+                                .clean_attribute_value(&self.get_node_text(&attr_value, source));
                             match attr_name_text.as_str() {
                                 "id" => id_attr = Some(value),
                                 "src" => src_attr = Some(value),
@@ -242,7 +265,7 @@ impl XmlExtractor {
                     }
                 }
             }
-            
+
             // Add attribute info to modifiers
             if let Some(id) = &id_attr {
                 modifiers.push(format!("id={id}"));
@@ -253,14 +276,14 @@ impl XmlExtractor {
             if let Some(href) = &href_attr {
                 modifiers.push(format!("href={href}"));
             }
-            
+
             // Create element name with id for uniqueness
             let symbol_name = if let Some(id) = id_attr {
                 format!("{element_name}#{id}")
             } else {
                 element_name.clone()
             };
-            
+
             symbols.push(Symbol {
                 name: symbol_name,
                 kind: SymbolKind::Class,
@@ -274,7 +297,14 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_start_tag(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_start_tag(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // This is handled by extract_element for full elements
         // Only process standalone start tags
         if let Some(parent) = node.parent() {
@@ -282,14 +312,14 @@ impl XmlExtractor {
                 if let Some(name_node) = node.child_by_field_name("name") {
                     let element_name = self.get_node_text(&name_node, source);
                     let location = Location::from_node(node, file_path);
-                    
+
                     let (namespace, _) = self.parse_namespaced_name(&element_name);
                     let mut modifiers = vec!["element".to_string(), "start-tag".to_string()];
-                    
+
                     if let Some(ns) = &namespace {
                         modifiers.push(format!("namespace={ns}"));
                     }
-                    
+
                     symbols.push(Symbol {
                         name: element_name,
                         kind: SymbolKind::Class,
@@ -305,33 +335,41 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_attribute(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_attribute(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let attr_name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Handle namespaced attributes
             let (namespace, local_name) = self.parse_namespaced_name(&attr_name);
-            
+
             let mut modifiers = vec!["attribute".to_string()];
             let signature;
-            
+
             // Add namespace information
             if let Some(ns) = &namespace {
                 modifiers.push(format!("namespace={ns}"));
             }
-            
+
             // Get attribute value
             if let Some(value_node) = node.child_by_field_name("value") {
-                let attr_value = self.clean_attribute_value(&self.get_node_text(&value_node, source));
+                let attr_value =
+                    self.clean_attribute_value(&self.get_node_text(&value_node, source));
                 signature = Some(format!("{attr_name}=\"{attr_value}\""));
-                
+
                 // Special handling for important attributes
                 match local_name.as_str() {
                     "id" => {
                         modifiers.push("id".to_string());
                         modifiers.push("unique".to_string());
-                        
+
                         // Create a separate symbol for the ID
                         symbols.push(Symbol {
                             name: format!("#{attr_value}"),
@@ -346,7 +384,7 @@ impl XmlExtractor {
                     }
                     "class" => {
                         modifiers.push("class".to_string());
-                        
+
                         // Create symbols for each class
                         for class_name in attr_value.split_whitespace() {
                             if !class_name.is_empty() {
@@ -366,7 +404,7 @@ impl XmlExtractor {
                     "xmlns" => {
                         modifiers.push("namespace".to_string());
                         modifiers.push("declaration".to_string());
-                        
+
                         // Create namespace symbol
                         symbols.push(Symbol {
                             name: format!("xmlns:{attr_value}"),
@@ -383,7 +421,7 @@ impl XmlExtractor {
                         let prefix = &name[6..];
                         modifiers.push("namespace".to_string());
                         modifiers.push("declaration".to_string());
-                        
+
                         // Create namespace prefix symbol
                         symbols.push(Symbol {
                             name: format!("{prefix}:{attr_value}"),
@@ -412,7 +450,7 @@ impl XmlExtractor {
                 modifiers.push("boolean".to_string());
                 signature = Some(attr_name.clone());
             }
-            
+
             symbols.push(Symbol {
                 name: attr_name,
                 kind: SymbolKind::Field,
@@ -426,18 +464,25 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_processing_instruction(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_processing_instruction(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let pi_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         // Extract processing instruction target
         if let Some(target_start) = pi_text.find("<?") {
             let content = &pi_text[target_start + 2..];
             if let Some(target_end) = content.find(|c: char| c.is_whitespace() || c == '?') {
                 let target = &content[..target_end];
-                
+
                 let mut modifiers = vec!["processing-instruction".to_string()];
-                
+
                 // Special handling for common processing instructions
                 match target {
                     "xml-stylesheet" => {
@@ -448,7 +493,7 @@ impl XmlExtractor {
                     }
                     _ => {}
                 }
-                
+
                 symbols.push(Symbol {
                     name: format!("<?{target}"),
                     kind: SymbolKind::Constant,
@@ -463,16 +508,25 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_doctype(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_doctype(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let doctype_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         // Extract DOCTYPE name
         if let Some(name_start) = doctype_text.find("<!DOCTYPE") {
             let content = &doctype_text[name_start + 9..];
-            if let Some(name_end) = content.find(|c: char| c.is_whitespace() || c == '>' || c == '[') {
+            if let Some(name_end) =
+                content.find(|c: char| c.is_whitespace() || c == '>' || c == '[')
+            {
                 let doctype_name = content[..name_end].trim();
-                
+
                 symbols.push(Symbol {
                     name: format!("<!DOCTYPE {doctype_name}"),
                     kind: SymbolKind::Type,
@@ -487,12 +541,19 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_xml_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_xml_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let decl_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
-        
+
         let mut modifiers = vec!["xml-declaration".to_string()];
-        
+
         // Extract version, encoding, standalone info
         if decl_text.contains("version=") {
             modifiers.push("version".to_string());
@@ -503,7 +564,7 @@ impl XmlExtractor {
         if decl_text.contains("standalone=") {
             modifiers.push("standalone".to_string());
         }
-        
+
         symbols.push(Symbol {
             name: "<?xml".to_string(),
             kind: SymbolKind::Constant,
@@ -516,7 +577,14 @@ impl XmlExtractor {
         });
     }
 
-    fn extract_cdata(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_cdata(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let location = Location::from_node(node, file_path);
         let cdata_content = self.get_node_text(node, source);
 
@@ -539,7 +607,14 @@ impl XmlExtractor {
         });
     }
 
-    fn extract_entity_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_entity_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let entity_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -574,7 +649,14 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_element_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_element_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let decl_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -584,7 +666,11 @@ impl XmlExtractor {
             if let Some(name_end) = content.find(|c: char| c.is_whitespace()) {
                 let element_name = content[..name_end].trim();
 
-                let mut modifiers = vec!["element".to_string(), "declaration".to_string(), "dtd".to_string()];
+                let mut modifiers = vec![
+                    "element".to_string(),
+                    "declaration".to_string(),
+                    "dtd".to_string(),
+                ];
 
                 // Analyze content model
                 if decl_text.contains("EMPTY") {
@@ -611,7 +697,14 @@ impl XmlExtractor {
         }
     }
 
-    fn extract_attribute_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_attribute_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         let decl_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
 
@@ -625,7 +718,11 @@ impl XmlExtractor {
                 let attr_name = parts[1];
                 let attr_type = parts.get(2).unwrap_or(&"");
 
-                let mut modifiers = vec!["attribute".to_string(), "declaration".to_string(), "dtd".to_string()];
+                let mut modifiers = vec![
+                    "attribute".to_string(),
+                    "declaration".to_string(),
+                    "dtd".to_string(),
+                ];
 
                 // Analyze attribute type
                 match *attr_type {
@@ -671,9 +768,10 @@ impl XmlExtractor {
 
     fn clean_attribute_value(&self, value: &str) -> String {
         // Remove quotes from attribute values
-        if (value.starts_with('"') && value.ends_with('"')) || 
-           (value.starts_with('\'') && value.ends_with('\'')) {
-            value[1..value.len()-1].to_string()
+        if (value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\''))
+        {
+            value[1..value.len() - 1].to_string()
         } else {
             value.to_string()
         }
@@ -701,8 +799,10 @@ impl XmlExtractor {
                     let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
                     if comment_text.starts_with("<!--") && comment_text.ends_with("-->") {
                         let content = comment_text
-                            .strip_prefix("<!--").unwrap_or("")
-                            .strip_suffix("-->").unwrap_or("")
+                            .strip_prefix("<!--")
+                            .unwrap_or("")
+                            .strip_suffix("-->")
+                            .unwrap_or("")
                             .trim();
                         if !content.is_empty() {
                             doc_comments.insert(0, content.to_string());
@@ -736,13 +836,36 @@ impl XmlExtractor {
     }
 
     fn is_schema_element(&self, element_name: &str) -> bool {
-        matches!(element_name,
-            "schema" | "element" | "attribute" | "complexType" | "simpleType" |
-            "sequence" | "choice" | "all" | "group" | "attributeGroup" |
-            "restriction" | "extension" | "union" | "list" | "import" | "include" |
-            "redefine" | "annotation" | "documentation" | "appinfo" |
-            "key" | "keyref" | "unique" | "selector" | "field" |
-            "any" | "anyAttribute" | "notation"
+        matches!(
+            element_name,
+            "schema"
+                | "element"
+                | "attribute"
+                | "complexType"
+                | "simpleType"
+                | "sequence"
+                | "choice"
+                | "all"
+                | "group"
+                | "attributeGroup"
+                | "restriction"
+                | "extension"
+                | "union"
+                | "list"
+                | "import"
+                | "include"
+                | "redefine"
+                | "annotation"
+                | "documentation"
+                | "appinfo"
+                | "key"
+                | "keyref"
+                | "unique"
+                | "selector"
+                | "field"
+                | "any"
+                | "anyAttribute"
+                | "notation"
         )
     }
 
@@ -752,20 +875,54 @@ impl XmlExtractor {
                 return true;
             }
         }
-        matches!(element_name,
-            "Envelope" | "Header" | "Body" | "Fault" | "faultcode" | "faultstring" |
-            "faultactor" | "detail" | "mustUnderstand" | "actor"
+        matches!(
+            element_name,
+            "Envelope"
+                | "Header"
+                | "Body"
+                | "Fault"
+                | "faultcode"
+                | "faultstring"
+                | "faultactor"
+                | "detail"
+                | "mustUnderstand"
+                | "actor"
         )
     }
 
     fn is_rss_element(&self, element_name: &str) -> bool {
-        matches!(element_name,
-            "rss" | "channel" | "item" | "title" | "description" | "link" |
-            "pubDate" | "lastBuildDate" | "ttl" | "language" | "copyright" |
-            "managingEditor" | "webMaster" | "category" | "generator" |
-            "docs" | "cloud" | "rating" | "textInput" | "skipHours" | "skipDays" |
-            "image" | "url" | "width" | "height" | "guid" | "author" | "comments" |
-            "enclosure" | "source"
+        matches!(
+            element_name,
+            "rss"
+                | "channel"
+                | "item"
+                | "title"
+                | "description"
+                | "link"
+                | "pubDate"
+                | "lastBuildDate"
+                | "ttl"
+                | "language"
+                | "copyright"
+                | "managingEditor"
+                | "webMaster"
+                | "category"
+                | "generator"
+                | "docs"
+                | "cloud"
+                | "rating"
+                | "textInput"
+                | "skipHours"
+                | "skipDays"
+                | "image"
+                | "url"
+                | "width"
+                | "height"
+                | "guid"
+                | "author"
+                | "comments"
+                | "enclosure"
+                | "source"
         )
     }
 
@@ -775,13 +932,43 @@ impl XmlExtractor {
                 return true;
             }
         }
-        matches!(element_name,
-            "svg" | "g" | "defs" | "desc" | "title" | "symbol" | "use" | "image" |
-            "switch" | "style" | "path" | "rect" | "circle" | "ellipse" | "line" |
-            "polyline" | "polygon" | "text" | "tspan" | "tref" | "textPath" |
-            "marker" | "pattern" | "clipPath" | "mask" | "linearGradient" |
-            "radialGradient" | "stop" | "animate" | "animateColor" | "animateMotion" |
-            "animateTransform" | "set" | "foreignObject" | "metadata"
+        matches!(
+            element_name,
+            "svg"
+                | "g"
+                | "defs"
+                | "desc"
+                | "title"
+                | "symbol"
+                | "use"
+                | "image"
+                | "switch"
+                | "style"
+                | "path"
+                | "rect"
+                | "circle"
+                | "ellipse"
+                | "line"
+                | "polyline"
+                | "polygon"
+                | "text"
+                | "tspan"
+                | "tref"
+                | "textPath"
+                | "marker"
+                | "pattern"
+                | "clipPath"
+                | "mask"
+                | "linearGradient"
+                | "radialGradient"
+                | "stop"
+                | "animate"
+                | "animateColor"
+                | "animateMotion"
+                | "animateTransform"
+                | "set"
+                | "foreignObject"
+                | "metadata"
         )
     }
 }

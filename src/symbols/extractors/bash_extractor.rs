@@ -1,5 +1,5 @@
 //! Bash symbol extractor
-//! 
+//!
 //! Extracts symbols from Bash shell script source code including:
 //! - Functions and function definitions
 //! - Variables and environment variables
@@ -23,8 +23,14 @@ impl SymbolExtractor for BashExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -78,11 +84,18 @@ impl BashExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push function as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -90,16 +103,16 @@ impl BashExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let signature = self.extract_function_signature(node, source);
             let documentation = self.extract_bash_doc(node, source);
             let modifiers = vec!["function".to_string()];
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Function,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Bash,
                 documentation,
                 modifiers,
@@ -108,13 +121,20 @@ impl BashExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             let mut modifiers = vec!["variable".to_string()];
-            
+
             // Check if it's an array assignment
             if let Some(value) = node.child_by_field_name("value") {
                 if value.kind() == "array" {
@@ -132,7 +152,7 @@ impl BashExtractor {
             } else if self.is_environment_variable(&name) {
                 modifiers.push("environment".to_string());
             }
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Variable,
@@ -146,12 +166,19 @@ impl BashExtractor {
         }
     }
 
-    fn extract_declaration(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Handle declare, local, export, readonly commands
         let mut cursor = node.walk();
         let mut command_name = String::new();
         let mut var_names = Vec::new();
-        
+
         for child in node.children(&mut cursor) {
             if child.kind() == "word" && command_name.is_empty() {
                 command_name = self.get_node_text(&child, source);
@@ -164,16 +191,17 @@ impl BashExtractor {
             } else if child.kind() == "word" && !command_name.is_empty() {
                 // Handle declarations like "local var1 var2"
                 let text = self.get_node_text(&child, source);
-                if !text.starts_with('-') { // Skip flags
+                if !text.starts_with('-') {
+                    // Skip flags
                     let location = Location::from_node(&child, file_path);
                     var_names.push((text, location));
                 }
             }
         }
-        
+
         for (name, location) in var_names {
             let mut modifiers = vec!["variable".to_string()];
-            
+
             match command_name.as_str() {
                 "declare" => modifiers.push("declared".to_string()),
                 "local" => modifiers.push("local".to_string()),
@@ -181,7 +209,7 @@ impl BashExtractor {
                 "readonly" => modifiers.push("readonly".to_string()),
                 _ => {}
             }
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Variable,
@@ -195,28 +223,35 @@ impl BashExtractor {
         }
     }
 
-    fn extract_command(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_command(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Check for source, ., include commands
         let mut cursor = node.walk();
         let mut command_parts = Vec::new();
-        
+
         for child in node.children(&mut cursor) {
             if child.kind() == "word" || child.kind() == "string" {
                 command_parts.push(self.get_node_text(&child, source));
             }
         }
-        
+
         if let Some(first_part) = command_parts.first() {
             if matches!(first_part.as_str(), "source" | "." | "include") {
                 if let Some(file_path_arg) = command_parts.get(1) {
                     let import_path = self.clean_string_literal(file_path_arg);
                     let location = Location::from_node(node, file_path);
-                    
+
                     let mut modifiers = vec![first_part.clone()];
                     if first_part == "." {
                         modifiers.push("source".to_string());
                     }
-                    
+
                     symbols.push(Symbol {
                         name: import_path,
                         kind: SymbolKind::Import,
@@ -234,7 +269,7 @@ impl BashExtractor {
                     if let Some(eq_pos) = alias_def.find('=') {
                         let alias_name = &alias_def[..eq_pos];
                         let location = Location::from_node(node, file_path);
-                        
+
                         symbols.push(Symbol {
                             name: alias_name.to_string(),
                             kind: SymbolKind::Function, // Treat aliases as functions
@@ -251,7 +286,14 @@ impl BashExtractor {
         }
     }
 
-    fn extract_for_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_for_variables(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract loop variables from for statements
         if let Some(variable) = node.child_by_field_name("variable") {
             let name = self.get_node_text(&variable, source);
@@ -270,7 +312,14 @@ impl BashExtractor {
         }
     }
 
-    fn extract_case_patterns(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_case_patterns(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract patterns from case statements - these can be useful for understanding script logic
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -300,7 +349,14 @@ impl BashExtractor {
         }
     }
 
-    fn extract_command_substitution(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_command_substitution(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract command substitutions like $(command) or `command`
         let substitution_text = self.get_node_text(node, source);
         let location = Location::from_node(node, file_path);
@@ -326,9 +382,10 @@ impl BashExtractor {
 
     fn clean_string_literal(&self, text: &str) -> String {
         // Remove quotes from string literals
-        if (text.starts_with('"') && text.ends_with('"')) || 
-           (text.starts_with('\'') && text.ends_with('\'')) {
-            text[1..text.len()-1].to_string()
+        if (text.starts_with('"') && text.ends_with('"'))
+            || (text.starts_with('\'') && text.ends_with('\''))
+        {
+            text[1..text.len() - 1].to_string()
         } else {
             text.to_string()
         }
@@ -350,7 +407,10 @@ impl BashExtractor {
                         if !content.is_empty() {
                             doc_comments.insert(0, content.to_string());
                         }
-                    } else if comment_text.starts_with("#") && !comment_text.starts_with("##") && !comment_text.starts_with("#!") {
+                    } else if comment_text.starts_with("#")
+                        && !comment_text.starts_with("##")
+                        && !comment_text.starts_with("#!")
+                    {
                         // Regular comment - might be documentation
                         let content = comment_text.strip_prefix("#").unwrap_or("").trim();
                         if !content.is_empty() {
@@ -389,36 +449,161 @@ impl BashExtractor {
 
     fn is_special_variable(&self, name: &str) -> bool {
         // Bash special variables
-        matches!(name,
-            "$" | "?" | "!" | "#" | "*" | "@" | "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" |
-            "BASH" | "BASH_VERSION" | "BASH_VERSINFO" | "BASHPID" | "PPID" | "UID" | "EUID" | "GROUPS" |
-            "HOSTNAME" | "HOSTTYPE" | "MACHTYPE" | "OSTYPE" | "SHELLOPTS" | "BASHOPTS" | "BASH_ALIASES" |
-            "BASH_ARGC" | "BASH_ARGV" | "BASH_CMDS" | "BASH_COMMAND" | "BASH_ENV" | "BASH_EXECUTION_STRING" |
-            "BASH_LINENO" | "BASH_REMATCH" | "BASH_SOURCE" | "BASH_SUBSHELL" | "BASH_XTRACEFD" |
-            "COLUMNS" | "COMP_CWORD" | "COMP_LINE" | "COMP_POINT" | "COMP_TYPE" | "COMP_KEY" | "COMP_WORDBREAKS" |
-            "COMP_WORDS" | "COMPREPLY" | "COPROC" | "DIRSTACK" | "EPOCHREALTIME" | "EPOCHSECONDS" |
-            "FUNCNAME" | "GLOBIGNORE" | "HISTCMD" | "HISTCONTROL" | "HISTFILE" | "HISTFILESIZE" |
-            "HISTIGNORE" | "HISTSIZE" | "HISTTIMEFORMAT" | "IFS" | "IGNOREEOF" | "INPUTRC" |
-            "LINENO" | "LINES" | "MAPFILE" | "OLDPWD" | "OPTARG" | "OPTERR" | "OPTIND" | "PIPESTATUS" |
-            "POSIXLY_CORRECT" | "PWD" | "RANDOM" | "READLINE_LINE" | "READLINE_POINT" | "REPLY" |
-            "SECONDS" | "SHLVL" | "TIMEFORMAT" | "TMOUT" | "TMPDIR"
+        matches!(
+            name,
+            "$" | "?"
+                | "!"
+                | "#"
+                | "*"
+                | "@"
+                | "0"
+                | "1"
+                | "2"
+                | "3"
+                | "4"
+                | "5"
+                | "6"
+                | "7"
+                | "8"
+                | "9"
+                | "BASH"
+                | "BASH_VERSION"
+                | "BASH_VERSINFO"
+                | "BASHPID"
+                | "PPID"
+                | "UID"
+                | "EUID"
+                | "GROUPS"
+                | "HOSTNAME"
+                | "HOSTTYPE"
+                | "MACHTYPE"
+                | "OSTYPE"
+                | "SHELLOPTS"
+                | "BASHOPTS"
+                | "BASH_ALIASES"
+                | "BASH_ARGC"
+                | "BASH_ARGV"
+                | "BASH_CMDS"
+                | "BASH_COMMAND"
+                | "BASH_ENV"
+                | "BASH_EXECUTION_STRING"
+                | "BASH_LINENO"
+                | "BASH_REMATCH"
+                | "BASH_SOURCE"
+                | "BASH_SUBSHELL"
+                | "BASH_XTRACEFD"
+                | "COLUMNS"
+                | "COMP_CWORD"
+                | "COMP_LINE"
+                | "COMP_POINT"
+                | "COMP_TYPE"
+                | "COMP_KEY"
+                | "COMP_WORDBREAKS"
+                | "COMP_WORDS"
+                | "COMPREPLY"
+                | "COPROC"
+                | "DIRSTACK"
+                | "EPOCHREALTIME"
+                | "EPOCHSECONDS"
+                | "FUNCNAME"
+                | "GLOBIGNORE"
+                | "HISTCMD"
+                | "HISTCONTROL"
+                | "HISTFILE"
+                | "HISTFILESIZE"
+                | "HISTIGNORE"
+                | "HISTSIZE"
+                | "HISTTIMEFORMAT"
+                | "IFS"
+                | "IGNOREEOF"
+                | "INPUTRC"
+                | "LINENO"
+                | "LINES"
+                | "MAPFILE"
+                | "OLDPWD"
+                | "OPTARG"
+                | "OPTERR"
+                | "OPTIND"
+                | "PIPESTATUS"
+                | "POSIXLY_CORRECT"
+                | "PWD"
+                | "RANDOM"
+                | "READLINE_LINE"
+                | "READLINE_POINT"
+                | "REPLY"
+                | "SECONDS"
+                | "SHLVL"
+                | "TIMEFORMAT"
+                | "TMOUT"
+                | "TMPDIR"
         )
     }
 
     fn is_environment_variable(&self, name: &str) -> bool {
         // Common environment variables
-        matches!(name,
-            "PATH" | "HOME" | "USER" | "SHELL" | "TERM" | "LANG" | "LC_ALL" | "LC_CTYPE" | "LC_NUMERIC" |
-            "LC_TIME" | "LC_COLLATE" | "LC_MONETARY" | "LC_MESSAGES" | "LC_PAPER" | "LC_NAME" |
-            "LC_ADDRESS" | "LC_TELEPHONE" | "LC_MEASUREMENT" | "LC_IDENTIFICATION" | "EDITOR" |
-            "VISUAL" | "PAGER" | "BROWSER" | "MANPATH" | "INFOPATH" | "LD_LIBRARY_PATH" | "PKG_CONFIG_PATH" |
-            "PYTHONPATH" | "CLASSPATH" | "JAVA_HOME" | "ANDROID_HOME" | "GOPATH" | "GOROOT" | "CARGO_HOME" |
-            "RUSTUP_HOME" | "NODE_PATH" | "NPM_CONFIG_PREFIX" | "GEM_HOME" | "GEM_PATH" | "RBENV_ROOT" |
-            "PYENV_ROOT" | "NVM_DIR" | "CONDA_DEFAULT_ENV" | "VIRTUAL_ENV" | "WORKON_HOME" |
-            "XDG_CONFIG_HOME" | "XDG_DATA_HOME" | "XDG_CACHE_HOME" | "XDG_RUNTIME_DIR" |
-            "DISPLAY" | "WAYLAND_DISPLAY" | "SSH_AUTH_SOCK" | "SSH_AGENT_PID" | "GPG_AGENT_INFO" |
-            "DBUS_SESSION_BUS_ADDRESS" | "DESKTOP_SESSION" | "XDG_CURRENT_DESKTOP" | "XDG_SESSION_TYPE"
-        ) || name.starts_with("XDG_") || name.ends_with("_HOME") || name.ends_with("_PATH")
+        matches!(
+            name,
+            "PATH"
+                | "HOME"
+                | "USER"
+                | "SHELL"
+                | "TERM"
+                | "LANG"
+                | "LC_ALL"
+                | "LC_CTYPE"
+                | "LC_NUMERIC"
+                | "LC_TIME"
+                | "LC_COLLATE"
+                | "LC_MONETARY"
+                | "LC_MESSAGES"
+                | "LC_PAPER"
+                | "LC_NAME"
+                | "LC_ADDRESS"
+                | "LC_TELEPHONE"
+                | "LC_MEASUREMENT"
+                | "LC_IDENTIFICATION"
+                | "EDITOR"
+                | "VISUAL"
+                | "PAGER"
+                | "BROWSER"
+                | "MANPATH"
+                | "INFOPATH"
+                | "LD_LIBRARY_PATH"
+                | "PKG_CONFIG_PATH"
+                | "PYTHONPATH"
+                | "CLASSPATH"
+                | "JAVA_HOME"
+                | "ANDROID_HOME"
+                | "GOPATH"
+                | "GOROOT"
+                | "CARGO_HOME"
+                | "RUSTUP_HOME"
+                | "NODE_PATH"
+                | "NPM_CONFIG_PREFIX"
+                | "GEM_HOME"
+                | "GEM_PATH"
+                | "RBENV_ROOT"
+                | "PYENV_ROOT"
+                | "NVM_DIR"
+                | "CONDA_DEFAULT_ENV"
+                | "VIRTUAL_ENV"
+                | "WORKON_HOME"
+                | "XDG_CONFIG_HOME"
+                | "XDG_DATA_HOME"
+                | "XDG_CACHE_HOME"
+                | "XDG_RUNTIME_DIR"
+                | "DISPLAY"
+                | "WAYLAND_DISPLAY"
+                | "SSH_AUTH_SOCK"
+                | "SSH_AGENT_PID"
+                | "GPG_AGENT_INFO"
+                | "DBUS_SESSION_BUS_ADDRESS"
+                | "DESKTOP_SESSION"
+                | "XDG_CURRENT_DESKTOP"
+                | "XDG_SESSION_TYPE"
+        ) || name.starts_with("XDG_")
+            || name.ends_with("_HOME")
+            || name.ends_with("_PATH")
     }
 }
 

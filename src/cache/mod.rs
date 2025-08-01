@@ -1,22 +1,24 @@
 //! # Intelligent Caching System
-//! 
+//!
 //! Multi-level cache system for parsed ASTs, symbol extraction results, and analysis data.
 //! Provides L1 (memory), L2 (disk), and L3 (distributed) caching with intelligent invalidation.
-//! 
+//!
 //! ## Modules
-//! 
+//!
 //! - `size_detector`: Project analysis and size detection for cache policy selection
 //! - `policies`: Configurable cache policies that adapt to project characteristics
 //! - `adaptive`: Unified cache manager that orchestrates all caching components
 
-pub mod size_detector;
-pub mod policies;
 pub mod adaptive;
+pub mod policies;
+pub mod size_detector;
 
 // Re-export key types for convenience
-pub use adaptive::{AdaptiveCacheManager, AdaptiveCacheStats, MemoryPressureLevel, OptimizationEvent};
-pub use policies::{CacheConfig, CachePolicyType, CacheConfigBuilder};
-pub use size_detector::{ProjectProfile, ProjectSize, CodebaseAnalyzer};
+pub use adaptive::{
+    AdaptiveCacheManager, AdaptiveCacheStats, MemoryPressureLevel, OptimizationEvent,
+};
+pub use policies::{CacheConfig, CacheConfigBuilder, CachePolicyType};
+pub use size_detector::{CodebaseAnalyzer, ProjectProfile, ProjectSize};
 
 use lru::LruCache;
 use serde::{Deserialize, Serialize};
@@ -65,7 +67,9 @@ fn get_current_timestamp() -> u64 {
         .unwrap_or_else(|_| {
             // Fallback: if system clock is before UNIX epoch, use a reasonable default
             // This can happen on embedded systems or during system clock adjustments
-            eprintln!("Warning: System clock appears to be before UNIX epoch, using fallback timestamp");
+            eprintln!(
+                "Warning: System clock appears to be before UNIX epoch, using fallback timestamp"
+            );
             0
         })
 }
@@ -122,9 +126,9 @@ pub struct L1Cache<T> {
 impl<T: Clone> L1Cache<T> {
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: Arc::new(Mutex::new(
-                LruCache::new(NonZeroUsize::new(capacity).unwrap())
-            )),
+            cache: Arc::new(Mutex::new(LruCache::new(
+                NonZeroUsize::new(capacity).unwrap(),
+            ))),
             max_size: capacity,
             hit_count: Arc::new(Mutex::new(0)),
             miss_count: Arc::new(Mutex::new(0)),
@@ -133,7 +137,7 @@ impl<T: Clone> L1Cache<T> {
 
     pub fn get(&self, key: &CacheKey) -> Option<T> {
         let mut cache = self.cache.lock().unwrap();
-        
+
         if let Some(entry) = cache.get_mut(key) {
             *self.hit_count.lock().unwrap() += 1;
             Some(entry.access().clone())
@@ -198,7 +202,7 @@ struct CacheMetadata {
 impl L2Cache {
     pub fn new(cache_dir: PathBuf, max_size_mb: u64) -> Result<Self, Box<dyn std::error::Error>> {
         fs::create_dir_all(&cache_dir)?;
-        
+
         let cache = Self {
             cache_dir,
             index: Arc::new(RwLock::new(HashMap::new())),
@@ -208,7 +212,7 @@ impl L2Cache {
 
         // Load existing cache index
         cache.load_index()?;
-        
+
         Ok(cache)
     }
 
@@ -217,7 +221,7 @@ impl L2Cache {
         T: for<'de> Deserialize<'de>,
     {
         let index = self.index.read().await;
-        
+
         if let Some(metadata) = index.get(key) {
             // Check if file exists and read it
             if metadata.file_path.exists() {
@@ -231,11 +235,16 @@ impl L2Cache {
                 }
             }
         }
-        
+
         None
     }
 
-    pub async fn put<T>(&self, key: CacheKey, data: T, dependencies: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
+    pub async fn put<T>(
+        &self,
+        key: CacheKey,
+        data: T,
+        dependencies: Vec<String>,
+    ) -> Result<(), Box<dyn std::error::Error>>
     where
         T: Serialize,
     {
@@ -271,7 +280,7 @@ impl L2Cache {
 
     pub async fn remove(&self, key: &CacheKey) -> bool {
         let mut index = self.index.write().await;
-        
+
         if let Some(metadata) = index.remove(key) {
             if metadata.file_path.exists() {
                 let _ = fs::remove_file(&metadata.file_path);
@@ -279,22 +288,22 @@ impl L2Cache {
                 return true;
             }
         }
-        
+
         false
     }
 
     pub async fn clear(&self) -> Result<(), Box<dyn std::error::Error>> {
         let mut index = self.index.write().await;
-        
+
         for metadata in index.values() {
             if metadata.file_path.exists() {
                 fs::remove_file(&metadata.file_path)?;
             }
         }
-        
+
         index.clear();
         *self.current_size_bytes.lock().unwrap() = 0;
-        
+
         Ok(())
     }
 
@@ -323,49 +332,48 @@ impl L2Cache {
 
     async fn ensure_space(&self, needed_bytes: u64) -> Result<(), Box<dyn std::error::Error>> {
         let current_size = *self.current_size_bytes.lock().unwrap();
-        
+
         if current_size + needed_bytes > self.max_size_bytes {
             // Evict least recently used entries
             self.evict_lru_entries(needed_bytes).await?;
         }
-        
+
         Ok(())
     }
 
     async fn evict_lru_entries(&self, needed_bytes: u64) -> Result<(), Box<dyn std::error::Error>> {
         let index = self.index.read().await;
-        let mut entries: Vec<(CacheKey, CacheMetadata)> = index.iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        
+        let mut entries: Vec<(CacheKey, CacheMetadata)> =
+            index.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+
         // Sort by last access time (oldest first)
         entries.sort_by_key(|(_, metadata)| metadata.last_accessed);
-        
+
         drop(index);
 
         let mut freed_bytes = 0u64;
-        
+
         for (key, _) in entries {
             if freed_bytes >= needed_bytes {
                 break;
             }
-            
+
             let removed_size = {
                 let index = self.index.read().await;
                 index.get(&key).map(|m| m.file_size).unwrap_or(0)
             };
-            
+
             if self.remove(&key).await {
                 freed_bytes += removed_size;
             }
         }
-        
+
         Ok(())
     }
 
     async fn update_access_time(&self, key: &CacheKey) {
         let mut index = self.index.write().await;
-        
+
         if let Some(metadata) = index.get_mut(key) {
             metadata.last_accessed = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -376,7 +384,7 @@ impl L2Cache {
 
     fn load_index(&self) -> Result<(), Box<dyn std::error::Error>> {
         use std::fs;
-        
+
         // Try to load existing index file first
         let index_path = self.cache_dir.join("cache_index.json");
         if index_path.exists() {
@@ -387,7 +395,7 @@ impl L2Cache {
                 }
             }
         }
-        
+
         // If index doesn't exist or is corrupted, rebuild by scanning cache directory
         if self.cache_dir.exists() {
             for entry in fs::read_dir(&self.cache_dir)? {
@@ -402,7 +410,7 @@ impl L2Cache {
                 }
             }
         }
-        
+
         Ok(())
     }
 }
@@ -487,12 +495,18 @@ where
         None
     }
 
-    pub async fn put(&self, key: CacheKey, data: T, dependencies: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn put(
+        &self,
+        key: CacheKey,
+        data: T,
+        dependencies: Vec<String>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Store in all cache levels
-        self.l1.put(key.clone(), data.clone(), 0, dependencies.clone());
+        self.l1
+            .put(key.clone(), data.clone(), 0, dependencies.clone());
         self.l2.put(key.clone(), data.clone(), dependencies).await?;
         let _ = self.l3.put(key, data).await;
-        
+
         Ok(())
     }
 
@@ -505,34 +519,35 @@ where
     pub async fn invalidate_dependencies(&self, changed_file: &str) {
         // For L1 cache, track and invalidate file-specific dependencies
         let mut files_to_invalidate = vec![changed_file.to_string()];
-        
+
         // Check if we have dependency information to cascade invalidation
         if let Some(deps) = self.get_file_dependencies(changed_file).await {
             files_to_invalidate.extend(deps);
         }
-        
+
         // Invalidate specific entries rather than clearing everything
         for file in &files_to_invalidate {
             // Get keys to remove (LRU cache doesn't have retain method)
             let keys_to_remove: Vec<CacheKey> = {
                 let cache = self.l1.cache.lock().unwrap();
-                cache.iter()
+                cache
+                    .iter()
                     .filter(|(key, _)| key.file_path.contains(file))
                     .map(|(key, _)| key.clone())
                     .collect()
             };
-            
+
             // Remove the keys
             let mut cache = self.l1.cache.lock().unwrap();
             for key in keys_to_remove {
                 cache.pop(&key);
             }
         }
-        
+
         // L2 cache has dependency tracking
         self.l2.invalidate_dependencies(changed_file).await;
     }
-    
+
     async fn get_file_dependencies(&self, file: &str) -> Option<Vec<String>> {
         // Get dependencies from L2 cache analysis or return None if not available
         // This would typically come from import/dependency analysis
@@ -581,7 +596,7 @@ mod tests {
     fn test_cache_key_creation() {
         let content = b"fn main() {}";
         let key = create_cache_key("test.rs", content, CacheType::ParsedAst);
-        
+
         assert_eq!(key.file_path, "test.rs");
         assert_eq!(key.cache_type, CacheType::ParsedAst);
         assert!(!key.content_hash.is_empty());
@@ -617,23 +632,26 @@ mod tests {
     async fn test_l2_cache() {
         let temp_dir = TempDir::new().unwrap();
         let cache = L2Cache::new(temp_dir.path().to_path_buf(), 10).unwrap();
-        
+
         let key = CacheKey {
             file_path: "test.rs".to_string(),
             content_hash: "hash".to_string(),
             cache_type: CacheType::ParsedAst,
         };
 
-        cache.put(key.clone(), "test_data".to_string(), vec![]).await.unwrap();
+        cache
+            .put(key.clone(), "test_data".to_string(), vec![])
+            .await
+            .unwrap();
         let result: Option<String> = cache.get(&key).await;
-        
+
         assert_eq!(result, Some("test_data".to_string()));
     }
 
     #[test]
     fn test_cache_entry() {
         let entry = CacheEntry::new("test_data".to_string(), 100, vec!["dep1.rs".to_string()]);
-        
+
         assert_eq!(entry.data, "test_data");
         assert_eq!(entry.file_size, 100);
         assert_eq!(entry.dependencies, vec!["dep1.rs"]);
@@ -644,10 +662,10 @@ mod tests {
     fn test_content_hash() {
         let content1 = b"fn main() {}";
         let content2 = b"fn main() { println!(\"Hello\"); }";
-        
+
         let hash1 = generate_content_hash(content1);
         let hash2 = generate_content_hash(content2);
-        
+
         assert_ne!(hash1, hash2);
         assert_eq!(hash1, generate_content_hash(content1)); // Consistency
     }

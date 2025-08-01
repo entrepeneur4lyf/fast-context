@@ -19,7 +19,10 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@napi-rs/cli": "^2.18.0",
-    "ava": "^6.0.0"
+    "ava": "^6.0.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0",
+    "@types/node": "^20.0.0"
   },
   "engines": {
     "node": ">= 10"
@@ -33,6 +36,8 @@
     "test": "ava",
     "test:integration": "cargo test --test api_integration_tests",
     "test:bench": "cargo bench",
+    "example": "ts-node examples/typescript-example.ts",
+    "example:js": "node examples/javascript-example.js",
     "universal": "napi universal",
     "version": "napi version"
   },

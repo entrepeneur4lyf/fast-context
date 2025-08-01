@@ -1,5 +1,5 @@
 //! Rust symbol extractor
-//! 
+//!
 //! Extracts symbols from Rust source code including:
 //! - Functions and methods
 //! - Structs and enums
@@ -22,8 +22,14 @@ impl SymbolExtractor for RustExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -40,12 +46,15 @@ impl RustExtractor {
         match node.kind() {
             "function_item" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     // Extract function signature
                     let signature = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Function,
@@ -60,9 +69,12 @@ impl RustExtractor {
             }
             "struct_item" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     // Push struct as scope for nested items
                     let scope = Scope {
                         name: name.clone(),
@@ -70,12 +82,12 @@ impl RustExtractor {
                         location: location.clone(),
                     };
                     scope_stack.push(scope);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Struct,
                         location,
-                        scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                        scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                         language: LanguageId::Rust,
                         documentation: self.extract_doc_comments(&node, source),
                         modifiers: self.extract_item_modifiers(&node, source),
@@ -85,9 +97,12 @@ impl RustExtractor {
             }
             "enum_item" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Enum,
@@ -103,9 +118,12 @@ impl RustExtractor {
             "use_declaration" => {
                 // Extract use statements as imports
                 if let Some(use_clause) = node.child_by_field_name("argument") {
-                    let import_text = use_clause.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let import_text = use_clause
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     symbols.push(Symbol {
                         name: import_text,
                         kind: SymbolKind::Import,
@@ -128,7 +146,10 @@ impl RustExtractor {
         }
 
         // Pop scope if we added one for this node
-        if matches!(node.kind(), "struct_item" | "enum_item" | "impl_item" | "mod_item") {
+        if matches!(
+            node.kind(),
+            "struct_item" | "enum_item" | "impl_item" | "mod_item"
+        ) {
             scope_stack.pop();
         }
     }
@@ -153,8 +174,12 @@ impl RustExtractor {
                 }
             } else if trimmed.starts_with("/**") && trimmed.ends_with("*/") {
                 // Single-line block comment
-                let content = trimmed.strip_prefix("/**").unwrap_or("")
-                    .strip_suffix("*/").unwrap_or("").trim();
+                let content = trimmed
+                    .strip_prefix("/**")
+                    .unwrap_or("")
+                    .strip_suffix("*/")
+                    .unwrap_or("")
+                    .trim();
                 if !content.is_empty() {
                     doc_comments.insert(0, content.to_string());
                 }

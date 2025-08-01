@@ -1,5 +1,5 @@
 //! Lua symbol extractor
-//! 
+//!
 //! Extracts symbols from Lua source code including:
 //! - Functions (local and global)
 //! - Variables and constants
@@ -23,8 +23,14 @@ impl SymbolExtractor for LuaExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -81,11 +87,18 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push function as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -93,16 +106,16 @@ impl LuaExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let signature = self.extract_function_signature(node, source);
             let documentation = self.extract_lua_doc(node, source);
             let modifiers = vec!["function".to_string(), "global".to_string()];
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Function,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Lua,
                 documentation,
                 modifiers,
@@ -111,11 +124,18 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_local_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_local_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
-            
+
             // Push function as scope for nested items
             let scope = Scope {
                 name: name.clone(),
@@ -123,16 +143,16 @@ impl LuaExtractor {
                 location: location.clone(),
             };
             scope_stack.push(scope);
-            
+
             let signature = self.extract_function_signature(node, source);
             let documentation = self.extract_lua_doc(node, source);
             let modifiers = vec!["function".to_string(), "local".to_string()];
-            
+
             symbols.push(Symbol {
                 name,
                 kind: SymbolKind::Function,
                 location,
-                scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                 language: LanguageId::Lua,
                 documentation,
                 modifiers,
@@ -141,27 +161,38 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_function_call(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_function_call(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Check for require() and dofile() calls
         if let Some(name_node) = node.child_by_field_name("name") {
             let function_name = self.get_node_text(&name_node, source);
-            
-            if matches!(function_name.as_str(), "require" | "dofile" | "loadfile" | "load") {
+
+            if matches!(
+                function_name.as_str(),
+                "require" | "dofile" | "loadfile" | "load"
+            ) {
                 if let Some(arguments) = node.child_by_field_name("arguments") {
                     // Extract the first argument as the module/file name
                     let mut cursor = arguments.walk();
                     for child in arguments.children(&mut cursor) {
                         if child.kind() == "string" {
-                            let module_name = self.clean_string_literal(&self.get_node_text(&child, source));
+                            let module_name =
+                                self.clean_string_literal(&self.get_node_text(&child, source));
                             let location = Location::from_node(&child, file_path);
-                            
+
                             let mut modifiers = vec![function_name.clone()];
                             if function_name == "require" {
                                 modifiers.push("module".to_string());
                             } else {
                                 modifiers.push("file".to_string());
                             }
-                            
+
                             symbols.push(Symbol {
                                 name: module_name,
                                 kind: SymbolKind::Import,
@@ -180,14 +211,21 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract variable names from variable declaration
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "variable" || child.kind() == "identifier" {
                 let name = self.get_node_text(&child, source);
                 let location = Location::from_node(&child, file_path);
-                
+
                 symbols.push(Symbol {
                     name,
                     kind: SymbolKind::Variable,
@@ -202,7 +240,14 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_local_variable(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_local_variable(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract local variable names
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -212,7 +257,7 @@ impl LuaExtractor {
                     if var_child.kind() == "identifier" {
                         let name = self.get_node_text(&var_child, source);
                         let location = Location::from_node(&var_child, file_path);
-                        
+
                         symbols.push(Symbol {
                             name,
                             kind: SymbolKind::Variable,
@@ -229,7 +274,14 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_assignment(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_assignment(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract variables from assignment statements
         if let Some(left) = node.child_by_field_name("left") {
             let mut cursor = left.walk();
@@ -237,7 +289,7 @@ impl LuaExtractor {
                 if child.kind() == "identifier" {
                     let name = self.get_node_text(&child, source);
                     let location = Location::from_node(&child, file_path);
-                    
+
                     // Check if this looks like a table/module definition
                     let mut modifiers = vec!["variable".to_string(), "global".to_string()];
                     if let Some(right) = node.child_by_field_name("right") {
@@ -245,7 +297,10 @@ impl LuaExtractor {
                             modifiers.push("table".to_string());
 
                             // Check if it's a module pattern (has return statement or _M pattern)
-                            if name.ends_with("_M") || name == "M" || self.is_module_pattern(&right, source) {
+                            if name.ends_with("_M")
+                                || name == "M"
+                                || self.is_module_pattern(&right, source)
+                            {
                                 modifiers.push("module".to_string());
                             }
 
@@ -264,7 +319,7 @@ impl LuaExtractor {
                             }
                         }
                     }
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Variable,
@@ -275,12 +330,14 @@ impl LuaExtractor {
                         modifiers,
                         signature: None,
                     });
-                } else if child.kind() == "dot_index_expression" || child.kind() == "bracket_index_expression" {
+                } else if child.kind() == "dot_index_expression"
+                    || child.kind() == "bracket_index_expression"
+                {
                     // Handle table field assignments like obj.field = value
                     if let Some(field_node) = child.child_by_field_name("field") {
                         let field_name = self.get_node_text(&field_node, source);
                         let location = Location::from_node(&field_node, file_path);
-                        
+
                         symbols.push(Symbol {
                             name: field_name,
                             kind: SymbolKind::Field,
@@ -297,7 +354,14 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_table(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_table(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract field names from table constructors
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -306,7 +370,7 @@ impl LuaExtractor {
                 if let Some(name_node) = child.child_by_field_name("name") {
                     let name = self.get_node_text(&name_node, source);
                     let location = Location::from_node(&name_node, file_path);
-                    
+
                     let mut modifiers = vec!["field".to_string(), "table".to_string()];
 
                     // Check if the value is a function
@@ -320,10 +384,14 @@ impl LuaExtractor {
                     if name.starts_with("__") {
                         modifiers.push("metamethod".to_string());
                     }
-                    
+
                     symbols.push(Symbol {
                         name,
-                        kind: if modifiers.contains(&"method".to_string()) { SymbolKind::Method } else { SymbolKind::Field },
+                        kind: if modifiers.contains(&"method".to_string()) {
+                            SymbolKind::Method
+                        } else {
+                            SymbolKind::Field
+                        },
                         location,
                         scope_chain: scope_stack.to_owned(),
                         language: LanguageId::Lua,
@@ -336,7 +404,14 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_for_variables(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_for_variables(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract loop variables from for statements
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -363,7 +438,14 @@ impl LuaExtractor {
         }
     }
 
-    fn extract_anonymous_function(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_anonymous_function(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Extract anonymous functions (closures) - these don't have names but are important for scope
         let location = Location::from_node(node, file_path);
         let signature = self.extract_anonymous_function_signature(node, source);
@@ -378,7 +460,11 @@ impl LuaExtractor {
             scope_chain: scope_stack.to_owned(),
             language: LanguageId::Lua,
             documentation: self.extract_lua_doc(node, source),
-            modifiers: vec!["function".to_string(), "anonymous".to_string(), "closure".to_string()],
+            modifiers: vec![
+                "function".to_string(),
+                "anonymous".to_string(),
+                "closure".to_string(),
+            ],
             signature,
         });
     }
@@ -389,12 +475,13 @@ impl LuaExtractor {
 
     fn clean_string_literal(&self, text: &str) -> String {
         // Remove quotes from string literals
-        if (text.starts_with('"') && text.ends_with('"')) || 
-           (text.starts_with('\'') && text.ends_with('\'')) {
-            text[1..text.len()-1].to_string()
+        if (text.starts_with('"') && text.ends_with('"'))
+            || (text.starts_with('\'') && text.ends_with('\''))
+        {
+            text[1..text.len() - 1].to_string()
         } else if text.starts_with("[[") && text.ends_with("]]") {
             // Long string literal
-            text[2..text.len()-2].to_string()
+            text[2..text.len() - 2].to_string()
         } else {
             text.to_string()
         }
@@ -419,8 +506,10 @@ impl LuaExtractor {
                     } else if comment_text.starts_with("--[[") && comment_text.ends_with("]]") {
                         // Multi-line comment
                         let content = comment_text
-                            .strip_prefix("--[[").unwrap_or("")
-                            .strip_suffix("]]").unwrap_or("")
+                            .strip_prefix("--[[")
+                            .unwrap_or("")
+                            .strip_suffix("]]")
+                            .unwrap_or("")
                             .trim();
                         if !content.is_empty() {
                             doc_comments.insert(0, content.to_string());
@@ -451,10 +540,12 @@ impl LuaExtractor {
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node.child_by_field_name("name")
+        let name = node
+            .child_by_field_name("name")
             .map(|n| self.get_node_text(&n, source))?;
 
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
 
@@ -462,7 +553,8 @@ impl LuaExtractor {
     }
 
     fn extract_anonymous_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let params = node.child_by_field_name("parameters")
+        let params = node
+            .child_by_field_name("parameters")
             .map(|p| self.get_node_text(&p, source))
             .unwrap_or_else(|| "()".to_string());
 
@@ -474,11 +566,11 @@ impl LuaExtractor {
         let table_text = self.get_node_text(node, source);
 
         // Look for common module patterns
-        table_text.contains("__index") ||
-        table_text.contains("new") ||
-        table_text.contains("init") ||
-        table_text.contains("_VERSION") ||
-        table_text.contains("_NAME")
+        table_text.contains("__index")
+            || table_text.contains("new")
+            || table_text.contains("init")
+            || table_text.contains("_VERSION")
+            || table_text.contains("_NAME")
     }
 
     fn is_metatable_pattern(&self, node: &Node, source: &str) -> bool {
@@ -486,24 +578,24 @@ impl LuaExtractor {
         let table_text = self.get_node_text(node, source);
 
         // Look for metamethods
-        table_text.contains("__index") ||
-        table_text.contains("__newindex") ||
-        table_text.contains("__call") ||
-        table_text.contains("__add") ||
-        table_text.contains("__sub") ||
-        table_text.contains("__mul") ||
-        table_text.contains("__div") ||
-        table_text.contains("__mod") ||
-        table_text.contains("__pow") ||
-        table_text.contains("__unm") ||
-        table_text.contains("__concat") ||
-        table_text.contains("__len") ||
-        table_text.contains("__eq") ||
-        table_text.contains("__lt") ||
-        table_text.contains("__le") ||
-        table_text.contains("__tostring") ||
-        table_text.contains("__gc") ||
-        table_text.contains("__mode")
+        table_text.contains("__index")
+            || table_text.contains("__newindex")
+            || table_text.contains("__call")
+            || table_text.contains("__add")
+            || table_text.contains("__sub")
+            || table_text.contains("__mul")
+            || table_text.contains("__div")
+            || table_text.contains("__mod")
+            || table_text.contains("__pow")
+            || table_text.contains("__unm")
+            || table_text.contains("__concat")
+            || table_text.contains("__len")
+            || table_text.contains("__eq")
+            || table_text.contains("__lt")
+            || table_text.contains("__le")
+            || table_text.contains("__tostring")
+            || table_text.contains("__gc")
+            || table_text.contains("__mode")
     }
 }
 

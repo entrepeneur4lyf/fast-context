@@ -1,5 +1,5 @@
 //! C#-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from C# source code, including:
 //! - Method calls and constructor invocations
 //! - Property access and field references
@@ -10,9 +10,9 @@
 //! - Control flow (if/else, loops, switch)
 //! - LINQ expressions and lambda functions
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// C#-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::CSharp
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for CSharpDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -93,29 +97,34 @@ impl DependencyExtractor for CSharpDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
-        matches!(node.kind(), "invocation_expression" | "object_creation_expression")
+        matches!(
+            node.kind(),
+            "invocation_expression" | "object_creation_expression"
+        )
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier_name" | "member_access_expression")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "using_directive")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        (node.kind() == "class_declaration" && node.child_by_field_name("base_list").is_some()) ||
-        (node.kind() == "interface_declaration" && node.child_by_field_name("base_list").is_some()) ||
-        (node.kind() == "struct_declaration" && node.child_by_field_name("base_list").is_some())
+        (node.kind() == "class_declaration" && node.child_by_field_name("base_list").is_some())
+            || (node.kind() == "interface_declaration"
+                && node.child_by_field_name("base_list").is_some())
+            || (node.kind() == "struct_declaration"
+                && node.child_by_field_name("base_list").is_some())
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "assignment_expression" | "variable_declarator")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -126,7 +135,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
         if let Some(expression_node) = node.child_by_field_name("function") {
             let method_name = self.get_node_text(&expression_node, source);
             let current_scope = context.current_scope();
-            
+
             if !method_name.trim().is_empty() {
                 // Try to resolve the method in known symbols
                 let resolved_methods = context.find_symbols_global(&method_name);
@@ -135,7 +144,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
                 } else {
                     method_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_method,
@@ -143,9 +152,9 @@ impl DependencyExtractor for CSharpDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -153,7 +162,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -165,12 +174,12 @@ impl DependencyExtractor for CSharpDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords and built-ins
             if self.is_csharp_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -178,7 +187,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -186,11 +195,11 @@ impl DependencyExtractor for CSharpDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -199,7 +208,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // using System.Collections.Generic; or using static System.Math;
         if let Some(name_node) = node.child_by_field_name("name") {
             let namespace_name = self.get_node_text(&name_node, source);
@@ -209,7 +218,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
                 } else {
                     DependencyType::NamespaceUsage
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     namespace_name,
@@ -221,7 +230,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -231,7 +240,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -249,7 +258,7 @@ impl DependencyExtractor for CSharpDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -279,27 +288,33 @@ impl DependencyExtractor for CSharpDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "foreach_statement" | "while_statement" | "do_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "foreach_statement" | "while_statement" | "do_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
-        matches!(node.kind(), "try_statement" | "catch_clause" | "finally_clause")
+        matches!(
+            node.kind(),
+            "try_statement" | "catch_clause" | "finally_clause"
+        )
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_statement" | "switch_expression")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -457,7 +472,13 @@ impl CSharpDependencyExtractor {
 
         // Extract dependencies from lambda body
         if let Some(body_node) = node.child_by_field_name("body") {
-            self.extract_expression_dependencies(body_node, source, context, dependencies, &current_scope);
+            self.extract_expression_dependencies(
+                body_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as lambda dependency
@@ -473,14 +494,15 @@ impl CSharpDependencyExtractor {
 
     /// Check if a type name is likely an interface (starts with 'I' followed by uppercase)
     fn is_likely_interface(&self, type_name: &str) -> bool {
-        type_name.len() > 1 &&
-        type_name.starts_with('I') &&
-        type_name.chars().nth(1).is_some_and(|c| c.is_uppercase())
+        type_name.len() > 1
+            && type_name.starts_with('I')
+            && type_name.chars().nth(1).is_some_and(|c| c.is_uppercase())
     }
 
     /// Check if a string is a C# keyword
     fn is_csharp_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "abstract" | "as" | "base" | "bool" | "break" | "byte" | "case" | "catch" |
             "char" | "checked" | "class" | "const" | "continue" | "decimal" | "default" |
             "delegate" | "do" | "double" | "else" | "enum" | "event" | "explicit" |
@@ -514,7 +536,11 @@ impl CSharpDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -534,7 +560,11 @@ impl CSharpDependencyExtractor {
 
                 // Extract dependencies from the initializer expression
                 self.extract_expression_dependencies(
-                    initializer_node, source, context, dependencies, &var_name
+                    initializer_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -552,7 +582,13 @@ impl CSharpDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as conditional execution
@@ -597,7 +633,13 @@ impl CSharpDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -683,8 +725,13 @@ impl CSharpDependencyExtractor {
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip identifiers in these declaration contexts
-                "method_declaration" | "class_declaration" | "interface_declaration" |
-                "struct_declaration" | "variable_declarator" | "parameter" | "using_directive" => {
+                "method_declaration"
+                | "class_declaration"
+                | "interface_declaration"
+                | "struct_declaration"
+                | "variable_declarator"
+                | "parameter"
+                | "using_directive" => {
                     // Check if this identifier is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -727,13 +774,31 @@ impl CSharpDependencyExtractor {
             "for_statement" => {
                 // for (init; condition; incrementors)
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(declaration_node) = node.child_by_field_name("declaration") {
-                    self.extract_condition_variables(declaration_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        declaration_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(incrementors_node) = node.child_by_field_name("incrementors") {
-                    self.extract_condition_variables(incrementors_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        incrementors_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "foreach_statement" => {
@@ -753,13 +818,25 @@ impl CSharpDependencyExtractor {
                 }
 
                 if let Some(expression_node) = node.child_by_field_name("expression") {
-                    self.extract_condition_variables(expression_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        expression_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_statement" | "do_statement" => {
                 // while (condition) or do ... while (condition)
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -794,7 +871,9 @@ impl CSharpDependencyExtractor {
                         }
                     }
 
-                    if let Some(identifier_node) = declaration_node.child_by_field_name("identifier") {
+                    if let Some(identifier_node) =
+                        declaration_node.child_by_field_name("identifier")
+                    {
                         let var_name = self.get_node_text(&identifier_node, source);
                         if !var_name.trim().is_empty() {
                             let dependency = self.create_dependency(
@@ -834,7 +913,13 @@ impl CSharpDependencyExtractor {
 
         // Extract switch expression/discriminant
         if let Some(expression_node) = node.child_by_field_name("expression") {
-            self.extract_condition_variables(expression_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                expression_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -859,7 +944,13 @@ impl CSharpDependencyExtractor {
 
         // Extract returned value dependencies
         if let Some(expression_node) = node.child_by_field_name("expression") {
-            self.extract_expression_dependencies(expression_node, source, context, dependencies, &current_scope);
+            self.extract_expression_dependencies(
+                expression_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -881,7 +972,11 @@ impl CSharpDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

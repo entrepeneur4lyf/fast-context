@@ -1,9 +1,9 @@
 //! # LSP-Compatible Export
-//! 
+//!
 //! Language Server Protocol compatible export format for seamless integration
 //! with IDEs, editors, and development tools that support LSP.
 
-use super::{ExportData, UniversalExporter, ExportOptions};
+use super::{ExportData, ExportOptions, UniversalExporter};
 use crate::analysis::AnalysisResult;
 
 use serde::{Deserialize, Serialize};
@@ -14,21 +14,21 @@ use std::collections::HashMap;
 pub struct LspSymbolInformation {
     /// The name of this symbol
     pub name: String,
-    
+
     /// The kind of this symbol
     pub kind: LspSymbolKind,
-    
+
     /// Indicates if this symbol is deprecated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deprecated: Option<bool>,
-    
+
     /// The location of this symbol
     pub location: LspLocation,
-    
+
     /// The name of the symbol containing this symbol
     #[serde(skip_serializing_if = "Option::is_none")]
     pub container_name: Option<String>,
-    
+
     /// Tags for this symbol (LSP 3.16+)
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<LspSymbolTag>,
@@ -39,28 +39,28 @@ pub struct LspSymbolInformation {
 pub struct LspDocumentSymbol {
     /// The name of this symbol
     pub name: String,
-    
+
     /// More detail for this symbol, e.g. the signature of a function
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
-    
+
     /// The kind of this symbol
     pub kind: LspSymbolKind,
-    
+
     /// Tags for this symbol
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<LspSymbolTag>,
-    
+
     /// Indicates if this symbol is deprecated
     #[serde(skip_serializing_if = "Option::is_none")]
     pub deprecated: Option<bool>,
-    
+
     /// The range enclosing this symbol not including leading/trailing whitespace
     pub range: LspRange,
-    
+
     /// The range that should be selected and revealed when this symbol is being picked
     pub selection_range: LspRange,
-    
+
     /// Children of this symbol, e.g. properties of a class
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub children: Vec<LspDocumentSymbol>,
@@ -78,7 +78,7 @@ pub struct LspLocation {
 pub struct LspRange {
     /// The range's start position
     pub start: LspPosition,
-    
+
     /// The range's end position
     pub end: LspPosition,
 }
@@ -88,7 +88,7 @@ pub struct LspRange {
 pub struct LspPosition {
     /// Line position in a document (zero-based)
     pub line: u32,
-    
+
     /// Character offset on a line in a document (zero-based)
     pub character: u32,
 }
@@ -148,7 +148,7 @@ pub struct LspReferencesResult {
 pub struct LspHover {
     /// The hover's content
     pub contents: LspMarkupContent,
-    
+
     /// An optional range
     #[serde(skip_serializing_if = "Option::is_none")]
     pub range: Option<LspRange>,
@@ -159,7 +159,7 @@ pub struct LspHover {
 pub struct LspMarkupContent {
     /// The type of the markup
     pub kind: LspMarkupKind,
-    
+
     /// The content itself
     pub value: String,
 }
@@ -178,19 +178,19 @@ pub enum LspMarkupKind {
 pub struct LspExport {
     /// Workspace symbols
     pub workspace_symbols: Vec<LspSymbolInformation>,
-    
+
     /// Document symbols by file URI
     pub document_symbols: HashMap<String, Vec<LspDocumentSymbol>>,
-    
+
     /// Definition locations by symbol
     pub definitions: HashMap<String, LspDefinitionResult>,
-    
+
     /// Reference locations by symbol
     pub references: HashMap<String, LspReferencesResult>,
-    
+
     /// Hover information by symbol
     pub hover_info: HashMap<String, LspHover>,
-    
+
     /// Export metadata
     pub metadata: LspExportMetadata,
 }
@@ -217,17 +217,17 @@ impl LspExporter {
             exporter: UniversalExporter::new(analysis, project_root),
         }
     }
-    
+
     /// Export complete LSP data
     pub fn export_lsp_data(&self, options: &ExportOptions) -> LspExport {
         let export_data = self.exporter.create_export_data(options);
-        
+
         let workspace_symbols = self.create_workspace_symbols(&export_data);
         let document_symbols = self.create_document_symbols(&export_data);
         let definitions = self.create_definitions(&export_data);
         let references = self.create_references(&export_data);
         let hover_info = self.create_hover_info(&export_data);
-        
+
         LspExport {
             workspace_symbols,
             document_symbols,
@@ -246,30 +246,36 @@ impl LspExporter {
             },
         }
     }
-    
+
     /// Export workspace symbols only
     pub fn export_workspace_symbols(&self, options: &ExportOptions) -> Vec<LspSymbolInformation> {
         let export_data = self.exporter.create_export_data(options);
         self.create_workspace_symbols(&export_data)
     }
-    
+
     /// Export document symbols for a specific file
-    pub fn export_document_symbols(&self, file_uri: &str, options: &ExportOptions) -> Vec<LspDocumentSymbol> {
+    pub fn export_document_symbols(
+        &self,
+        file_uri: &str,
+        options: &ExportOptions,
+    ) -> Vec<LspDocumentSymbol> {
         let export_data = self.exporter.create_export_data(options);
         let document_symbols = self.create_document_symbols(&export_data);
-        
+
         document_symbols.get(file_uri).cloned().unwrap_or_default()
     }
-    
+
     /// Export to JSON string
     pub fn export_to_json(&self, options: &ExportOptions) -> Result<String, serde_json::Error> {
         let lsp_data = self.export_lsp_data(options);
         serde_json::to_string_pretty(&lsp_data)
     }
-    
+
     /// Create workspace symbols
     fn create_workspace_symbols(&self, export_data: &ExportData) -> Vec<LspSymbolInformation> {
-        export_data.symbols.iter()
+        export_data
+            .symbols
+            .iter()
             .map(|symbol| {
                 LspSymbolInformation {
                     name: symbol.name.clone(),
@@ -298,11 +304,14 @@ impl LspExporter {
             })
             .collect()
     }
-    
+
     /// Create document symbols organized by file
-    fn create_document_symbols(&self, export_data: &ExportData) -> HashMap<String, Vec<LspDocumentSymbol>> {
+    fn create_document_symbols(
+        &self,
+        export_data: &ExportData,
+    ) -> HashMap<String, Vec<LspDocumentSymbol>> {
         let mut document_symbols: HashMap<String, Vec<LspDocumentSymbol>> = HashMap::new();
-        
+
         // Group symbols by file
         let mut symbols_by_file: HashMap<String, Vec<&super::ExportSymbol>> = HashMap::new();
         for symbol in &export_data.symbols {
@@ -311,22 +320,25 @@ impl LspExporter {
                 .or_default()
                 .push(symbol);
         }
-        
+
         // Create hierarchical document symbols for each file
         for (file_path, file_symbols) in symbols_by_file {
             let uri = self.path_to_uri(&file_path);
             let doc_symbols = self.create_hierarchical_symbols(file_symbols);
             document_symbols.insert(uri, doc_symbols);
         }
-        
+
         document_symbols
     }
-    
+
     /// Create hierarchical symbols from flat symbol list
-    fn create_hierarchical_symbols(&self, symbols: Vec<&super::ExportSymbol>) -> Vec<LspDocumentSymbol> {
+    fn create_hierarchical_symbols(
+        &self,
+        symbols: Vec<&super::ExportSymbol>,
+    ) -> Vec<LspDocumentSymbol> {
         let mut root_symbols = Vec::new();
         let mut symbol_map: HashMap<String, LspDocumentSymbol> = HashMap::new();
-        
+
         // First pass: create all symbols
         for symbol in &symbols {
             let doc_symbol = LspDocumentSymbol {
@@ -357,10 +369,10 @@ impl LspExporter {
                 },
                 children: Vec::new(),
             };
-            
+
             symbol_map.insert(symbol.qualified_name.clone(), doc_symbol);
         }
-        
+
         // Second pass: build hierarchy
         for symbol in symbols {
             if symbol.scope_chain.is_empty() {
@@ -372,7 +384,9 @@ impl LspExporter {
                 // Child symbol - find parent
                 let parent_scope = symbol.scope_chain.join("::");
                 let child_qualified_name = symbol.qualified_name.clone();
-                if symbol_map.contains_key(&parent_scope) && symbol_map.contains_key(&child_qualified_name) {
+                if symbol_map.contains_key(&parent_scope)
+                    && symbol_map.contains_key(&child_qualified_name)
+                {
                     if let Some(child_symbol) = symbol_map.remove(&child_qualified_name) {
                         if let Some(parent) = symbol_map.get_mut(&parent_scope) {
                             parent.children.push(child_symbol);
@@ -381,23 +395,26 @@ impl LspExporter {
                 }
             }
         }
-        
+
         // Add any remaining symbols as root symbols
         root_symbols.extend(symbol_map.into_values());
-        
+
         // Sort by position
         root_symbols.sort_by(|a, b| {
-            a.range.start.line.cmp(&b.range.start.line)
+            a.range
+                .start
+                .line
+                .cmp(&b.range.start.line)
                 .then_with(|| a.range.start.character.cmp(&b.range.start.character))
         });
-        
+
         root_symbols
     }
-    
+
     /// Create definition mappings
     fn create_definitions(&self, export_data: &ExportData) -> HashMap<String, LspDefinitionResult> {
         let mut definitions = HashMap::new();
-        
+
         for symbol in &export_data.symbols {
             let location = LspLocation {
                 uri: self.path_to_uri(&symbol.file_path),
@@ -412,7 +429,7 @@ impl LspExporter {
                     },
                 },
             };
-            
+
             definitions.insert(
                 symbol.qualified_name.clone(),
                 LspDefinitionResult {
@@ -420,19 +437,19 @@ impl LspExporter {
                 },
             );
         }
-        
+
         definitions
     }
-    
+
     /// Create reference mappings
     fn create_references(&self, export_data: &ExportData) -> HashMap<String, LspReferencesResult> {
         let mut references = HashMap::new();
-        
+
         // Build references from relationships
         for relationship in &export_data.relationships {
             let _from_symbol = &relationship.from_symbol;
             let to_symbol = &relationship.to_symbol;
-            
+
             // Find the symbol that's being referenced (to_symbol)
             if let Some(symbol) = export_data.symbols.iter().find(|s| s.id == *to_symbol) {
                 let reference_location = LspLocation {
@@ -448,41 +465,47 @@ impl LspExporter {
                         },
                     },
                 };
-                
+
                 // Add reference to the target symbol
                 references
                     .entry(symbol.qualified_name.clone())
-                    .or_insert_with(|| LspReferencesResult { references: Vec::new() })
+                    .or_insert_with(|| LspReferencesResult {
+                        references: Vec::new(),
+                    })
                     .references
                     .push(reference_location);
             }
         }
-        
+
         references
     }
-    
+
     /// Create hover information
     fn create_hover_info(&self, export_data: &ExportData) -> HashMap<String, LspHover> {
         let mut hover_info = HashMap::new();
-        
+
         for symbol in &export_data.symbols {
             let mut content_parts = Vec::new();
-            
+
             // Add signature if available
             if let Some(ref signature) = symbol.signature {
-                content_parts.push(format!("```{}\n{}\n```", symbol.language.to_lowercase(), signature));
+                content_parts.push(format!(
+                    "```{}\n{}\n```",
+                    symbol.language.to_lowercase(),
+                    signature
+                ));
             }
-            
+
             // Add documentation if available
             if let Some(ref docs) = symbol.documentation {
                 content_parts.push(docs.clone());
             }
-            
+
             // Add complexity information
             if symbol.complexity > 0 {
                 content_parts.push(format!("**Complexity:** {}", symbol.complexity));
             }
-            
+
             // Add dependency information
             if !symbol.dependencies.is_empty() || !symbol.dependents.is_empty() {
                 content_parts.push(format!(
@@ -491,7 +514,7 @@ impl LspExporter {
                     symbol.dependents.len()
                 ));
             }
-            
+
             if !content_parts.is_empty() {
                 let hover = LspHover {
                     contents: LspMarkupContent {
@@ -509,14 +532,14 @@ impl LspExporter {
                         },
                     }),
                 };
-                
+
                 hover_info.insert(symbol.qualified_name.clone(), hover);
             }
         }
-        
+
         hover_info
     }
-    
+
     /// Convert internal symbol kind to LSP symbol kind
     fn convert_symbol_kind(&self, kind: &str) -> LspSymbolKind {
         match kind {
@@ -541,18 +564,18 @@ impl LspExporter {
             _ => LspSymbolKind::Variable, // Default fallback
         }
     }
-    
+
     /// Convert symbol tags to LSP tags
     fn convert_symbol_tags(&self, tags: &[String]) -> Vec<LspSymbolTag> {
         let mut lsp_tags = Vec::new();
-        
+
         if tags.contains(&"deprecated".to_string()) {
             lsp_tags.push(LspSymbolTag::Deprecated);
         }
-        
+
         lsp_tags
     }
-    
+
     /// Convert file path to URI
     fn path_to_uri(&self, path: &str) -> String {
         if path.starts_with("file://") {
@@ -568,14 +591,14 @@ impl LspExporter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::symbols::{Symbol, SymbolKind, Location};
+    use crate::analysis::{AnalysisResult, CodeMetrics, CodeNode};
     use crate::parsers::LanguageId;
-    use crate::analysis::{CodeNode, CodeMetrics, AnalysisResult};
+    use crate::symbols::{Location, Symbol, SymbolKind};
     use petgraph::Graph;
 
     fn create_test_analysis() -> AnalysisResult {
         let mut graph = Graph::new();
-        
+
         let symbol = Symbol {
             name: "test_function".to_string(),
             kind: SymbolKind::Function,
@@ -592,7 +615,7 @@ mod tests {
             modifiers: vec!["pub".to_string()],
             signature: Some("fn test_function() -> i32".to_string()),
         };
-        
+
         let node_data = CodeNode {
             symbol,
             file_path: "/test/project/src/main.rs".to_string(),
@@ -601,7 +624,7 @@ mod tests {
                 ..Default::default()
             },
         };
-        
+
         graph.add_node(node_data);
 
         AnalysisResult {
@@ -618,9 +641,9 @@ mod tests {
         let analysis = create_test_analysis();
         let exporter = LspExporter::new(analysis, "/test/project".to_string());
         let options = ExportOptions::default();
-        
+
         let workspace_symbols = exporter.export_workspace_symbols(&options);
-        
+
         assert_eq!(workspace_symbols.len(), 1);
         let symbol = &workspace_symbols[0];
         assert_eq!(symbol.name, "test_function");
@@ -634,9 +657,10 @@ mod tests {
         let analysis = create_test_analysis();
         let exporter = LspExporter::new(analysis, "/test/project".to_string());
         let options = ExportOptions::default();
-        
-        let doc_symbols = exporter.export_document_symbols("file:///test/project/src/main.rs", &options);
-        
+
+        let doc_symbols =
+            exporter.export_document_symbols("file:///test/project/src/main.rs", &options);
+
         assert_eq!(doc_symbols.len(), 1);
         let symbol = &doc_symbols[0];
         assert_eq!(symbol.name, "test_function");
@@ -649,9 +673,9 @@ mod tests {
         let analysis = create_test_analysis();
         let exporter = LspExporter::new(analysis, "/test/project".to_string());
         let options = ExportOptions::default();
-        
+
         let lsp_data = exporter.export_lsp_data(&options);
-        
+
         assert_eq!(lsp_data.workspace_symbols.len(), 1);
         assert_eq!(lsp_data.document_symbols.len(), 1);
         assert_eq!(lsp_data.definitions.len(), 1);
@@ -663,10 +687,19 @@ mod tests {
     fn test_path_to_uri_conversion() {
         let analysis = create_test_analysis();
         let exporter = LspExporter::new(analysis, "/test/project".to_string());
-        
-        assert_eq!(exporter.path_to_uri("/absolute/path"), "file:///absolute/path");
-        assert_eq!(exporter.path_to_uri("relative/path"), "file:///relative/path");
-        assert_eq!(exporter.path_to_uri("file:///already/uri"), "file:///already/uri");
+
+        assert_eq!(
+            exporter.path_to_uri("/absolute/path"),
+            "file:///absolute/path"
+        );
+        assert_eq!(
+            exporter.path_to_uri("relative/path"),
+            "file:///relative/path"
+        );
+        assert_eq!(
+            exporter.path_to_uri("file:///already/uri"),
+            "file:///already/uri"
+        );
     }
 
     #[test]
@@ -674,7 +707,7 @@ mod tests {
         let analysis = create_test_analysis();
         let exporter = LspExporter::new(analysis, "/test/project".to_string());
         let options = ExportOptions::default();
-        
+
         let json = exporter.export_to_json(&options).unwrap();
         assert!(json.contains("test_function"));
         assert!(json.contains("workspace_symbols"));

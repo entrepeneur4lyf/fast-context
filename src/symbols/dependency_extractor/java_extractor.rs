@@ -1,5 +1,5 @@
 //! Java-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Java source code, including:
 //! - Method calls and constructor invocations
 //! - Field access and variable references
@@ -9,9 +9,9 @@
 //! - Exception handling (try/catch/finally)
 //! - Control flow (if/else, loops, switch)
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Java-specific dependency extractor
@@ -21,7 +21,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Java
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -30,11 +30,15 @@ impl DependencyExtractor for JavaDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -89,29 +93,34 @@ impl DependencyExtractor for JavaDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
-        matches!(node.kind(), "method_invocation" | "object_creation_expression")
+        matches!(
+            node.kind(),
+            "method_invocation" | "object_creation_expression"
+        )
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier" | "field_access")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "import_declaration")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        (node.kind() == "class_declaration" && node.child_by_field_name("superclass").is_some()) ||
-        (node.kind() == "class_declaration" && node.child_by_field_name("interfaces").is_some()) ||
-        (node.kind() == "interface_declaration" && node.child_by_field_name("extends").is_some())
+        (node.kind() == "class_declaration" && node.child_by_field_name("superclass").is_some())
+            || (node.kind() == "class_declaration"
+                && node.child_by_field_name("interfaces").is_some())
+            || (node.kind() == "interface_declaration"
+                && node.child_by_field_name("extends").is_some())
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "assignment_expression" | "variable_declarator")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -122,7 +131,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
         if let Some(name_node) = node.child_by_field_name("name") {
             let method_name = self.get_node_text(&name_node, source);
             let current_scope = context.current_scope();
-            
+
             if !method_name.trim().is_empty() {
                 // Handle object.method() calls
                 let full_call = if let Some(object_node) = node.child_by_field_name("object") {
@@ -131,7 +140,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
                 } else {
                     method_name
                 };
-                
+
                 // Try to resolve the method in known symbols
                 let resolved_methods = context.find_symbols_global(&full_call);
                 let target_method = if !resolved_methods.is_empty() {
@@ -139,7 +148,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
                 } else {
                     full_call
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_method,
@@ -147,9 +156,9 @@ impl DependencyExtractor for JavaDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -157,7 +166,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -169,12 +178,12 @@ impl DependencyExtractor for JavaDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords and built-ins
             if self.is_java_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -182,7 +191,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -190,11 +199,11 @@ impl DependencyExtractor for JavaDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -203,7 +212,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // import package.Class; or import package.*;
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -215,7 +224,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
                     } else {
                         DependencyType::Imports
                     };
-                    
+
                     let dependency = self.create_dependency(
                         current_scope.clone(),
                         import_path,
@@ -228,7 +237,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -238,7 +247,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
     ) {
         self.extract_class_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -256,7 +265,7 @@ impl DependencyExtractor for JavaDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -286,27 +295,33 @@ impl DependencyExtractor for JavaDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "enhanced_for_statement" | "while_statement" | "do_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "enhanced_for_statement" | "while_statement" | "do_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
-        matches!(node.kind(), "try_statement" | "catch_clause" | "finally_clause")
+        matches!(
+            node.kind(),
+            "try_statement" | "catch_clause" | "finally_clause"
+        )
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_expression" | "switch_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -493,7 +508,11 @@ impl JavaDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -513,7 +532,11 @@ impl JavaDependencyExtractor {
 
                 // Extract dependencies from the value expression
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -531,7 +554,13 @@ impl JavaDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as conditional execution
@@ -547,7 +576,8 @@ impl JavaDependencyExtractor {
 
     /// Check if a string is a Java keyword
     fn is_java_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "abstract" | "assert" | "boolean" | "break" | "byte" | "case" | "catch" |
             "char" | "class" | "const" | "continue" | "default" | "do" | "double" |
             "else" | "enum" | "extends" | "final" | "finally" | "float" | "for" |
@@ -594,7 +624,13 @@ impl JavaDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -680,8 +716,12 @@ impl JavaDependencyExtractor {
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip identifiers in these declaration contexts
-                "method_declaration" | "class_declaration" | "interface_declaration" |
-                "variable_declarator" | "formal_parameter" | "import_declaration" => {
+                "method_declaration"
+                | "class_declaration"
+                | "interface_declaration"
+                | "variable_declarator"
+                | "formal_parameter"
+                | "import_declaration" => {
                     // Check if this identifier is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -719,13 +759,31 @@ impl JavaDependencyExtractor {
             "for_statement" => {
                 // for (init; condition; update)
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(init_node) = node.child_by_field_name("init") {
-                    self.extract_condition_variables(init_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        init_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(update_node) = node.child_by_field_name("update") {
-                    self.extract_condition_variables(update_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        update_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "enhanced_for_statement" => {
@@ -745,13 +803,25 @@ impl JavaDependencyExtractor {
                 }
 
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_statement" | "do_statement" => {
                 // while (condition) or do ... while (condition)
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -826,7 +896,13 @@ impl JavaDependencyExtractor {
 
         // Extract switch expression/discriminant
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -853,7 +929,13 @@ impl JavaDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -876,7 +958,11 @@ impl JavaDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

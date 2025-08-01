@@ -1,5 +1,5 @@
 //! Lua-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Lua source code, including:
 //! - Function calls and method invocations
 //! - Variable references and table access
@@ -9,9 +9,9 @@
 //! - Coroutine operations
 //! - Table construction and field access
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Lua-specific dependency extractor
@@ -21,7 +21,7 @@ impl DependencyExtractor for LuaDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Lua
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -30,11 +30,15 @@ impl DependencyExtractor for LuaDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -71,27 +75,33 @@ impl DependencyExtractor for LuaDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "function_call")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
-        matches!(node.kind(), "identifier" | "dot_index_expression" | "bracket_index_expression")
+        matches!(
+            node.kind(),
+            "identifier" | "dot_index_expression" | "bracket_index_expression"
+        )
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         node.kind() == "function_call" && self.is_require_call(node, "")
     }
-    
+
     fn is_inheritance(&self, _node: &Node) -> bool {
         false // Lua doesn't have traditional inheritance
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
-        matches!(node.kind(), "assignment_statement" | "local_variable_declaration")
+        matches!(
+            node.kind(),
+            "assignment_statement" | "local_variable_declaration"
+        )
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -102,13 +112,16 @@ impl DependencyExtractor for LuaDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("name") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             // Check if this is a require call
-            if function_name == "require" || function_name == "dofile" || function_name == "loadfile" {
+            if function_name == "require"
+                || function_name == "dofile"
+                || function_name == "loadfile"
+            {
                 self.extract_require_dependencies(node, source, context, dependencies);
                 return;
             }
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 let resolved_functions = context.find_symbols_global(&function_name);
                 let target_function = if !resolved_functions.is_empty() {
@@ -116,7 +129,7 @@ impl DependencyExtractor for LuaDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -124,9 +137,9 @@ impl DependencyExtractor for LuaDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -134,7 +147,7 @@ impl DependencyExtractor for LuaDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -145,18 +158,18 @@ impl DependencyExtractor for LuaDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             if self.is_lua_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
                 resolved_vars[0].qualified_name()
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -164,11 +177,11 @@ impl DependencyExtractor for LuaDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -178,7 +191,7 @@ impl DependencyExtractor for LuaDependencyExtractor {
     ) {
         self.extract_require_dependencies(node, source, context, dependencies);
     }
-    
+
     fn extract_inheritance(
         &self,
         _node: Node,
@@ -188,7 +201,7 @@ impl DependencyExtractor for LuaDependencyExtractor {
     ) {
         // Lua doesn't have traditional inheritance
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -206,7 +219,7 @@ impl DependencyExtractor for LuaDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -230,27 +243,30 @@ impl DependencyExtractor for LuaDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "while_statement" | "repeat_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "while_statement" | "repeat_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, _node: &Node) -> bool {
         false // Lua doesn't have traditional exception handling
     }
-    
+
     fn is_switch_statement(&self, _node: &Node) -> bool {
         false // Lua doesn't have switch statements
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement")
     }
@@ -310,7 +326,8 @@ impl LuaDependencyExtractor {
                 let mut cursor = args_node.walk();
                 for child in args_node.children(&mut cursor) {
                     if child.kind() == "string" {
-                        let module_name = self.get_node_text(&child, source)
+                        let module_name = self
+                            .get_node_text(&child, source)
                             .trim_matches('"')
                             .trim_matches('\'')
                             .to_string();
@@ -339,7 +356,8 @@ impl LuaDependencyExtractor {
 
     /// Check if a string is a Lua keyword
     fn is_lua_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             // Lua keywords
             "and" | "break" | "do" | "else" | "elseif" | "end" | "false" |
             "for" | "function" | "goto" | "if" | "in" | "local" | "nil" |
@@ -369,7 +387,11 @@ impl LuaDependencyExtractor {
                 // For simplicity, extract the first variable name
                 let var_name = self.get_node_text(&variables_node, source);
                 self.extract_expression_dependencies(
-                    values_node, source, context, dependencies, &var_name
+                    values_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -387,7 +409,11 @@ impl LuaDependencyExtractor {
             if let Some(values_node) = node.child_by_field_name("value") {
                 let var_name = self.get_node_text(&names_node, source);
                 self.extract_expression_dependencies(
-                    values_node, source, context, dependencies, &var_name
+                    values_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -404,7 +430,13 @@ impl LuaDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -446,7 +478,13 @@ impl LuaDependencyExtractor {
             _ => {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -520,8 +558,10 @@ impl LuaDependencyExtractor {
 
         while let Some(parent) = current.parent() {
             match parent.kind() {
-                "function_declaration" | "local_function" | "local_variable_declaration" |
-                "parameter_list" => {
+                "function_declaration"
+                | "local_function"
+                | "local_variable_declaration"
+                | "parameter_list" => {
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
                             return false;
@@ -575,10 +615,22 @@ impl LuaDependencyExtractor {
                             }
 
                             if let Some(start_node) = clause_node.child_by_field_name("start") {
-                                self.extract_condition_variables(start_node, source, context, dependencies, &current_scope);
+                                self.extract_condition_variables(
+                                    start_node,
+                                    source,
+                                    context,
+                                    dependencies,
+                                    &current_scope,
+                                );
                             }
                             if let Some(end_node) = clause_node.child_by_field_name("end") {
-                                self.extract_condition_variables(end_node, source, context, dependencies, &current_scope);
+                                self.extract_condition_variables(
+                                    end_node,
+                                    source,
+                                    context,
+                                    dependencies,
+                                    &current_scope,
+                                );
                             }
                         }
                         "generic_for_clause" => {
@@ -597,8 +649,16 @@ impl LuaDependencyExtractor {
                                 }
                             }
 
-                            if let Some(expressions_node) = clause_node.child_by_field_name("expression") {
-                                self.extract_condition_variables(expressions_node, source, context, dependencies, &current_scope);
+                            if let Some(expressions_node) =
+                                clause_node.child_by_field_name("expression")
+                            {
+                                self.extract_condition_variables(
+                                    expressions_node,
+                                    source,
+                                    context,
+                                    dependencies,
+                                    &current_scope,
+                                );
                             }
                         }
                         _ => {}
@@ -607,12 +667,24 @@ impl LuaDependencyExtractor {
             }
             "while_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "repeat_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -631,7 +703,13 @@ impl LuaDependencyExtractor {
 
         // Extract returned values
         if let Some(expressions_node) = node.child_by_field_name("expression") {
-            self.extract_expression_dependencies(expressions_node, source, context, dependencies, &current_scope);
+            self.extract_expression_dependencies(
+                expressions_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(

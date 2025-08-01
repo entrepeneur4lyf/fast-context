@@ -1,5 +1,5 @@
 //! Zig-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Zig source code, including:
 //! - Function calls and method invocations
 //! - Struct and enum definitions with field access
@@ -10,9 +10,9 @@
 //! - Memory management and allocators
 //! - Generic types and functions
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Zig-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Zig
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for ZigDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -87,27 +91,30 @@ impl DependencyExtractor for ZigDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "call_expression" | "builtin_call_expression")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier" | "field_access")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         node.kind() == "builtin_call_expression" && self.is_import_builtin(node, "")
     }
-    
+
     fn is_inheritance(&self, _node: &Node) -> bool {
         false // Zig doesn't have inheritance
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
-        matches!(node.kind(), "assignment_expression" | "variable_declaration")
+        matches!(
+            node.kind(),
+            "assignment_expression" | "variable_declaration"
+        )
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -118,7 +125,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 let resolved_functions = context.find_symbols_global(&function_name);
                 let target_function = if !resolved_functions.is_empty() {
@@ -126,7 +133,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -134,9 +141,9 @@ impl DependencyExtractor for ZigDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -144,7 +151,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -155,18 +162,18 @@ impl DependencyExtractor for ZigDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             if self.is_zig_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
                 resolved_vars[0].qualified_name()
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -174,11 +181,11 @@ impl DependencyExtractor for ZigDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -188,7 +195,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
     ) {
         self.extract_builtin_calls(node, source, context, dependencies);
     }
-    
+
     fn extract_inheritance(
         &self,
         _node: Node,
@@ -198,7 +205,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
     ) {
         // Zig doesn't have inheritance
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -216,7 +223,7 @@ impl DependencyExtractor for ZigDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -246,27 +253,27 @@ impl DependencyExtractor for ZigDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_expression")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "for_statement" | "while_statement")
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
         matches!(node.kind(), "try_expression" | "catch_expression")
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_expression")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -316,7 +323,8 @@ impl ZigDependencyExtractor {
                     let mut cursor = args_node.walk();
                     for child in args_node.children(&mut cursor) {
                         if child.kind() == "string_literal" {
-                            let import_path = self.get_node_text(&child, source)
+                            let import_path = self
+                                .get_node_text(&child, source)
                                 .trim_matches('"')
                                 .to_string();
 
@@ -409,7 +417,13 @@ impl ZigDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "comptime" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -426,7 +440,8 @@ impl ZigDependencyExtractor {
 
     /// Check if a string is a Zig keyword
     fn is_zig_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             // Zig keywords
             "align" | "allowzero" | "and" | "anyframe" | "anytype" | "asm" |
             "async" | "await" | "break" | "callconv" | "catch" | "comptime" |
@@ -457,7 +472,11 @@ impl ZigDependencyExtractor {
             if let Some(right_node) = node.child_by_field_name("right") {
                 let var_name = self.get_node_text(&left_node, source);
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -475,7 +494,11 @@ impl ZigDependencyExtractor {
             if let Some(value_node) = node.child_by_field_name("value") {
                 let var_name = self.get_node_text(&name_node, source);
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
 
@@ -509,7 +532,13 @@ impl ZigDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -551,7 +580,13 @@ impl ZigDependencyExtractor {
             _ => {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -625,8 +660,12 @@ impl ZigDependencyExtractor {
 
         while let Some(parent) = current.parent() {
             match parent.kind() {
-                "function_declaration" | "struct_declaration" | "enum_declaration" |
-                "union_declaration" | "variable_declaration" | "parameter_declaration" => {
+                "function_declaration"
+                | "struct_declaration"
+                | "enum_declaration"
+                | "union_declaration"
+                | "variable_declaration"
+                | "parameter_declaration" => {
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
                             return false;
@@ -662,7 +701,13 @@ impl ZigDependencyExtractor {
             "for_statement" => {
                 // for (items) |item, index|
                 if let Some(iterable_node) = node.child_by_field_name("iterable") {
-                    self.extract_condition_variables(iterable_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        iterable_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
 
                 if let Some(capture_node) = node.child_by_field_name("capture") {
@@ -686,7 +731,13 @@ impl ZigDependencyExtractor {
             }
             "while_statement" => {
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -709,7 +760,13 @@ impl ZigDependencyExtractor {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() != "try" {
-                        self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                        self.extract_expression_dependencies(
+                            child,
+                            source,
+                            context,
+                            dependencies,
+                            &current_scope,
+                        );
                     }
                 }
             }
@@ -753,7 +810,13 @@ impl ZigDependencyExtractor {
         let current_scope = context.current_scope();
 
         if let Some(expr_node) = node.child_by_field_name("expression") {
-            self.extract_condition_variables(expr_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                expr_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -779,7 +842,13 @@ impl ZigDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -802,7 +871,11 @@ impl ZigDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

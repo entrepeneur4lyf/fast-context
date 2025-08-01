@@ -1,5 +1,5 @@
 //! # Symbol Extraction and Management
-//! 
+//!
 //! Extracts symbols (functions, classes, variables, imports) from parsed ASTs
 //! with full context, scope tracking, and cross-language support.
 
@@ -27,7 +27,7 @@ impl Location {
     pub fn from_node(node: &Node, file_path: &str) -> Self {
         let start = node.start_position();
         let end = node.end_position();
-        
+
         Self {
             file_path: file_path.to_string(),
             start_line: start.row,
@@ -45,6 +45,7 @@ pub enum SymbolKind {
     Method,
     Class,
     Struct,
+    Union,
     Enum,
     Interface,
     Trait,
@@ -77,7 +78,7 @@ pub struct Symbol {
     pub scope_chain: Vec<Scope>,
     pub language: LanguageId,
     pub documentation: Option<String>,
-    pub modifiers: Vec<String>, // public, private, static, etc.
+    pub modifiers: Vec<String>,    // public, private, static, etc.
     pub signature: Option<String>, // function signatures, type info
 }
 
@@ -87,9 +88,8 @@ impl Symbol {
         if self.scope_chain.is_empty() {
             self.name.clone()
         } else {
-            let scope_names: Vec<String> = self.scope_chain.iter()
-                .map(|s| s.name.clone())
-                .collect();
+            let scope_names: Vec<String> =
+                self.scope_chain.iter().map(|s| s.name.clone()).collect();
             format!("{}::{}", scope_names.join("::"), self.name)
         }
     }
@@ -185,29 +185,31 @@ impl DependencyType {
 
     /// Check if this dependency type represents a strong coupling
     pub fn is_strong_coupling(&self) -> bool {
-        matches!(self, 
-            DependencyType::Inherits | 
-            DependencyType::Implements | 
-            DependencyType::Uses |
-            DependencyType::TypeOf
+        matches!(
+            self,
+            DependencyType::Inherits
+                | DependencyType::Implements
+                | DependencyType::Uses
+                | DependencyType::TypeOf
         )
     }
 
     /// Check if this dependency type represents runtime behavior
     pub fn is_runtime(&self) -> bool {
-        matches!(self,
-            DependencyType::Calls |
-            DependencyType::References |
-            DependencyType::Assigns |
-            DependencyType::MacroInvocation |
-            DependencyType::ControlFlow |
-            DependencyType::DataFlow |
-            DependencyType::ConditionalExecution |
-            DependencyType::LoopIteration |
-            DependencyType::ExceptionHandling |
-            DependencyType::SwitchCase |
-            DependencyType::ReturnFlow |
-            DependencyType::BreakContinue
+        matches!(
+            self,
+            DependencyType::Calls
+                | DependencyType::References
+                | DependencyType::Assigns
+                | DependencyType::MacroInvocation
+                | DependencyType::ControlFlow
+                | DependencyType::DataFlow
+                | DependencyType::ConditionalExecution
+                | DependencyType::LoopIteration
+                | DependencyType::ExceptionHandling
+                | DependencyType::SwitchCase
+                | DependencyType::ReturnFlow
+                | DependencyType::BreakContinue
         )
     }
 }
@@ -239,7 +241,7 @@ impl Dependency {
     /// Create a new dependency with default values
     pub fn new(
         from_symbol: String,
-        to_symbol: String, 
+        to_symbol: String,
         relationship_type: DependencyType,
         location: Location,
         language: LanguageId,
@@ -266,7 +268,13 @@ impl Dependency {
         language: LanguageId,
         strength: f32,
     ) -> Self {
-        let mut dep = Self::new(from_symbol, to_symbol, relationship_type, location, language);
+        let mut dep = Self::new(
+            from_symbol,
+            to_symbol,
+            relationship_type,
+            location,
+            language,
+        );
         dep.strength = strength.clamp(0.0, 1.0);
         dep
     }
@@ -279,7 +287,13 @@ impl Dependency {
         location: Location,
         language: LanguageId,
     ) -> Self {
-        let mut dep = Self::new(from_symbol, to_symbol, relationship_type, location, language);
+        let mut dep = Self::new(
+            from_symbol,
+            to_symbol,
+            relationship_type,
+            location,
+            language,
+        );
         dep.is_conditional = true;
         dep.strength = 0.5; // Conditional dependencies are typically weaker
         dep
@@ -293,12 +307,14 @@ impl Dependency {
 
     /// Get a unique identifier for this dependency
     pub fn id(&self) -> String {
-        format!("{}->{}:{:?}@{}:{}", 
-                self.from_symbol, 
-                self.to_symbol, 
-                self.relationship_type,
-                self.location.start_line,
-                self.location.start_column)
+        format!(
+            "{}->{}:{:?}@{}:{}",
+            self.from_symbol,
+            self.to_symbol,
+            self.relationship_type,
+            self.location.start_line,
+            self.location.start_column
+        )
     }
 
     /// Check if this dependency is cross-file
@@ -313,24 +329,16 @@ pub trait SymbolExtractor {
     fn language(&self) -> LanguageId;
 }
 
-
-
-
-
 // Re-export the symbol extractor factory from the extractors module
 pub use extractors::SymbolExtractorFactory;
 
 // Re-export dependency extractor components
 pub use dependency_extractor::{
-    DependencyExtractor, DependencyExtractorFactory, ExtractionContext
+    DependencyExtractor, DependencyExtractorFactory, ExtractionContext,
 };
 
 // Note: Dependency and DependencyType are already defined in this module
 // so they don't need to be re-exported
-
-
-
-
 
 /// Regex symbol extractor
 pub struct RegexExtractor;
@@ -344,7 +352,13 @@ impl SymbolExtractor for RegexExtractor {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
 
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -490,7 +504,7 @@ enum Color {
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Rust).unwrap();
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -501,7 +515,7 @@ enum Color {
 
         // Should find main function, Point struct, and Color enum
         assert!(symbols.len() >= 3);
-        
+
         let main_fn = symbols.iter().find(|s| s.name == "main").unwrap();
         assert_eq!(main_fn.kind, SymbolKind::Function);
         assert!(main_fn.is_global());
@@ -539,7 +553,7 @@ def main():
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Python).unwrap();
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -550,27 +564,32 @@ def main():
 
         // Should find imports, class, functions, and variables
         assert!(symbols.len() >= 6);
-        
+
         // Check for import
-        let os_import = symbols.iter().find(|s| s.name == "os" && s.kind == SymbolKind::Import);
+        let os_import = symbols
+            .iter()
+            .find(|s| s.name == "os" && s.kind == SymbolKind::Import);
         assert!(os_import.is_some());
-        
+
         // Check for constant
         let max_size = symbols.iter().find(|s| s.name == "MAX_SIZE").unwrap();
         assert_eq!(max_size.kind, SymbolKind::Constant);
-        
+
         // Check for class
         let calc_class = symbols.iter().find(|s| s.name == "Calculator").unwrap();
         assert_eq!(calc_class.kind, SymbolKind::Class);
         assert!(calc_class.documentation.is_some());
-        
+
         // Check for function with docstring
         let add_method = symbols.iter().find(|s| s.name == "add").unwrap();
         assert_eq!(add_method.kind, SymbolKind::Function);
         assert!(add_method.documentation.is_some());
-        
+
         // Check for private method modifier
-        let private_method = symbols.iter().find(|s| s.name == "_private_method").unwrap();
+        let private_method = symbols
+            .iter()
+            .find(|s| s.name == "_private_method")
+            .unwrap();
         assert!(private_method.modifiers.contains(&"private".to_string()));
     }
 
@@ -615,8 +634,10 @@ export { multiply as multiplyNumbers };
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::JavaScript).unwrap();
-        
+        let parse_result = parser_factory
+            .parse(source, LanguageId::JavaScript)
+            .unwrap();
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -627,48 +648,63 @@ export { multiply as multiplyNumbers };
 
         // Should find imports, class, functions, and variables
         assert!(symbols.len() >= 8);
-        
+
         // Check for default import
-        let react_import = symbols.iter().find(|s| s.name == "React" && s.kind == SymbolKind::Import);
+        let react_import = symbols
+            .iter()
+            .find(|s| s.name == "React" && s.kind == SymbolKind::Import);
         assert!(react_import.is_some());
-        assert!(react_import.unwrap().modifiers.contains(&"default".to_string()));
-        
+        assert!(react_import
+            .unwrap()
+            .modifiers
+            .contains(&"default".to_string()));
+
         // Check for named import
-        let usestate_import = symbols.iter().find(|s| s.name == "useState" && s.kind == SymbolKind::Import);
+        let usestate_import = symbols
+            .iter()
+            .find(|s| s.name == "useState" && s.kind == SymbolKind::Import);
         assert!(usestate_import.is_some());
-        assert!(usestate_import.unwrap().modifiers.contains(&"named".to_string()));
-        
+        assert!(usestate_import
+            .unwrap()
+            .modifiers
+            .contains(&"named".to_string()));
+
         // Check for namespace import
-        let utils_import = symbols.iter().find(|s| s.name == "utils" && s.kind == SymbolKind::Import);
+        let utils_import = symbols
+            .iter()
+            .find(|s| s.name == "utils" && s.kind == SymbolKind::Import);
         assert!(utils_import.is_some());
-        assert!(utils_import.unwrap().modifiers.contains(&"namespace".to_string()));
-        
+        assert!(utils_import
+            .unwrap()
+            .modifiers
+            .contains(&"namespace".to_string()));
+
         // Check for constant
         let api_url = symbols.iter().find(|s| s.name == "API_URL").unwrap();
         assert_eq!(api_url.kind, SymbolKind::Constant);
-        
+
         // Check for exported class with JSDoc
         let calc_class = symbols.iter().find(|s| s.name == "Calculator").unwrap();
         assert_eq!(calc_class.kind, SymbolKind::Class);
         // Note: JSDoc extraction may not be working yet with tree-sitter JavaScript
         // assert!(calc_class.documentation.is_some());
         assert!(calc_class.modifiers.contains(&"export".to_string()));
-        
+
         // Check for method with JSDoc
         let add_method = symbols.iter().find(|s| s.name == "add").unwrap();
         assert_eq!(add_method.kind, SymbolKind::Method);
         // Note: JSDoc extraction may not be working yet with tree-sitter JavaScript
         // assert!(add_method.documentation.is_some());
-        
+
         // Check for static method (detection may need refinement)
         let _create_method = symbols.iter().find(|s| s.name == "create").unwrap();
         // assert!(create_method.modifiers.contains(&"static".to_string()));
-        
+
         // Check for async function (detection may need refinement)
         let process_data = symbols.iter().find(|s| s.name == "processData").unwrap();
         // assert!(process_data.modifiers.contains(&"async".to_string()));
         assert!(process_data.modifiers.contains(&"export".to_string()));
-        
+
         // Check for arrow function (should be detected as either constant or function)
         let _multiply = symbols.iter().find(|s| s.name == "multiply").unwrap();
         // Arrow function detection may need refinement with tree-sitter
@@ -695,8 +731,10 @@ export class UserService {
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::TypeScript).unwrap();
-        
+        let parse_result = parser_factory
+            .parse(source, LanguageId::TypeScript)
+            .unwrap();
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -707,16 +745,20 @@ export class UserService {
 
         // Should find interface, type alias, class, and method
         assert!(symbols.len() >= 3);
-        
+
         // Check for interface
-        let user_interface = symbols.iter().find(|s| s.name == "User" && s.kind == SymbolKind::Interface);
+        let user_interface = symbols
+            .iter()
+            .find(|s| s.name == "User" && s.kind == SymbolKind::Interface);
         assert!(user_interface.is_some());
         assert_eq!(user_interface.unwrap().language, LanguageId::TypeScript);
-        
+
         // Check for type alias
-        let user_role_type = symbols.iter().find(|s| s.name == "UserRole" && s.kind == SymbolKind::Type);
+        let user_role_type = symbols
+            .iter()
+            .find(|s| s.name == "UserRole" && s.kind == SymbolKind::Type);
         assert!(user_role_type.is_some());
-        
+
         // Check for exported class
         let user_service = symbols.iter().find(|s| s.name == "UserService").unwrap();
         assert_eq!(user_service.kind, SymbolKind::Class);
@@ -773,7 +815,7 @@ enum Operation {
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Java).unwrap();
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -785,72 +827,98 @@ enum Operation {
         // Debug output to see what symbols we found
         println!("Java symbols found ({}):", symbols.len());
         for symbol in &symbols {
-            println!("  - {}: {:?} (modifiers: {:?}, scope: {:?})", 
-                     symbol.name, symbol.kind, symbol.modifiers, symbol.scope_chain);
+            println!(
+                "  - {}: {:?} (modifiers: {:?}, scope: {:?})",
+                symbol.name, symbol.kind, symbol.modifiers, symbol.scope_chain
+            );
         }
-        
+
         // Should find package, imports, class, interface, enum, methods, and fields
-        assert!(symbols.len() >= 10, "Expected at least 10 symbols, found {}", symbols.len());
-        
+        assert!(
+            symbols.len() >= 10,
+            "Expected at least 10 symbols, found {}",
+            symbols.len()
+        );
+
         // Check for package
-        let package = symbols.iter().find(|s| s.name == "com.example.demo" && s.kind == SymbolKind::Namespace);
+        let package = symbols
+            .iter()
+            .find(|s| s.name == "com.example.demo" && s.kind == SymbolKind::Namespace);
         assert!(package.is_some(), "Package declaration not found");
         assert!(package.unwrap().modifiers.contains(&"package".to_string()));
-        
+
         // Check for import
-        let util_import = symbols.iter().find(|s| s.name == "java.util.List" && s.kind == SymbolKind::Import);
+        let util_import = symbols
+            .iter()
+            .find(|s| s.name == "java.util.List" && s.kind == SymbolKind::Import);
         assert!(util_import.is_some(), "java.util.List import not found");
-        
+
         // Check for static import
-        let static_import = symbols.iter().find(|s| s.name.contains("java.lang.Math") && s.kind == SymbolKind::Import);
+        let static_import = symbols
+            .iter()
+            .find(|s| s.name.contains("java.lang.Math") && s.kind == SymbolKind::Import);
         assert!(static_import.is_some(), "static import not found");
         if let Some(import) = static_import {
             assert!(import.modifiers.contains(&"static".to_string()));
         }
-        
+
         // Check for class with Javadoc
-        let calc_class = symbols.iter().find(|s| s.name == "Calculator" && s.kind == SymbolKind::Class);
+        let calc_class = symbols
+            .iter()
+            .find(|s| s.name == "Calculator" && s.kind == SymbolKind::Class);
         assert!(calc_class.is_some(), "Calculator class not found");
-        assert!(calc_class.unwrap().modifiers.contains(&"public".to_string()));
-        
+        assert!(calc_class
+            .unwrap()
+            .modifiers
+            .contains(&"public".to_string()));
+
         // Check for field (may be Field or Constant depending on modifiers)
         let max_value = symbols.iter().find(|s| s.name == "MAX_VALUE");
         assert!(max_value.is_some(), "MAX_VALUE field not found");
-        
+
         // Verify that constants are properly classified
         if let Some(max_val) = max_value {
             // Constants should be identified by uppercase naming convention and immutability
-            let is_constant = max_val.name.chars().all(|c| c.is_uppercase() || c == '_') 
-                && max_val.signature.as_ref().map_or(false, |sig| sig.contains("const") || sig.contains("static"));
-            
+            let is_constant = max_val.name.chars().all(|c| c.is_uppercase() || c == '_')
+                && max_val
+                    .signature
+                    .as_ref()
+                    .is_some_and(|sig| sig.contains("const") || sig.contains("static"));
+
             if is_constant {
-                assert_eq!(max_val.kind, crate::symbols::SymbolKind::Constant, 
-                          "MAX_VALUE should be classified as Constant, found {:?}", max_val.kind);
+                assert_eq!(
+                    max_val.kind,
+                    crate::symbols::SymbolKind::Constant,
+                    "MAX_VALUE should be classified as Constant, found {:?}",
+                    max_val.kind
+                );
             }
         }
-        
+
         // Check for field
         let history_field = symbols.iter().find(|s| s.name == "history");
         assert!(history_field.is_some(), "history field not found");
-        
+
         // Check for constructor
-        let constructor = symbols.iter().find(|s| s.name == "Calculator" && s.modifiers.contains(&"constructor".to_string()));
+        let constructor = symbols
+            .iter()
+            .find(|s| s.name == "Calculator" && s.modifiers.contains(&"constructor".to_string()));
         assert!(constructor.is_some(), "Constructor not found");
         assert_eq!(constructor.unwrap().kind, SymbolKind::Method);
-        
-        // Check for methods  
+
+        // Check for methods
         let add_method = symbols.iter().find(|s| s.name == "add");
         assert!(add_method.is_some(), "add method not found");
         assert_eq!(add_method.unwrap().kind, SymbolKind::Method);
-        
+
         let create_method = symbols.iter().find(|s| s.name == "create");
         assert!(create_method.is_some(), "create method not found");
-        
+
         // Check for interface
         let interface = symbols.iter().find(|s| s.name == "MathOperations");
         assert!(interface.is_some(), "MathOperations interface not found");
         assert_eq!(interface.unwrap().kind, SymbolKind::Interface);
-        
+
         // Check for enum
         let enum_symbol = symbols.iter().find(|s| s.name == "Operation");
         assert!(enum_symbol.is_some(), "Operation enum not found");
@@ -915,7 +983,7 @@ func Multiply(a, b float64) float64 {
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Go).unwrap();
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -927,66 +995,111 @@ func Multiply(a, b float64) float64 {
         // Debug output to see what symbols we found
         println!("Go symbols found ({}):", symbols.len());
         for symbol in &symbols {
-            println!("  - {}: {:?} (modifiers: {:?}, scope: {:?})", 
-                     symbol.name, symbol.kind, symbol.modifiers, symbol.scope_chain);
+            println!(
+                "  - {}: {:?} (modifiers: {:?}, scope: {:?})",
+                symbol.name, symbol.kind, symbol.modifiers, symbol.scope_chain
+            );
         }
-        
+
         // Should find package, imports, types, functions, methods, constants, and variables
-        assert!(symbols.len() >= 8, "Expected at least 8 symbols, found {}", symbols.len());
-        
+        assert!(
+            symbols.len() >= 8,
+            "Expected at least 8 symbols, found {}",
+            symbols.len()
+        );
+
         // Check for package
-        let package = symbols.iter().find(|s| s.name == "calculator" && s.kind == SymbolKind::Namespace);
+        let package = symbols
+            .iter()
+            .find(|s| s.name == "calculator" && s.kind == SymbolKind::Namespace);
         assert!(package.is_some(), "Package declaration not found");
         assert!(package.unwrap().modifiers.contains(&"package".to_string()));
-        
+
         // Check for imports
-        let fmt_import = symbols.iter().find(|s| s.name == "fmt" && s.kind == SymbolKind::Import);
+        let fmt_import = symbols
+            .iter()
+            .find(|s| s.name == "fmt" && s.kind == SymbolKind::Import);
         assert!(fmt_import.is_some(), "fmt import not found");
-        
-        let json_import = symbols.iter().find(|s| s.name == "json" && s.kind == SymbolKind::Import);
+
+        let json_import = symbols
+            .iter()
+            .find(|s| s.name == "json" && s.kind == SymbolKind::Import);
         assert!(json_import.is_some(), "aliased json import not found");
         if let Some(import) = json_import {
             assert!(import.modifiers.contains(&"aliased".to_string()));
         }
-        
-        let dot_import = symbols.iter().find(|s| s.modifiers.contains(&"dot".to_string()));
+
+        let dot_import = symbols
+            .iter()
+            .find(|s| s.modifiers.contains(&"dot".to_string()));
         assert!(dot_import.is_some(), "dot import not found");
-        
-        let blank_import = symbols.iter().find(|s| s.modifiers.contains(&"blank".to_string()));
+
+        let blank_import = symbols
+            .iter()
+            .find(|s| s.modifiers.contains(&"blank".to_string()));
         assert!(blank_import.is_some(), "blank import not found");
-        
+
         // Check for struct type
-        let calculator_struct = symbols.iter().find(|s| s.name == "Calculator" && s.kind == SymbolKind::Struct);
+        let calculator_struct = symbols
+            .iter()
+            .find(|s| s.name == "Calculator" && s.kind == SymbolKind::Struct);
         assert!(calculator_struct.is_some(), "Calculator struct not found");
-        assert!(calculator_struct.unwrap().modifiers.contains(&"struct".to_string()));
-        
+        assert!(calculator_struct
+            .unwrap()
+            .modifiers
+            .contains(&"struct".to_string()));
+
         // Check for interface type
-        let operation_interface = symbols.iter().find(|s| s.name == "Operation" && s.kind == SymbolKind::Interface);
-        assert!(operation_interface.is_some(), "Operation interface not found");
-        assert!(operation_interface.unwrap().modifiers.contains(&"interface".to_string()));
-        
+        let operation_interface = symbols
+            .iter()
+            .find(|s| s.name == "Operation" && s.kind == SymbolKind::Interface);
+        assert!(
+            operation_interface.is_some(),
+            "Operation interface not found"
+        );
+        assert!(operation_interface
+            .unwrap()
+            .modifiers
+            .contains(&"interface".to_string()));
+
         // Check for constants
-        let max_value = symbols.iter().find(|s| s.name == "MaxValue" && s.kind == SymbolKind::Constant);
+        let max_value = symbols
+            .iter()
+            .find(|s| s.name == "MaxValue" && s.kind == SymbolKind::Constant);
         assert!(max_value.is_some(), "MaxValue constant not found");
         assert!(max_value.unwrap().modifiers.contains(&"const".to_string()));
-        
+
         // Check for variables
-        let global_counter = symbols.iter().find(|s| s.name == "GlobalCounter" && s.kind == SymbolKind::Variable);
+        let global_counter = symbols
+            .iter()
+            .find(|s| s.name == "GlobalCounter" && s.kind == SymbolKind::Variable);
         assert!(global_counter.is_some(), "GlobalCounter variable not found");
-        assert!(global_counter.unwrap().modifiers.contains(&"var".to_string()));
-        
+        assert!(global_counter
+            .unwrap()
+            .modifiers
+            .contains(&"var".to_string()));
+
         // Check for functions
-        let new_func = symbols.iter().find(|s| s.name == "New" && s.kind == SymbolKind::Function);
+        let new_func = symbols
+            .iter()
+            .find(|s| s.name == "New" && s.kind == SymbolKind::Function);
         assert!(new_func.is_some(), "New function not found");
         assert!(new_func.unwrap().signature.is_some());
-        
-        let multiply_func = symbols.iter().find(|s| s.name == "Multiply" && s.kind == SymbolKind::Function);
+
+        let multiply_func = symbols
+            .iter()
+            .find(|s| s.name == "Multiply" && s.kind == SymbolKind::Function);
         assert!(multiply_func.is_some(), "Multiply function not found");
-        
+
         // Check for methods
-        let add_method = symbols.iter().find(|s| s.name == "Add" && s.kind == SymbolKind::Method);
+        let add_method = symbols
+            .iter()
+            .find(|s| s.name == "Add" && s.kind == SymbolKind::Method);
         assert!(add_method.is_some(), "Add method not found");
-        assert!(add_method.unwrap().modifiers.contains(&"method".to_string()));
+        assert!(add_method
+            .unwrap()
+            .modifiers
+            .contains(&"method".to_string()));
         assert!(add_method.unwrap().signature.is_some());
     }
 
@@ -1055,7 +1168,7 @@ namespace Calculator.Services
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::CSharp).unwrap();
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -1067,51 +1180,87 @@ namespace Calculator.Services
         // Debug output to see what symbols we found
         println!("C# symbols found ({}):", symbols.len());
         for symbol in &symbols {
-            println!("  {} ({:?}) - modifiers: {:?}", symbol.name, symbol.kind, symbol.modifiers);
+            println!(
+                "  {} ({:?}) - modifiers: {:?}",
+                symbol.name, symbol.kind, symbol.modifiers
+            );
         }
-        
+
         // Should find using statements, namespace, class, interface, enum, methods, properties, fields
         assert!(symbols.len() >= 12);
-        
+
         // Check for using statements
-        let system_using = symbols.iter().find(|s| s.name == "System" && s.kind == SymbolKind::Import);
+        let system_using = symbols
+            .iter()
+            .find(|s| s.name == "System" && s.kind == SymbolKind::Import);
         assert!(system_using.is_some(), "System using not found");
-        
+
         // Check for namespace
-        let namespace = symbols.iter().find(|s| s.name == "Calculator.Services" && s.kind == SymbolKind::Namespace);
+        let namespace = symbols
+            .iter()
+            .find(|s| s.name == "Calculator.Services" && s.kind == SymbolKind::Namespace);
         assert!(namespace.is_some(), "Namespace not found");
-        
+
         // Check for class
-        let calc_class = symbols.iter().find(|s| s.name == "CalculatorService" && s.kind == SymbolKind::Class);
+        let calc_class = symbols
+            .iter()
+            .find(|s| s.name == "CalculatorService" && s.kind == SymbolKind::Class);
         assert!(calc_class.is_some(), "CalculatorService class not found");
-        assert!(calc_class.unwrap().modifiers.contains(&"public".to_string()));
-        
+        assert!(calc_class
+            .unwrap()
+            .modifiers
+            .contains(&"public".to_string()));
+
         // Check for interface
-        let interface = symbols.iter().find(|s| s.name == "ICalculatorService" && s.kind == SymbolKind::Interface);
-        assert!(interface.is_some(), "ICalculatorService interface not found");
-        
+        let interface = symbols
+            .iter()
+            .find(|s| s.name == "ICalculatorService" && s.kind == SymbolKind::Interface);
+        assert!(
+            interface.is_some(),
+            "ICalculatorService interface not found"
+        );
+
         // Check for enum
-        let enum_sym = symbols.iter().find(|s| s.name == "Operation" && s.kind == SymbolKind::Enum);
+        let enum_sym = symbols
+            .iter()
+            .find(|s| s.name == "Operation" && s.kind == SymbolKind::Enum);
         assert!(enum_sym.is_some(), "Operation enum not found");
-        
+
         // Check for property
-        let property = symbols.iter().find(|s| s.name == "Result" && s.kind == SymbolKind::Field);
+        let property = symbols
+            .iter()
+            .find(|s| s.name == "Result" && s.kind == SymbolKind::Field);
         assert!(property.is_some(), "Result property not found");
-        
+
         // Check for method with XML doc
-        let add_method = symbols.iter().find(|s| s.name == "Add" && s.kind == SymbolKind::Method);
+        let add_method = symbols
+            .iter()
+            .find(|s| s.name == "Add" && s.kind == SymbolKind::Method);
         assert!(add_method.is_some(), "Add method not found");
-        assert!(add_method.unwrap().modifiers.contains(&"public".to_string()));
-        
+        assert!(add_method
+            .unwrap()
+            .modifiers
+            .contains(&"public".to_string()));
+
         // Check for static method
-        let reset_method = symbols.iter().find(|s| s.name == "Reset" && s.kind == SymbolKind::Method);
+        let reset_method = symbols
+            .iter()
+            .find(|s| s.name == "Reset" && s.kind == SymbolKind::Method);
         assert!(reset_method.is_some(), "Reset method not found");
-        assert!(reset_method.unwrap().modifiers.contains(&"static".to_string()));
-        
+        assert!(reset_method
+            .unwrap()
+            .modifiers
+            .contains(&"static".to_string()));
+
         // Check for private method
-        let is_valid_method = symbols.iter().find(|s| s.name == "IsValid" && s.kind == SymbolKind::Method);
+        let is_valid_method = symbols
+            .iter()
+            .find(|s| s.name == "IsValid" && s.kind == SymbolKind::Method);
         assert!(is_valid_method.is_some(), "IsValid method not found");
-        assert!(is_valid_method.unwrap().modifiers.contains(&"private".to_string()));
+        assert!(is_valid_method
+            .unwrap()
+            .modifiers
+            .contains(&"private".to_string()));
     }
 
     #[test]
@@ -1181,7 +1330,7 @@ var globalVariable = 42
 
         let mut parser_factory = ParserFactory::new();
         let parse_result = parser_factory.parse(source, LanguageId::Swift).unwrap();
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -1193,66 +1342,115 @@ var globalVariable = 42
         // Debug output to see what symbols we found
         println!("Swift symbols found ({}):", symbols.len());
         for symbol in &symbols {
-            println!("  {} ({:?}) - modifiers: {:?}", symbol.name, symbol.kind, symbol.modifiers);
+            println!(
+                "  {} ({:?}) - modifiers: {:?}",
+                symbol.name, symbol.kind, symbol.modifiers
+            );
         }
-        
+
         // Should find imports, class, struct, protocol, enum, functions, properties, variables
         assert!(symbols.len() >= 15);
-        
+
         // Check for imports
-        let foundation_import = symbols.iter().find(|s| s.name == "Foundation" && s.kind == SymbolKind::Import);
+        let foundation_import = symbols
+            .iter()
+            .find(|s| s.name == "Foundation" && s.kind == SymbolKind::Import);
         assert!(foundation_import.is_some(), "Foundation import not found");
-        
-        let uikit_import = symbols.iter().find(|s| s.name == "UIKit" && s.kind == SymbolKind::Import);
+
+        let uikit_import = symbols
+            .iter()
+            .find(|s| s.name == "UIKit" && s.kind == SymbolKind::Import);
         assert!(uikit_import.is_some(), "UIKit import not found");
-        
+
         // Check for class
-        let calc_class = symbols.iter().find(|s| s.name == "Calculator" && s.kind == SymbolKind::Class);
+        let calc_class = symbols
+            .iter()
+            .find(|s| s.name == "Calculator" && s.kind == SymbolKind::Class);
         assert!(calc_class.is_some(), "Calculator class not found");
-        assert!(calc_class.unwrap().modifiers.contains(&"public".to_string()));
-        
+        assert!(calc_class
+            .unwrap()
+            .modifiers
+            .contains(&"public".to_string()));
+
         // Check for struct
-        let point_struct = symbols.iter().find(|s| s.name == "Point" && s.kind == SymbolKind::Struct);
+        let point_struct = symbols
+            .iter()
+            .find(|s| s.name == "Point" && s.kind == SymbolKind::Struct);
         assert!(point_struct.is_some(), "Point struct not found");
-        
+
         // Check for protocol
-        let drawable_protocol = symbols.iter().find(|s| s.name == "Drawable" && s.kind == SymbolKind::Interface);
+        let drawable_protocol = symbols
+            .iter()
+            .find(|s| s.name == "Drawable" && s.kind == SymbolKind::Interface);
         assert!(drawable_protocol.is_some(), "Drawable protocol not found");
-        
+
         // Check for enum
-        let color_enum = symbols.iter().find(|s| s.name == "Color" && s.kind == SymbolKind::Enum);
+        let color_enum = symbols
+            .iter()
+            .find(|s| s.name == "Color" && s.kind == SymbolKind::Enum);
         assert!(color_enum.is_some(), "Color enum not found");
-        
+
         // Check for initializer
-        let init_method = symbols.iter().find(|s| s.name == "init" && s.kind == SymbolKind::Method);
+        let init_method = symbols
+            .iter()
+            .find(|s| s.name == "init" && s.kind == SymbolKind::Method);
         assert!(init_method.is_some(), "Initializer not found");
-        assert!(init_method.unwrap().modifiers.contains(&"public".to_string()));
-        
+        assert!(init_method
+            .unwrap()
+            .modifiers
+            .contains(&"public".to_string()));
+
         // Check for public method
-        let add_method = symbols.iter().find(|s| s.name == "add" && s.kind == SymbolKind::Method);
+        let add_method = symbols
+            .iter()
+            .find(|s| s.name == "add" && s.kind == SymbolKind::Method);
         assert!(add_method.is_some(), "Add method not found");
-        assert!(add_method.unwrap().modifiers.contains(&"public".to_string()));
-        
+        assert!(add_method
+            .unwrap()
+            .modifiers
+            .contains(&"public".to_string()));
+
         // Check for private method
-        let log_method = symbols.iter().find(|s| s.name == "logOperation" && s.kind == SymbolKind::Method);
+        let log_method = symbols
+            .iter()
+            .find(|s| s.name == "logOperation" && s.kind == SymbolKind::Method);
         assert!(log_method.is_some(), "LogOperation method not found");
-        assert!(log_method.unwrap().modifiers.contains(&"private".to_string()));
-        
+        assert!(log_method
+            .unwrap()
+            .modifiers
+            .contains(&"private".to_string()));
+
         // Check for static method
-        let create_method = symbols.iter().find(|s| s.name == "createDefault" && s.kind == SymbolKind::Method);
+        let create_method = symbols
+            .iter()
+            .find(|s| s.name == "createDefault" && s.kind == SymbolKind::Method);
         assert!(create_method.is_some(), "CreateDefault method not found");
-        assert!(create_method.unwrap().modifiers.contains(&"static".to_string()));
-        
+        assert!(create_method
+            .unwrap()
+            .modifiers
+            .contains(&"static".to_string()));
+
         // Check for global function
-        let global_func = symbols.iter().find(|s| s.name == "globalFunction" && s.kind == SymbolKind::Function);
+        let global_func = symbols
+            .iter()
+            .find(|s| s.name == "globalFunction" && s.kind == SymbolKind::Function);
         assert!(global_func.is_some(), "Global function not found");
-        
+
         // Check for properties
-        let result_prop = symbols.iter().find(|s| s.name == "result" && s.kind == SymbolKind::Field && s.modifiers.contains(&"property".to_string()));
+        let result_prop = symbols.iter().find(|s| {
+            s.name == "result"
+                && s.kind == SymbolKind::Field
+                && s.modifiers.contains(&"property".to_string())
+        });
         assert!(result_prop.is_some(), "Result property not found");
-        
+
         // Check for variables (in Swift, variables are often detected as fields with property modifier)
-        let global_var = symbols.iter().find(|s| s.name == "globalVariable" && (s.kind == SymbolKind::Variable || (s.kind == SymbolKind::Field && s.modifiers.contains(&"property".to_string()))));
+        let global_var = symbols.iter().find(|s| {
+            s.name == "globalVariable"
+                && (s.kind == SymbolKind::Variable
+                    || (s.kind == SymbolKind::Field
+                        && s.modifiers.contains(&"property".to_string())))
+        });
         assert!(global_var.is_some(), "Global variable not found");
     }
 
@@ -1312,23 +1510,30 @@ var globalVariable = 42
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::ObjectiveC).unwrap();
-        
+        let parse_result = parser_factory
+            .parse(source, LanguageId::ObjectiveC)
+            .unwrap();
+
         // Debug: print the tree structure
         println!("Tree root: {:?}", parse_result.tree.root_node().kind());
         let root = parse_result.tree.root_node();
         let mut cursor = root.walk();
         cursor.goto_first_child();
-        
+
         println!("Root children:");
         loop {
             let node = cursor.node();
-            println!("  - {} ({}..{})", node.kind(), node.start_position().row, node.end_position().row);
+            println!(
+                "  - {} ({}..{})",
+                node.kind(),
+                node.start_position().row,
+                node.end_position().row
+            );
             if !cursor.goto_next_sibling() {
                 break;
             }
         }
-        
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -1340,57 +1545,97 @@ var globalVariable = 42
         // Debug output to see what symbols we found
         println!("Objective-C symbols found ({}):", symbols.len());
         for symbol in &symbols {
-            println!("  {} ({:?}) - modifiers: {:?}", symbol.name, symbol.kind, symbol.modifiers);
+            println!(
+                "  {} ({:?}) - modifiers: {:?}",
+                symbol.name, symbol.kind, symbol.modifiers
+            );
         }
-        
+
         // Should find imports, protocol, interface, implementation, properties, methods
         assert!(symbols.len() >= 10);
-        
+
         // Check for imports
-        let foundation_import = symbols.iter().find(|s| s.name == "Foundation/Foundation.h" && s.kind == SymbolKind::Import);
+        let foundation_import = symbols
+            .iter()
+            .find(|s| s.name == "Foundation/Foundation.h" && s.kind == SymbolKind::Import);
         assert!(foundation_import.is_some(), "Foundation import not found");
-        
-        let utilities_import = symbols.iter().find(|s| s.name == "MyUtilities.h" && s.kind == SymbolKind::Import);
+
+        let utilities_import = symbols
+            .iter()
+            .find(|s| s.name == "MyUtilities.h" && s.kind == SymbolKind::Import);
         assert!(utilities_import.is_some(), "MyUtilities import not found");
-        
+
         // Check for protocol
-        let protocol = symbols.iter().find(|s| s.name == "CalculatorDelegate" && s.kind == SymbolKind::Interface);
+        let protocol = symbols
+            .iter()
+            .find(|s| s.name == "CalculatorDelegate" && s.kind == SymbolKind::Interface);
         assert!(protocol.is_some(), "CalculatorDelegate protocol not found");
-        assert!(protocol.unwrap().modifiers.contains(&"protocol".to_string()));
-        
+        assert!(protocol
+            .unwrap()
+            .modifiers
+            .contains(&"protocol".to_string()));
+
         // Check for class interface
-        let class_interface = symbols.iter().find(|s| s.name == "Calculator" && s.kind == SymbolKind::Class && s.modifiers.contains(&"interface".to_string()));
+        let class_interface = symbols.iter().find(|s| {
+            s.name == "Calculator"
+                && s.kind == SymbolKind::Class
+                && s.modifiers.contains(&"interface".to_string())
+        });
         assert!(class_interface.is_some(), "Calculator interface not found");
-        
+
         // Check for class implementation
-        let class_impl = symbols.iter().find(|s| s.name == "Calculator" && s.kind == SymbolKind::Class && s.modifiers.contains(&"implementation".to_string()));
+        let class_impl = symbols.iter().find(|s| {
+            s.name == "Calculator"
+                && s.kind == SymbolKind::Class
+                && s.modifiers.contains(&"implementation".to_string())
+        });
         assert!(class_impl.is_some(), "Calculator implementation not found");
-        
+
         // Check for properties
-        let name_property = symbols.iter().find(|s| s.name == "name" && s.kind == SymbolKind::Field && s.modifiers.contains(&"property".to_string()));
+        let name_property = symbols.iter().find(|s| {
+            s.name == "name"
+                && s.kind == SymbolKind::Field
+                && s.modifiers.contains(&"property".to_string())
+        });
         assert!(name_property.is_some(), "Name property not found");
-        
-        let result_property = symbols.iter().find(|s| s.name == "result" && s.kind == SymbolKind::Field && s.modifiers.contains(&"property".to_string()));
+
+        let result_property = symbols.iter().find(|s| {
+            s.name == "result"
+                && s.kind == SymbolKind::Field
+                && s.modifiers.contains(&"property".to_string())
+        });
         assert!(result_property.is_some(), "Result property not found");
-        
+
         // Check for class method
-        let shared_method = symbols.iter().find(|s| s.name.contains("sharedCalculator") && s.kind == SymbolKind::Method);
+        let shared_method = symbols
+            .iter()
+            .find(|s| s.name.contains("sharedCalculator") && s.kind == SymbolKind::Method);
         assert!(shared_method.is_some(), "sharedCalculator method not found");
         if let Some(method) = shared_method {
-            assert!(method.modifiers.contains(&"class".to_string()) || method.modifiers.contains(&"method".to_string()));
+            assert!(
+                method.modifiers.contains(&"class".to_string())
+                    || method.modifiers.contains(&"method".to_string())
+            );
         }
-        
+
         // Check for instance methods
-        let init_method = symbols.iter().find(|s| s.name.contains("initWithName") && s.kind == SymbolKind::Method);
+        let init_method = symbols
+            .iter()
+            .find(|s| s.name.contains("initWithName") && s.kind == SymbolKind::Method);
         assert!(init_method.is_some(), "initWithName method not found");
-        
-        let add_method = symbols.iter().find(|s| s.name.contains("addNumber") && s.kind == SymbolKind::Method);
+
+        let add_method = symbols
+            .iter()
+            .find(|s| s.name.contains("addNumber") && s.kind == SymbolKind::Method);
         assert!(add_method.is_some(), "addNumber method not found");
-        
-        let reset_method = symbols.iter().find(|s| s.name.contains("reset") && s.kind == SymbolKind::Method);
+
+        let reset_method = symbols
+            .iter()
+            .find(|s| s.name.contains("reset") && s.kind == SymbolKind::Method);
         assert!(reset_method.is_some(), "reset method not found");
     }
-}/// PHP Symbol Extractor
+}
+/// PHP Symbol Extractor
 /// Extracts functions, classes, variables, includes, and interfaces from PHP code
 pub struct PhpExtractor;
 
@@ -1404,7 +1649,13 @@ impl SymbolExtractor for PhpExtractor {
         let root_node = tree.root_node();
         let mut scope_stack = Vec::new();
 
-        self.traverse_node(&root_node, source, file_path, &mut symbols, &mut scope_stack);
+        self.traverse_node(
+            &root_node,
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -1419,7 +1670,10 @@ impl PhpExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         match node.kind() {
-            "include_expression" | "include_once_expression" | "require_expression" | "require_once_expression" => {
+            "include_expression"
+            | "include_once_expression"
+            | "require_expression"
+            | "require_once_expression" => {
                 self.extract_include(node, source, file_path, symbols, scope_stack);
             }
             "function_definition" => {
@@ -1476,7 +1730,7 @@ impl PhpExtractor {
             if child.kind() == "string" {
                 if let Ok(include_path) = child.utf8_text(source.as_bytes()) {
                     let clean_path = include_path.trim_matches('"').trim_matches('\'');
-                    
+
                     let symbol = Symbol {
                         name: clean_path.to_string(),
                         kind: SymbolKind::Import,
@@ -1485,7 +1739,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec![node.kind().to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
                 }
@@ -1512,7 +1768,9 @@ impl PhpExtractor {
                     // Check for visibility modifiers (public, private, protected, static)
                     let mut modifier_cursor = node.walk();
                     for modifier_child in node.children(&mut modifier_cursor) {
-                        if modifier_child.kind() == "visibility_modifier" || modifier_child.kind() == "static_modifier" {
+                        if modifier_child.kind() == "visibility_modifier"
+                            || modifier_child.kind() == "static_modifier"
+                        {
                             if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
                                 modifiers.push(modifier_text.to_string());
                             }
@@ -1527,7 +1785,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers,
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -1561,7 +1821,9 @@ impl PhpExtractor {
                     // Check for class modifiers (abstract, final)
                     let mut modifier_cursor = node.walk();
                     for modifier_child in node.children(&mut modifier_cursor) {
-                        if modifier_child.kind() == "abstract_modifier" || modifier_child.kind() == "final_modifier" {
+                        if modifier_child.kind() == "abstract_modifier"
+                            || modifier_child.kind() == "final_modifier"
+                        {
                             if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
                                 modifiers.push(modifier_text.to_string());
                             }
@@ -1576,7 +1838,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers,
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -1613,7 +1877,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["interface".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -1650,7 +1916,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["trait".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -1685,8 +1953,13 @@ impl PhpExtractor {
                     let mut modifier_cursor = node.walk();
                     for modifier_child in node.children(&mut modifier_cursor) {
                         match modifier_child.kind() {
-                            "visibility_modifier" | "static_modifier" | "abstract_modifier" | "final_modifier" => {
-                                if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
+                            "visibility_modifier"
+                            | "static_modifier"
+                            | "abstract_modifier"
+                            | "final_modifier" => {
+                                if let Ok(modifier_text) =
+                                    modifier_child.utf8_text(source.as_bytes())
+                                {
                                     modifiers.push(modifier_text.to_string());
                                 }
                             }
@@ -1702,7 +1975,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers,
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
                 }
@@ -1728,14 +2003,18 @@ impl PhpExtractor {
                     if prop_child.kind() == "variable_name" {
                         if let Ok(property_name) = prop_child.utf8_text(source.as_bytes()) {
                             let clean_name = property_name.trim_start_matches('$');
-                            
+
                             let mut modifiers = vec!["property".to_string()];
 
                             // Check for visibility modifiers
                             let mut modifier_cursor = node.walk();
                             for modifier_child in node.children(&mut modifier_cursor) {
-                                if modifier_child.kind() == "visibility_modifier" || modifier_child.kind() == "static_modifier" {
-                                    if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
+                                if modifier_child.kind() == "visibility_modifier"
+                                    || modifier_child.kind() == "static_modifier"
+                                {
+                                    if let Ok(modifier_text) =
+                                        modifier_child.utf8_text(source.as_bytes())
+                                    {
                                         modifiers.push(modifier_text.to_string());
                                     }
                                 }
@@ -1749,7 +2028,9 @@ impl PhpExtractor {
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers,
-                                signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                                signature: Some(
+                                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                ),
                             };
                             symbols.push(symbol);
                         }
@@ -1783,7 +2064,9 @@ impl PhpExtractor {
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers: vec!["const".to_string()],
-                                signature: Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                                signature: Some(
+                                    child.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                ),
                             };
                             symbols.push(symbol);
                         }
@@ -1807,7 +2090,7 @@ impl PhpExtractor {
             if child.kind() == "variable_name" {
                 if let Ok(var_name) = child.utf8_text(source.as_bytes()) {
                     let clean_name = var_name.trim_start_matches('$');
-                    
+
                     let symbol = Symbol {
                         name: clean_name.to_string(),
                         kind: SymbolKind::Variable,
@@ -1816,7 +2099,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["variable".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
                 }
@@ -1846,7 +2131,9 @@ impl PhpExtractor {
                         language: LanguageId::PHP,
                         documentation: None,
                         modifiers: vec!["namespace".to_string()],
-                        signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                        signature: Some(
+                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                        ),
                     };
                     symbols.push(symbol);
 
@@ -1887,7 +2174,9 @@ impl PhpExtractor {
                                 language: LanguageId::PHP,
                                 documentation: None,
                                 modifiers: vec!["use".to_string()],
-                                signature: Some(node.utf8_text(source.as_bytes()).unwrap_or("").to_string()),
+                                signature: Some(
+                                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                ),
                             };
                             symbols.push(symbol);
                         }
@@ -1999,8 +2288,10 @@ const GLOBAL_CONSTANT = 'global constant';
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::PHP).expect("Failed to parse PHP code");
-        
+        let parse_result = parser_factory
+            .parse(source, LanguageId::PHP)
+            .expect("Failed to parse PHP code");
+
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
             &parse_result.tree,
@@ -2008,95 +2299,153 @@ const GLOBAL_CONSTANT = 'global constant';
             "test.php",
             LanguageId::PHP,
         );
-        
+
         println!("PHP symbols extracted: {}", symbols.len());
         for symbol in &symbols {
-            println!("  {:?}: {} ({})", symbol.kind, symbol.name, symbol.modifiers.join(", "));
+            println!(
+                "  {:?}: {} ({})",
+                symbol.kind,
+                symbol.name,
+                symbol.modifiers.join(", ")
+            );
         }
-        
+
         // Should extract significantly more symbols
-        assert!(symbols.len() >= 20, "Expected at least 20 symbols, got {}", symbols.len());
-        
+        assert!(
+            symbols.len() >= 20,
+            "Expected at least 20 symbols, got {}",
+            symbols.len()
+        );
+
         // Check for namespace
-        let namespace = symbols.iter().find(|s| s.name == "App\\Controllers" && s.kind == SymbolKind::Module);
+        let namespace = symbols
+            .iter()
+            .find(|s| s.name == "App\\Controllers" && s.kind == SymbolKind::Module);
         assert!(namespace.is_some(), "Namespace not found");
-        
+
         // Check for use statements
-        let use_request = symbols.iter().find(|s| s.name == "Illuminate\\Http\\Request" && s.kind == SymbolKind::Import);
+        let use_request = symbols
+            .iter()
+            .find(|s| s.name == "Illuminate\\Http\\Request" && s.kind == SymbolKind::Import);
         assert!(use_request.is_some(), "Use statement for Request not found");
-        
-        let use_user = symbols.iter().find(|s| s.name == "App\\Models\\User" && s.kind == SymbolKind::Import);
+
+        let use_user = symbols
+            .iter()
+            .find(|s| s.name == "App\\Models\\User" && s.kind == SymbolKind::Import);
         assert!(use_user.is_some(), "Use statement for User not found");
-        
+
         // Check for includes
-        let require_config = symbols.iter().find(|s| s.name == "config.php" && s.kind == SymbolKind::Import);
+        let require_config = symbols
+            .iter()
+            .find(|s| s.name == "config.php" && s.kind == SymbolKind::Import);
         assert!(require_config.is_some(), "Require config.php not found");
-        
-        let include_helpers = symbols.iter().find(|s| s.name == "helpers.php" && s.kind == SymbolKind::Import);
+
+        let include_helpers = symbols
+            .iter()
+            .find(|s| s.name == "helpers.php" && s.kind == SymbolKind::Import);
         assert!(include_helpers.is_some(), "Include helpers.php not found");
-        
+
         // Check for interface
-        let interface = symbols.iter().find(|s| s.name == "UserRepositoryInterface" && s.kind == SymbolKind::Interface);
+        let interface = symbols
+            .iter()
+            .find(|s| s.name == "UserRepositoryInterface" && s.kind == SymbolKind::Interface);
         assert!(interface.is_some(), "Interface not found");
-        
+
         // Check for abstract class
-        let base_class = symbols.iter().find(|s| s.name == "BaseController" && s.kind == SymbolKind::Class);
+        let base_class = symbols
+            .iter()
+            .find(|s| s.name == "BaseController" && s.kind == SymbolKind::Class);
         assert!(base_class.is_some(), "BaseController class not found");
-        
+
         // Check for trait
-        let trait_symbol = symbols.iter().find(|s| s.name == "Cacheable" && s.kind == SymbolKind::Trait);
+        let trait_symbol = symbols
+            .iter()
+            .find(|s| s.name == "Cacheable" && s.kind == SymbolKind::Trait);
         assert!(trait_symbol.is_some(), "Cacheable trait not found");
-        
+
         // Check for concrete class
-        let user_controller = symbols.iter().find(|s| s.name == "UserController" && s.kind == SymbolKind::Class);
+        let user_controller = symbols
+            .iter()
+            .find(|s| s.name == "UserController" && s.kind == SymbolKind::Class);
         assert!(user_controller.is_some(), "UserController class not found");
-        
+
         // Check for properties
-        let request_prop = symbols.iter().find(|s| s.name == "request" && s.kind == SymbolKind::Field);
+        let request_prop = symbols
+            .iter()
+            .find(|s| s.name == "request" && s.kind == SymbolKind::Field);
         assert!(request_prop.is_some(), "Request property not found");
-        
-        let logger_prop = symbols.iter().find(|s| s.name == "logger" && s.kind == SymbolKind::Field);
+
+        let logger_prop = symbols
+            .iter()
+            .find(|s| s.name == "logger" && s.kind == SymbolKind::Field);
         assert!(logger_prop.is_some(), "Logger property not found");
-        
-        let instance_prop = symbols.iter().find(|s| s.name == "instance" && s.kind == SymbolKind::Field);
+
+        let instance_prop = symbols
+            .iter()
+            .find(|s| s.name == "instance" && s.kind == SymbolKind::Field);
         assert!(instance_prop.is_some(), "Instance property not found");
-        
+
         // Check for constants
-        let version_const = symbols.iter().find(|s| s.name == "VERSION" && s.kind == SymbolKind::Constant);
+        let version_const = symbols
+            .iter()
+            .find(|s| s.name == "VERSION" && s.kind == SymbolKind::Constant);
         assert!(version_const.is_some(), "VERSION constant not found");
-        
-        let debug_const = symbols.iter().find(|s| s.name == "DEBUG" && s.kind == SymbolKind::Constant);
+
+        let debug_const = symbols
+            .iter()
+            .find(|s| s.name == "DEBUG" && s.kind == SymbolKind::Constant);
         assert!(debug_const.is_some(), "DEBUG constant not found");
-        
+
         // Check for methods
-        let handle_method = symbols.iter().find(|s| s.name == "handle" && s.kind == SymbolKind::Method);
+        let handle_method = symbols
+            .iter()
+            .find(|s| s.name == "handle" && s.kind == SymbolKind::Method);
         assert!(handle_method.is_some(), "Handle method not found");
-        
-        let construct_method = symbols.iter().find(|s| s.name == "__construct" && s.kind == SymbolKind::Method);
+
+        let construct_method = symbols
+            .iter()
+            .find(|s| s.name == "__construct" && s.kind == SymbolKind::Method);
         assert!(construct_method.is_some(), "Constructor method not found");
-        
-        let log_method = symbols.iter().find(|s| s.name == "log" && s.kind == SymbolKind::Method);
+
+        let log_method = symbols
+            .iter()
+            .find(|s| s.name == "log" && s.kind == SymbolKind::Method);
         assert!(log_method.is_some(), "Log method not found");
-        
-        let find_method = symbols.iter().find(|s| s.name == "findById" && s.kind == SymbolKind::Method);
+
+        let find_method = symbols
+            .iter()
+            .find(|s| s.name == "findById" && s.kind == SymbolKind::Method);
         assert!(find_method.is_some(), "FindById method not found");
-        
-        let save_method = symbols.iter().find(|s| s.name == "save" && s.kind == SymbolKind::Method);
+
+        let save_method = symbols
+            .iter()
+            .find(|s| s.name == "save" && s.kind == SymbolKind::Method);
         assert!(save_method.is_some(), "Save method not found");
-        
-        let get_instance_method = symbols.iter().find(|s| s.name == "getInstance" && s.kind == SymbolKind::Method);
-        assert!(get_instance_method.is_some(), "GetInstance method not found");
-        
+
+        let get_instance_method = symbols
+            .iter()
+            .find(|s| s.name == "getInstance" && s.kind == SymbolKind::Method);
+        assert!(
+            get_instance_method.is_some(),
+            "GetInstance method not found"
+        );
+
         // Check for global function
-        let global_func = symbols.iter().find(|s| s.name == "globalFunction" && s.kind == SymbolKind::Function);
+        let global_func = symbols
+            .iter()
+            .find(|s| s.name == "globalFunction" && s.kind == SymbolKind::Function);
         assert!(global_func.is_some(), "Global function not found");
-        
+
         // Check for global variable
-        let global_var = symbols.iter().find(|s| s.name == "globalVar" && s.kind == SymbolKind::Variable);
+        let global_var = symbols
+            .iter()
+            .find(|s| s.name == "globalVar" && s.kind == SymbolKind::Variable);
         assert!(global_var.is_some(), "Global variable not found");
-        
+
         // Check for global constant
-        let global_const = symbols.iter().find(|s| s.name == "GLOBAL_CONSTANT" && s.kind == SymbolKind::Constant);
+        let global_const = symbols
+            .iter()
+            .find(|s| s.name == "GLOBAL_CONSTANT" && s.kind == SymbolKind::Constant);
         assert!(global_const.is_some(), "Global constant not found");
     }
 }

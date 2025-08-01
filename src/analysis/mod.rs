@@ -1,12 +1,12 @@
 //! # Code Analysis and Graph Construction
-//! 
+//!
 //! Analyzes parsed code to build comprehensive code graphs showing relationships
 //! between symbols, dependencies, and semantic connections across the codebase.
 
 use crate::parsers::LanguageId;
 use crate::symbols::{Symbol, SymbolKind};
-use petgraph::{Graph, Directed};
 use petgraph::graph::NodeIndex;
+use petgraph::{Directed, Graph};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -58,10 +58,10 @@ pub struct CodeMetrics {
     pub lines_of_code: u32,
     pub number_of_parameters: u32,
     pub depth_of_nesting: u32,
-    pub fan_in: u32,  // Number of symbols that depend on this one
-    pub fan_out: u32, // Number of symbols this one depends on
+    pub fan_in: u32,               // Number of symbols that depend on this one
+    pub fan_out: u32,              // Number of symbols this one depends on
     pub cognitive_complexity: u32, // Cognitive complexity metric
-    pub nesting_depth: u32, // Maximum nesting depth
+    pub nesting_depth: u32,        // Maximum nesting depth
 }
 
 /// Complete code graph representing a codebase
@@ -90,10 +90,10 @@ impl CodeGraphBuilder {
 
         for symbol in symbols {
             let qualified_name = symbol.qualified_name();
-            
+
             // Calculate basic metrics
             let metrics = self.calculate_metrics(&symbol);
-            
+
             let node_data = CodeNode {
                 symbol: symbol.clone(),
                 file_path: file_path.to_string(),
@@ -115,9 +115,13 @@ impl CodeGraphBuilder {
         to_symbol: &str,
         relationship: CodeRelationship,
     ) -> Result<(), String> {
-        let from_node = self.symbol_to_node.get(from_symbol)
+        let from_node = self
+            .symbol_to_node
+            .get(from_symbol)
             .ok_or_else(|| format!("Symbol not found: {from_symbol}"))?;
-        let to_node = self.symbol_to_node.get(to_symbol)
+        let to_node = self
+            .symbol_to_node
+            .get(to_symbol)
             .ok_or_else(|| format!("Symbol not found: {to_symbol}"))?;
 
         self.graph.add_edge(*from_node, *to_node, relationship);
@@ -130,7 +134,7 @@ impl CodeGraphBuilder {
             // For each symbol in the file, look for references to other symbols
             for &node_idx in &file_nodes {
                 let symbol = self.graph[node_idx].symbol.clone();
-                
+
                 // Analyze function calls, variable references, etc.
                 self.find_symbol_references(node_idx, &symbol, file_path);
             }
@@ -141,7 +145,7 @@ impl CodeGraphBuilder {
     fn find_symbol_references(&mut self, from_node: NodeIndex, symbol: &Symbol, file_path: &str) {
         // This is a simplified implementation - in practice, you'd parse the symbol's
         // content to find actual references to other symbols
-        
+
         match symbol.kind {
             SymbolKind::Function => {
                 // Analyze function body for calls to other functions
@@ -161,11 +165,11 @@ impl CodeGraphBuilder {
     fn analyze_function_calls(&mut self, from_node: NodeIndex, content: &str, _file_path: &str) {
         // Simple regex-based analysis - in practice, you'd use proper AST analysis
         let call_pattern = regex::Regex::new(r"(\w+)\s*\(").unwrap();
-        
+
         for captures in call_pattern.captures_iter(content) {
             if let Some(function_name) = captures.get(1) {
                 let called_function = function_name.as_str();
-                
+
                 // Look for the called function in our symbol table
                 if let Some(&to_node) = self.symbol_to_node.get(called_function) {
                     let relationship = CodeRelationship {
@@ -174,7 +178,7 @@ impl CodeGraphBuilder {
                         confidence: 0.8,
                         metadata: HashMap::new(),
                     };
-                    
+
                     self.graph.add_edge(from_node, to_node, relationship);
                 }
             }
@@ -182,10 +186,15 @@ impl CodeGraphBuilder {
     }
 
     /// Create import relationships
-    fn create_import_relationship(&mut self, from_node: NodeIndex, symbol: &Symbol, file_path: &str) {
+    fn create_import_relationship(
+        &mut self,
+        from_node: NodeIndex,
+        symbol: &Symbol,
+        file_path: &str,
+    ) {
         // Extract imported module/symbol name from the import statement
         let imported_name = &symbol.name;
-        
+
         // Create a relationship indicating this file imports the symbol
         let relationship = CodeRelationship {
             kind: RelationshipKind::Imports,
@@ -284,8 +293,8 @@ impl CodeGraphBuilder {
     /// Count decision points in code
     fn count_decision_points(&self, code: &str) -> u32 {
         let decision_keywords = [
-            "if", "else if", "while", "for", "match", "case", "catch",
-            "&&", "||", "?", "switch", "try", "except", "elif"
+            "if", "else if", "while", "for", "match", "case", "catch", "&&", "||", "?", "switch",
+            "try", "except", "elif",
         ];
 
         let mut count = 0;
@@ -354,7 +363,11 @@ impl AnalysisResult {
     /// Get the most complex symbols
     pub fn most_complex_symbols(&self, limit: usize) -> Vec<&CodeNode> {
         let mut symbols: Vec<&CodeNode> = self.graph.node_weights().collect();
-        symbols.sort_by(|a, b| b.metrics.cyclomatic_complexity.cmp(&a.metrics.cyclomatic_complexity));
+        symbols.sort_by(|a, b| {
+            b.metrics
+                .cyclomatic_complexity
+                .cmp(&a.metrics.cyclomatic_complexity)
+        });
         symbols.into_iter().take(limit).collect()
     }
 
@@ -365,6 +378,9 @@ impl AnalysisResult {
         symbols.into_iter().take(limit).collect()
     }
 }
+
+// Re-export enhanced code graph components
+pub use code_graph::{CodeGraphBuilder as EnhancedCodeGraphBuilder, EnhancedCodeGraph};
 
 #[cfg(test)]
 mod tests {
@@ -421,7 +437,9 @@ mod tests {
             metadata: HashMap::new(),
         };
 
-        builder.add_relationship("main", "helper", relationship).unwrap();
+        builder
+            .add_relationship("main", "helper", relationship)
+            .unwrap();
 
         let graph = builder.build();
         assert_eq!(graph.node_count(), 2);
@@ -431,7 +449,7 @@ mod tests {
     #[test]
     fn test_metrics_calculation() {
         let builder = CodeGraphBuilder::new();
-        
+
         let symbol = Symbol {
             name: "complex_function".to_string(),
             kind: SymbolKind::Function,
@@ -455,6 +473,3 @@ mod tests {
         assert_eq!(metrics.number_of_parameters, 2);
     }
 }
-
-// Re-export enhanced code graph components
-pub use code_graph::{EnhancedCodeGraph, CodeGraphBuilder as EnhancedCodeGraphBuilder};

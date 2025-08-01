@@ -1,12 +1,12 @@
 //! # Adaptive Cache Manager
-//! 
+//!
 //! Orchestrates the entire caching system by automatically detecting project characteristics
 //! and configuring optimal cache policies. Provides a unified interface for all cache operations.
 
 use crate::cache::{
-    size_detector::{CodebaseAnalyzer, ProjectProfile},
     policies::{CacheConfig, CachePolicyType, ConfigValidationError},
-    MultiLevelCache, CacheKey, CacheStats,
+    size_detector::{CodebaseAnalyzer, ProjectProfile},
+    CacheKey, CacheStats, MultiLevelCache,
 };
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -14,22 +14,22 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 /// Adaptive cache manager that automatically optimizes caching strategy
-pub struct AdaptiveCacheManager<T> 
-where 
+pub struct AdaptiveCacheManager<T>
+where
     T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync,
 {
     /// Multi-level cache instance
     cache: MultiLevelCache<T>,
-    
+
     /// Current cache configuration
     config: Arc<RwLock<CacheConfig>>,
-    
+
     /// Project profile for optimization
     project_profile: Arc<RwLock<Option<ProjectProfile>>>,
-    
+
     /// Cache statistics and metrics
     stats: Arc<RwLock<AdaptiveCacheStats>>,
-    
+
     /// Project root path
     project_root: PathBuf,
 }
@@ -39,22 +39,22 @@ where
 pub struct AdaptiveCacheStats {
     /// Base L1 cache statistics
     pub l1_stats: CacheStats,
-    
+
     /// Configuration changes made
     pub config_adaptations: u64,
-    
+
     /// Profile analysis count
     pub profile_analyses: u64,
-    
+
     /// Last profile analysis timestamp
     pub last_analysis: std::time::SystemTime,
-    
+
     /// Cache effectiveness score (0-100)
     pub effectiveness_score: f64,
-    
+
     /// Memory pressure indicator
     pub memory_pressure_level: MemoryPressureLevel,
-    
+
     /// Policy optimization events
     pub optimization_events: Vec<OptimizationEvent>,
 }
@@ -94,20 +94,21 @@ where
     /// Create a new adaptive cache manager for a project
     pub async fn new<P: AsRef<Path>>(project_root: P) -> Result<Self, AdaptiveCacheError> {
         let project_root = project_root.as_ref().to_path_buf();
-        
+
         // Analyze project to determine optimal configuration
         let analyzer = CodebaseAnalyzer::new();
         let project_profile = analyzer.analyze_project(&project_root)?;
         let config = CacheConfig::from_project_profile(&project_profile);
-        
+
         // Create multi-level cache with optimized configuration
         let cache = MultiLevelCache::new(
             config.l1_capacity,
             config.cache_dir.clone(),
             config.disk_limit_mb as u64,
             None, // L3 Redis URL - not implemented yet
-        ).map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
-        
+        )
+        .map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
+
         let stats = AdaptiveCacheStats {
             l1_stats: CacheStats {
                 hits: 0,
@@ -124,7 +125,10 @@ where
             optimization_events: vec![OptimizationEvent {
                 timestamp: std::time::SystemTime::now(),
                 event_type: OptimizationEventType::InitialConfiguration,
-                description: format!("Initialized with {} policy", config.policy_type.description()),
+                description: format!(
+                    "Initialized with {} policy",
+                    config.policy_type.description()
+                ),
                 config_changes: vec![
                     format!("L1 capacity: {}", config.l1_capacity),
                     format!("L2 enabled: {}", config.enable_l2_cache),
@@ -132,7 +136,7 @@ where
                 ],
             }],
         };
-        
+
         Ok(Self {
             cache,
             config: Arc::new(RwLock::new(config)),
@@ -141,21 +145,22 @@ where
             project_root,
         })
     }
-    
+
     /// Create with custom configuration (bypasses auto-detection)
     pub async fn with_config<P: AsRef<Path>>(
-        project_root: P, 
-        config: CacheConfig
+        project_root: P,
+        config: CacheConfig,
     ) -> Result<Self, AdaptiveCacheError> {
         let project_root = project_root.as_ref().to_path_buf();
-        
+
         let cache = MultiLevelCache::new(
             config.l1_capacity,
             config.cache_dir.clone(),
             config.disk_limit_mb as u64,
             None,
-        ).map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
-        
+        )
+        .map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
+
         let stats = AdaptiveCacheStats {
             l1_stats: CacheStats {
                 hits: 0,
@@ -171,7 +176,7 @@ where
             memory_pressure_level: MemoryPressureLevel::Low,
             optimization_events: vec![],
         };
-        
+
         Ok(Self {
             cache,
             config: Arc::new(RwLock::new(config)),
@@ -180,11 +185,11 @@ where
             project_root,
         })
     }
-    
+
     /// Get cached data with automatic cache optimization
     pub async fn get(&self, key: &CacheKey) -> Option<T> {
         let result = self.cache.get(key).await;
-        
+
         // Update statistics
         {
             let mut stats = self.stats.write().await;
@@ -193,7 +198,7 @@ where
             } else {
                 stats.l1_stats.misses += 1;
             }
-            
+
             // Recalculate hit rate
             let total = stats.l1_stats.hits + stats.l1_stats.misses;
             if total > 0 {
@@ -201,85 +206,96 @@ where
                 stats.effectiveness_score = (stats.l1_stats.hit_rate * 100.0).min(100.0);
             }
         }
-        
+
         // Trigger adaptive optimization if needed
         self.maybe_optimize().await;
-        
+
         result
     }
-    
+
     /// Store data in cache with automatic optimization
-    pub async fn put(&self, key: CacheKey, data: T, dependencies: Vec<String>) -> Result<(), AdaptiveCacheError> {
-        self.cache.put(key, data, dependencies).await.map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
-        
+    pub async fn put(
+        &self,
+        key: CacheKey,
+        data: T,
+        dependencies: Vec<String>,
+    ) -> Result<(), AdaptiveCacheError> {
+        self.cache
+            .put(key, data, dependencies)
+            .await
+            .map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
+
         // Update entry count
         {
             let mut stats = self.stats.write().await;
             stats.l1_stats.entries = self.cache.l1_stats().entries;
         }
-        
+
         // Check for memory pressure and adapt if needed
         self.check_memory_pressure().await;
-        
+
         Ok(())
     }
-    
+
     /// Invalidate cache entries
     pub async fn invalidate(&self, key: &CacheKey) {
         self.cache.invalidate(key).await;
     }
-    
+
     /// Invalidate entries that depend on a changed file
     pub async fn invalidate_dependencies(&self, changed_file: &str) {
         self.cache.invalidate_dependencies(changed_file).await;
     }
-    
+
     /// Re-analyze project and update cache configuration
     pub async fn reanalyze_project(&self) -> Result<(), AdaptiveCacheError> {
         let analyzer = CodebaseAnalyzer::new();
         let new_profile = analyzer.analyze_project(&self.project_root)?;
         let new_config = CacheConfig::from_project_profile(&new_profile);
-        
+
         // Compare with current configuration
         let config_changed = {
             let current_config = self.config.read().await;
-            new_config.policy_type != current_config.policy_type ||
-            new_config.memory_limit_mb != current_config.memory_limit_mb ||
-            new_config.enable_l2_cache != current_config.enable_l2_cache ||
-            new_config.enable_l3_cache != current_config.enable_l3_cache
+            new_config.policy_type != current_config.policy_type
+                || new_config.memory_limit_mb != current_config.memory_limit_mb
+                || new_config.enable_l2_cache != current_config.enable_l2_cache
+                || new_config.enable_l3_cache != current_config.enable_l3_cache
         };
-        
+
         if config_changed {
             // Apply new configuration
             {
                 let mut config = self.config.write().await;
                 *config = new_config.clone();
             }
-            
+
             // Update profile
             {
                 let mut profile = self.project_profile.write().await;
                 *profile = Some(new_profile);
             }
-            
+
             // Record optimization event
             {
                 let mut stats = self.stats.write().await;
                 stats.config_adaptations += 1;
                 stats.profile_analyses += 1;
                 stats.last_analysis = std::time::SystemTime::now();
-                
+
                 stats.optimization_events.push(OptimizationEvent {
                     timestamp: std::time::SystemTime::now(),
                     event_type: OptimizationEventType::ProjectAnalysisUpdate,
-                    description: format!("Updated to {} policy", new_config.policy_type.description()),
+                    description: format!(
+                        "Updated to {} policy",
+                        new_config.policy_type.description()
+                    ),
                     config_changes: vec![
                         format!("Memory limit: {}MB", new_config.memory_limit_mb),
                         format!("L2 enabled: {}", new_config.enable_l2_cache),
                         format!("L3 enabled: {}", new_config.enable_l3_cache),
                     ],
                 });
-                
+
                 // Keep only last 100 events
                 if stats.optimization_events.len() > 100 {
                     let events_len = stats.optimization_events.len();
@@ -287,40 +303,42 @@ where
                 }
             }
         }
-        
+
         Ok(())
     }
-    
+
     /// Get current cache statistics
     pub async fn stats(&self) -> AdaptiveCacheStats {
         let mut stats = self.stats.read().await.clone();
-        
+
         // Update L1 stats from actual cache
         stats.l1_stats = self.cache.l1_stats();
-        
+
         stats
     }
-    
+
     /// Get current cache configuration
     pub async fn config(&self) -> CacheConfig {
         self.config.read().await.clone()
     }
-    
+
     /// Get project profile (if available)
     pub async fn project_profile(&self) -> Option<ProjectProfile> {
         self.project_profile.read().await.clone()
     }
-    
+
     /// Force cache optimization based on current performance
     pub async fn optimize_now(&self) -> Result<bool, AdaptiveCacheError> {
         let stats = self.stats.read().await.clone();
-        
+
         // Analyze current performance
         if stats.effectiveness_score < 30.0 && stats.l1_stats.hits + stats.l1_stats.misses > 100 {
             // Poor performance, try to optimize
             self.downgrade_policy().await?;
             Ok(true)
-        } else if stats.effectiveness_score > 80.0 && stats.memory_pressure_level == MemoryPressureLevel::Low {
+        } else if stats.effectiveness_score > 80.0
+            && stats.memory_pressure_level == MemoryPressureLevel::Low
+        {
             // Good performance and low memory pressure, can upgrade
             self.upgrade_policy().await?;
             Ok(true)
@@ -328,13 +346,13 @@ where
             Ok(false)
         }
     }
-    
+
     /// Check for memory pressure and adapt configuration
     async fn check_memory_pressure(&self) {
         // Simple memory pressure detection based on cache utilization
         let l1_stats = self.cache.l1_stats();
         let utilization = l1_stats.entries as f64 / l1_stats.max_entries as f64;
-        
+
         let pressure_level = if utilization < 0.6 {
             MemoryPressureLevel::Low
         } else if utilization < 0.8 {
@@ -344,13 +362,13 @@ where
         } else {
             MemoryPressureLevel::Critical
         };
-        
+
         // Update pressure level and adapt if needed
         {
             let mut stats = self.stats.write().await;
             if stats.memory_pressure_level != pressure_level {
                 stats.memory_pressure_level = pressure_level.clone();
-                
+
                 // Adapt configuration based on pressure
                 if pressure_level == MemoryPressureLevel::Critical {
                     // Emergency downgrade
@@ -360,23 +378,23 @@ where
             }
         }
     }
-    
+
     /// Automatically optimize cache if conditions are met
     async fn maybe_optimize(&self) {
         let stats = self.stats.read().await;
         let total_requests = stats.l1_stats.hits + stats.l1_stats.misses;
-        
+
         // Only optimize after sufficient data
         if total_requests > 0 && total_requests % 1000 == 0 {
             drop(stats);
             let _ = self.optimize_now().await;
         }
     }
-    
+
     /// Upgrade cache policy for better performance
     async fn upgrade_policy(&self) -> Result<(), AdaptiveCacheError> {
         let mut config = self.config.write().await;
-        
+
         let new_policy = match config.policy_type {
             CachePolicyType::Minimal => Some(CachePolicyType::Balanced),
             CachePolicyType::Balanced => Some(CachePolicyType::Adaptive),
@@ -384,31 +402,31 @@ where
             CachePolicyType::Persistent => Some(CachePolicyType::Enterprise),
             CachePolicyType::Enterprise => None, // Already at highest level
         };
-        
+
         if let Some(new_policy) = new_policy {
             config.policy_type = new_policy.clone();
-            
+
             // Apply policy-specific upgrades
             match new_policy {
                 CachePolicyType::Balanced => {
                     config.enable_l2_cache = true;
                     config.enable_predictive_caching = true;
-                },
+                }
                 CachePolicyType::Adaptive => {
                     config.enable_cache_warming = true;
                     config.background_warming_threads = 2;
-                },
+                }
                 CachePolicyType::Persistent => {
                     config.enable_l3_cache = true;
                     config.compression_enabled = true;
-                },
+                }
                 CachePolicyType::Enterprise => {
                     config.streaming_enabled = true;
                     config.background_warming_threads = 4;
-                },
+                }
                 _ => {}
             }
-            
+
             // Record event
             drop(config);
             let mut stats = self.stats.write().await;
@@ -419,14 +437,14 @@ where
                 config_changes: vec!["Policy upgraded due to good performance".to_string()],
             });
         }
-        
+
         Ok(())
     }
-    
+
     /// Downgrade cache policy to reduce memory usage
     async fn downgrade_policy(&self) -> Result<(), AdaptiveCacheError> {
         let mut config = self.config.write().await;
-        
+
         let new_policy = match config.policy_type {
             CachePolicyType::Enterprise => Some(CachePolicyType::Persistent),
             CachePolicyType::Persistent => Some(CachePolicyType::Adaptive),
@@ -434,10 +452,10 @@ where
             CachePolicyType::Balanced => Some(CachePolicyType::Minimal),
             CachePolicyType::Minimal => None, // Already at lowest level
         };
-        
+
         if let Some(new_policy) = new_policy {
             config.policy_type = new_policy.clone();
-            
+
             // Apply policy-specific downgrades
             match new_policy {
                 CachePolicyType::Minimal => {
@@ -445,22 +463,22 @@ where
                     config.enable_l3_cache = false;
                     config.enable_predictive_caching = false;
                     config.enable_cache_warming = false;
-                },
+                }
                 CachePolicyType::Balanced => {
                     config.enable_l3_cache = false;
                     config.compression_enabled = false;
                     config.background_warming_threads = 1;
-                },
+                }
                 CachePolicyType::Adaptive => {
                     config.streaming_enabled = false;
                     config.background_warming_threads = 2;
-                },
+                }
                 CachePolicyType::Persistent => {
                     config.background_warming_threads = 3;
-                },
+                }
                 _ => {}
             }
-            
+
             // Record event
             drop(config);
             let mut stats = self.stats.write().await;
@@ -468,10 +486,12 @@ where
                 timestamp: std::time::SystemTime::now(),
                 event_type: OptimizationEventType::PolicyDowngrade,
                 description: format!("Downgraded to {} policy", new_policy.description()),
-                config_changes: vec!["Policy downgraded due to poor performance or memory pressure".to_string()],
+                config_changes: vec![
+                    "Policy downgraded due to poor performance or memory pressure".to_string(),
+                ],
             });
         }
-        
+
         Ok(())
     }
 }
@@ -481,13 +501,13 @@ where
 pub enum AdaptiveCacheError {
     #[error("Project analysis failed: {0}")]
     AnalysisError(#[from] crate::cache::size_detector::AnalysisError),
-    
+
     #[error("Cache configuration error: {0}")]
     ConfigError(#[from] ConfigValidationError),
-    
+
     #[error("Cache operation failed: {0}")]
     CacheError(String),
-    
+
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -496,20 +516,32 @@ pub enum AdaptiveCacheError {
 mod tests {
     use super::*;
     use crate::cache::CacheType;
-    use tempfile::TempDir;
     use std::fs;
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_adaptive_cache_creation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create a small test project with proper directory structure
         fs::create_dir_all(temp_path.join("src")).unwrap();
-        fs::write(temp_path.join("src/main.rs"), "fn main() { println!(\"Hello, world!\"); }").unwrap();
-        fs::write(temp_path.join("src/lib.rs"), "pub fn hello() -> String { \"Hello\".to_string() }").unwrap();
-        fs::write(temp_path.join("Cargo.toml"), "[package]\nname = \"test\"\nversion = \"0.1.0\"").unwrap();
-        
+        fs::write(
+            temp_path.join("src/main.rs"),
+            "fn main() { println!(\"Hello, world!\"); }",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("src/lib.rs"),
+            "pub fn hello() -> String { \"Hello\".to_string() }",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("Cargo.toml"),
+            "[package]\nname = \"test\"\nversion = \"0.1.0\"",
+        )
+        .unwrap();
+
         // For testing, create with a default configuration since file scanning may fail in temp dirs
         let config = CacheConfig {
             policy_type: CachePolicyType::Minimal,
@@ -533,10 +565,12 @@ mod tests {
             compression_enabled: false,
             streaming_enabled: false,
         };
-        
-        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config).await.unwrap();
+
+        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config)
+            .await
+            .unwrap();
         let config = cache_manager.config().await;
-        
+
         // Should start with minimal policy for tiny project
         assert_eq!(config.policy_type, CachePolicyType::Minimal);
         assert!(!config.enable_l2_cache);
@@ -547,12 +581,20 @@ mod tests {
     async fn test_cache_operations() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Create proper project structure
         fs::create_dir_all(temp_path.join("src")).unwrap();
-        fs::write(temp_path.join("src/test.rs"), "fn test() { assert_eq!(1 + 1, 2); }").unwrap();
-        fs::write(temp_path.join("Cargo.toml"), "[package]\nname = \"test\"\nversion = \"0.1.0\"").unwrap();
-        
+        fs::write(
+            temp_path.join("src/test.rs"),
+            "fn test() { assert_eq!(1 + 1, 2); }",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("Cargo.toml"),
+            "[package]\nname = \"test\"\nversion = \"0.1.0\"",
+        )
+        .unwrap();
+
         // Use default config for testing
         let config = CacheConfig {
             policy_type: CachePolicyType::Minimal,
@@ -576,20 +618,25 @@ mod tests {
             compression_enabled: false,
             streaming_enabled: false,
         };
-        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config).await.unwrap();
-        
+        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config)
+            .await
+            .unwrap();
+
         let key = CacheKey {
             file_path: "test.rs".to_string(),
             content_hash: "hash123".to_string(),
             cache_type: CacheType::ParsedAst,
         };
-        
+
         // Test put and get
-        cache_manager.put(key.clone(), "test_data".to_string(), vec![]).await.unwrap();
-        
+        cache_manager
+            .put(key.clone(), "test_data".to_string(), vec![])
+            .await
+            .unwrap();
+
         let result = cache_manager.get(&key).await;
         assert_eq!(result, Some("test_data".to_string()));
-        
+
         // Check statistics
         let stats = cache_manager.stats().await;
         assert_eq!(stats.l1_stats.hits, 1);
@@ -601,12 +648,20 @@ mod tests {
     async fn test_project_reanalysis() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Start with tiny project
         fs::create_dir_all(temp_path.join("src")).unwrap();
-        fs::write(temp_path.join("src/main.rs"), "fn main() { println!(\"Hello\"); }").unwrap();
-        fs::write(temp_path.join("Cargo.toml"), "[package]\nname = \"test\"\nversion = \"0.1.0\"").unwrap();
-        
+        fs::write(
+            temp_path.join("src/main.rs"),
+            "fn main() { println!(\"Hello\"); }",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("Cargo.toml"),
+            "[package]\nname = \"test\"\nversion = \"0.1.0\"",
+        )
+        .unwrap();
+
         // Use default config for testing
         let config = CacheConfig {
             policy_type: CachePolicyType::Minimal,
@@ -630,24 +685,30 @@ mod tests {
             compression_enabled: false,
             streaming_enabled: false,
         };
-        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config).await.unwrap();
+        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config)
+            .await
+            .unwrap();
         let initial_config = cache_manager.config().await;
         assert_eq!(initial_config.policy_type, CachePolicyType::Minimal);
-        
-        // Add more files to make it a small project  
+
+        // Add more files to make it a small project
         fs::create_dir_all(temp_path.join("src/modules")).unwrap();
         for i in 0..150 {
-            fs::write(temp_path.join("src/modules").join(format!("file_{}.rs", i)), "fn test() { println!(\"test\"); }").unwrap();
+            fs::write(
+                temp_path.join("src/modules").join(format!("file_{i}.rs")),
+                "fn test() { println!(\"test\"); }",
+            )
+            .unwrap();
         }
-        
+
         // Skip reanalysis for testing - file scanning issues in temp directories
         // In a real scenario, reanalysis would detect the increased project size
         // and upgrade to CachePolicyType::Balanced
-        
+
         // Test that we can at least get the current config
         let config_after_growth = cache_manager.config().await;
         assert_eq!(config_after_growth.policy_type, CachePolicyType::Minimal); // Still minimal since we didn't reanalyze
-        
+
         // Verify the cache manager is functional
         let _stats = cache_manager.stats().await;
     }
@@ -656,25 +717,32 @@ mod tests {
     async fn test_memory_pressure_adaptation() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
-        
+
         fs::write(temp_path.join("test.rs"), "fn test() {}").unwrap();
-        
+
         // Create with small L1 capacity to trigger pressure quickly
-        let mut config = CacheConfig::default();
-        config.l1_capacity = 5; // Very small capacity
-        
-        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config).await.unwrap();
-        
+        let config = CacheConfig {
+            l1_capacity: 5, // Very small capacity
+            ..Default::default()
+        };
+
+        let cache_manager = AdaptiveCacheManager::<String>::with_config(temp_path, config)
+            .await
+            .unwrap();
+
         // Fill cache beyond capacity
         for i in 0..10 {
             let key = CacheKey {
-                file_path: format!("file_{}.rs", i),
-                content_hash: format!("hash{}", i),
+                file_path: format!("file_{i}.rs"),
+                content_hash: format!("hash{i}"),
                 cache_type: CacheType::ParsedAst,
             };
-            cache_manager.put(key, format!("data_{}", i), vec![]).await.unwrap();
+            cache_manager
+                .put(key, format!("data_{i}"), vec![])
+                .await
+                .unwrap();
         }
-        
+
         // Check that memory pressure was detected
         let stats = cache_manager.stats().await;
         assert_ne!(stats.memory_pressure_level, MemoryPressureLevel::Low);

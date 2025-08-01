@@ -1,5 +1,5 @@
 //! Python symbol extractor
-//! 
+//!
 //! Extracts symbols from Python source code including:
 //! - Functions and methods
 //! - Classes and inheritance
@@ -23,8 +23,14 @@ impl SymbolExtractor for PythonExtractor {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol> {
         let mut symbols = Vec::new();
         let mut scope_stack = Vec::new();
-        
-        self.extract_from_node(tree.root_node(), source, file_path, &mut symbols, &mut scope_stack);
+
+        self.extract_from_node(
+            tree.root_node(),
+            source,
+            file_path,
+            &mut symbols,
+            &mut scope_stack,
+        );
         symbols
     }
 }
@@ -41,14 +47,17 @@ impl PythonExtractor {
         match node.kind() {
             "function_definition" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     // Extract function signature and docstring
                     let signature = self.extract_function_signature(&node, source);
                     let documentation = self.extract_docstring(&node, source);
                     let modifiers = self.extract_function_modifiers(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Function,
@@ -63,9 +72,12 @@ impl PythonExtractor {
             }
             "class_definition" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = name_node
+                        .utf8_text(source.as_bytes())
+                        .unwrap_or("")
+                        .to_string();
                     let location = Location::from_node(&node, file_path);
-                    
+
                     // Push class as scope for nested items
                     let scope = Scope {
                         name: name.clone(),
@@ -73,15 +85,15 @@ impl PythonExtractor {
                         location: location.clone(),
                     };
                     scope_stack.push(scope);
-                    
+
                     let documentation = self.extract_docstring(&node, source);
                     let modifiers = self.extract_class_modifiers(&node, source);
-                    
+
                     symbols.push(Symbol {
                         name,
                         kind: SymbolKind::Class,
                         location,
-                        scope_chain: scope_stack[..scope_stack.len()-1].to_vec(),
+                        scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                         language: LanguageId::Python,
                         documentation,
                         modifiers,
@@ -98,14 +110,14 @@ impl PythonExtractor {
                     if left.kind() == "identifier" {
                         let name = left.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                         let location = Location::from_node(&left, file_path);
-                        
+
                         // Determine if this is a constant (ALL_CAPS) or variable
                         let kind = if name.chars().all(|c| c.is_uppercase() || c == '_') {
                             SymbolKind::Constant
                         } else {
                             SymbolKind::Variable
                         };
-                        
+
                         symbols.push(Symbol {
                             name,
                             kind,
@@ -137,8 +149,10 @@ impl PythonExtractor {
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
         // Extract just the function definition line
         if let Some(parameters) = node.child_by_field_name("parameters") {
-            let func_name = node.child_by_field_name("name")?
-                .utf8_text(source.as_bytes()).ok()?;
+            let func_name = node
+                .child_by_field_name("name")?
+                .utf8_text(source.as_bytes())
+                .ok()?;
             let params = parameters.utf8_text(source.as_bytes()).ok()?;
             Some(format!("def {func_name}{params}"))
         } else {
@@ -179,28 +193,32 @@ impl PythonExtractor {
         let mut cleaned = raw.trim();
 
         // Remove triple quotes first
-        if (cleaned.starts_with("\"\"\"") && cleaned.ends_with("\"\"\"") && cleaned.len() >= 6) ||
-           (cleaned.starts_with("'''") && cleaned.ends_with("'''") && cleaned.len() >= 6) {
-            cleaned = &cleaned[3..cleaned.len()-3];
+        if (cleaned.starts_with("\"\"\"") && cleaned.ends_with("\"\"\"") && cleaned.len() >= 6)
+            || (cleaned.starts_with("'''") && cleaned.ends_with("'''") && cleaned.len() >= 6)
+        {
+            cleaned = &cleaned[3..cleaned.len() - 3];
         }
         // Remove single quotes
-        else if (cleaned.starts_with('"') && cleaned.ends_with('"') && cleaned.len() >= 2) ||
-                 (cleaned.starts_with('\'') && cleaned.ends_with('\'') && cleaned.len() >= 2) {
-            cleaned = &cleaned[1..cleaned.len()-1];
+        else if (cleaned.starts_with('"') && cleaned.ends_with('"') && cleaned.len() >= 2)
+            || (cleaned.starts_with('\'') && cleaned.ends_with('\'') && cleaned.len() >= 2)
+        {
+            cleaned = &cleaned[1..cleaned.len() - 1];
         }
 
         // Normalize whitespace for multi-line docstrings
         let lines: Vec<&str> = cleaned.lines().collect();
         if lines.len() > 1 {
             // Find common indentation (excluding first line)
-            let min_indent = lines.iter()
+            let min_indent = lines
+                .iter()
                 .skip(1)
                 .filter(|line| !line.trim().is_empty())
                 .map(|line| line.len() - line.trim_start().len())
                 .min()
                 .unwrap_or(0);
 
-            let normalized_lines: Vec<String> = lines.iter()
+            let normalized_lines: Vec<String> = lines
+                .iter()
                 .enumerate()
                 .map(|(i, line)| {
                     if i == 0 {
@@ -221,7 +239,7 @@ impl PythonExtractor {
 
     fn extract_function_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for decorators by looking at previous siblings
         let mut current = *node;
         while let Some(sibling) = current.prev_sibling() {
@@ -251,7 +269,7 @@ impl PythonExtractor {
 
     fn extract_class_modifiers(&self, node: &Node, _source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check for inheritance
         if let Some(_superclasses) = node.child_by_field_name("superclasses") {
             modifiers.push("inherits".to_string());
@@ -260,16 +278,24 @@ impl PythonExtractor {
         modifiers
     }
 
-    fn extract_import(&self, node: &Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_import(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         match node.kind() {
             "import_statement" => {
                 // import module1, module2
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "dotted_name" || child.kind() == "identifier" {
-                        let module_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                        let module_name =
+                            child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                         let location = Location::from_node(&child, file_path);
-                        
+
                         symbols.push(Symbol {
                             name: module_name,
                             kind: SymbolKind::Import,
@@ -287,17 +313,18 @@ impl PythonExtractor {
                 // from module import name1, name2
                 let mut module_name = String::new();
                 let mut imported_names = Vec::new();
-                
+
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     match child.kind() {
                         "dotted_name" | "identifier" => {
                             if module_name.is_empty() {
-                                module_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                                module_name =
+                                    child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
                             } else {
                                 imported_names.push((
                                     child.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                                    Location::from_node(&child, file_path)
+                                    Location::from_node(&child, file_path),
                                 ));
                             }
                         }
@@ -306,8 +333,11 @@ impl PythonExtractor {
                             for import_child in child.children(&mut import_cursor) {
                                 if import_child.kind() == "identifier" {
                                     imported_names.push((
-                                        import_child.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                                        Location::from_node(&import_child, file_path)
+                                        import_child
+                                            .utf8_text(source.as_bytes())
+                                            .unwrap_or("")
+                                            .to_string(),
+                                        Location::from_node(&import_child, file_path),
                                     ));
                                 }
                             }
@@ -319,7 +349,11 @@ impl PythonExtractor {
                 // Create import symbols
                 for (name, location) in imported_names {
                     symbols.push(Symbol {
-                        name: if module_name.is_empty() { name.clone() } else { format!("{module_name}.{name}") },
+                        name: if module_name.is_empty() {
+                            name.clone()
+                        } else {
+                            format!("{module_name}.{name}")
+                        },
                         kind: SymbolKind::Import,
                         location,
                         scope_chain: scope_stack.to_vec(),

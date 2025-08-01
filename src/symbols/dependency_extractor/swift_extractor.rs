@@ -1,5 +1,5 @@
 //! Swift-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Swift source code, including:
 //! - Function calls and method invocations
 //! - Property access and variable references
@@ -10,9 +10,9 @@
 //! - Control flow (if/guard/switch, loops)
 //! - Closures and capture lists
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Swift-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Swift
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for SwiftDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -56,7 +60,10 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             "import_declaration" => {
                 self.extract_imports(node, source, context, dependencies);
             }
-            "class_declaration" | "protocol_declaration" | "struct_declaration" | "enum_declaration" => {
+            "class_declaration"
+            | "protocol_declaration"
+            | "struct_declaration"
+            | "enum_declaration" => {
                 self.extract_type_inheritance(node, source, context, dependencies);
             }
             "assignment" | "property_declaration" => {
@@ -90,29 +97,33 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "call_expression")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "simple_identifier" | "navigation_expression")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "import_declaration")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
-        matches!(node.kind(), 
-            "class_declaration" | "protocol_declaration" | "struct_declaration" | "enum_declaration"
+        matches!(
+            node.kind(),
+            "class_declaration"
+                | "protocol_declaration"
+                | "struct_declaration"
+                | "enum_declaration"
         ) && node.child_by_field_name("inheritance_clause").is_some()
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
         matches!(node.kind(), "assignment" | "property_declaration")
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -123,7 +134,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 // Try to resolve the function in known symbols
                 let resolved_functions = context.find_symbols_global(&function_name);
@@ -132,7 +143,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -140,9 +151,9 @@ impl DependencyExtractor for SwiftDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -150,7 +161,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -162,12 +173,12 @@ impl DependencyExtractor for SwiftDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords and built-ins
             if self.is_swift_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -175,7 +186,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -183,11 +194,11 @@ impl DependencyExtractor for SwiftDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -196,7 +207,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         // import Foundation, import UIKit.UIView, import class MyModule.MyClass
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -208,7 +219,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
                     } else {
                         DependencyType::ModuleDependency
                     };
-                    
+
                     let dependency = self.create_dependency(
                         current_scope.clone(),
                         import_path,
@@ -221,7 +232,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -231,7 +242,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
     ) {
         self.extract_type_inheritance(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -249,7 +260,7 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -279,27 +290,30 @@ impl DependencyExtractor for SwiftDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement" | "guard_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "for_statement" | "while_statement" | "repeat_while_statement")
+        matches!(
+            node.kind(),
+            "for_statement" | "while_statement" | "repeat_while_statement"
+        )
     }
-    
+
     fn is_exception_handling(&self, node: &Node) -> bool {
         matches!(node.kind(), "do_statement" | "catch_clause")
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "switch_statement")
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -483,7 +497,8 @@ impl SwiftDependencyExtractor {
 
     /// Check if a string is a Swift keyword
     fn is_swift_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "associatedtype" | "class" | "deinit" | "enum" | "extension" | "fileprivate" |
             "func" | "import" | "init" | "inout" | "internal" | "let" | "open" |
             "operator" | "private" | "protocol" | "public" | "rethrows" | "static" |
@@ -513,7 +528,11 @@ impl SwiftDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -533,7 +552,11 @@ impl SwiftDependencyExtractor {
 
                 // Extract dependencies from the initializer expression
                 self.extract_expression_dependencies(
-                    value_node, source, context, dependencies, &var_name
+                    value_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -551,13 +574,25 @@ impl SwiftDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Extract guard let/var bindings
         if node.kind() == "guard_statement" {
             if let Some(condition_list_node) = node.child_by_field_name("condition") {
-                self.extract_guard_bindings(condition_list_node, source, context, dependencies, &current_scope);
+                self.extract_guard_bindings(
+                    condition_list_node,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -585,7 +620,13 @@ impl SwiftDependencyExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "optional_binding_condition" {
                 if let Some(value_node) = child.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        scope,
+                    );
                 }
             }
         }
@@ -622,7 +663,13 @@ impl SwiftDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -708,9 +755,14 @@ impl SwiftDependencyExtractor {
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip identifiers in these declaration contexts
-                "function_declaration" | "class_declaration" | "struct_declaration" |
-                "enum_declaration" | "protocol_declaration" | "property_declaration" |
-                "parameter" | "import_declaration" => {
+                "function_declaration"
+                | "class_declaration"
+                | "struct_declaration"
+                | "enum_declaration"
+                | "protocol_declaration"
+                | "property_declaration"
+                | "parameter"
+                | "import_declaration" => {
                     // Check if this identifier is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -762,13 +814,25 @@ impl SwiftDependencyExtractor {
                 }
 
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "while_statement" | "repeat_while_statement" => {
                 // while condition or repeat { } while condition
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -827,7 +891,13 @@ impl SwiftDependencyExtractor {
 
         // Extract switch expression
         if let Some(expr_node) = node.child_by_field_name("expr") {
-            self.extract_condition_variables(expr_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                expr_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         let dependency = self.create_dependency(
@@ -854,7 +924,13 @@ impl SwiftDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -877,7 +953,11 @@ impl SwiftDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,

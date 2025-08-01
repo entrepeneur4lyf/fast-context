@@ -58,6 +58,7 @@ tree-sitter-yaml = "0.7"
 tree-sitter-md = "0.3"
 tree-sitter-jsdoc = "0.23"
 tree-sitter-regex = "0.24"
+tree-sitter-cpp = "0.23.4"
 
 # Fast-context specific dependencies
 notify = "6.1"

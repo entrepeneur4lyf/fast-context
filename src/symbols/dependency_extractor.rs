@@ -33,22 +33,24 @@ pub struct ExtractionContext {
 impl ExtractionContext {
     pub fn new(file_path: String, language: LanguageId, symbols: Vec<Symbol>) -> Self {
         let mut symbol_map = HashMap::new();
-        
+
         // Build symbol lookup map
         for (idx, symbol) in symbols.iter().enumerate() {
-            symbol_map.entry(symbol.name.clone())
+            symbol_map
+                .entry(symbol.name.clone())
                 .or_insert_with(Vec::new)
                 .push(idx);
-            
+
             // Also add qualified name for scoped symbols
             let qualified = symbol.qualified_name();
             if qualified != symbol.name {
-                symbol_map.entry(qualified)
+                symbol_map
+                    .entry(qualified)
                     .or_insert_with(Vec::new)
                     .push(idx);
             }
         }
-        
+
         Self {
             file_path,
             language,
@@ -60,13 +62,11 @@ impl ExtractionContext {
             global_registry: None,
         }
     }
-    
+
     /// Find symbols by name, preferring those in current scope
     pub fn find_symbols(&self, name: &str) -> Vec<&Symbol> {
         if let Some(indices) = self.symbol_map.get(name) {
-            let mut symbols: Vec<&Symbol> = indices.iter()
-                .map(|&idx| &self.symbols[idx])
-                .collect();
+            let mut symbols: Vec<&Symbol> = indices.iter().map(|&idx| &self.symbols[idx]).collect();
 
             // Sort by scope relevance (prefer current scope)
             symbols.sort_by(|a, b| {
@@ -96,20 +96,20 @@ impl ExtractionContext {
         self.global_registry = Some(registry);
         self
     }
-    
+
     /// Calculate how relevant a symbol is to the current scope
     fn scope_relevance(&self, symbol: &Symbol) -> usize {
         let symbol_scope = symbol.qualified_name();
         let current_scope = self.scope_stack.join("::");
-        
+
         if symbol_scope == current_scope {
             return 1000; // Exact match
         }
-        
+
         // Count common scope prefixes
         let symbol_parts: Vec<&str> = symbol_scope.split("::").collect();
         let current_parts: Vec<&str> = current_scope.split("::").collect();
-        
+
         let mut common = 0;
         for (a, b) in symbol_parts.iter().zip(current_parts.iter()) {
             if a == b {
@@ -118,26 +118,26 @@ impl ExtractionContext {
                 break;
             }
         }
-        
+
         common
     }
-    
+
     /// Enter a new scope
     pub fn push_scope(&mut self, scope_name: String) {
         self.scope_stack.push(scope_name);
     }
-    
+
     /// Exit current scope
     pub fn pop_scope(&mut self) {
         self.scope_stack.pop();
     }
-    
+
     /// Enter conditional context
     pub fn enter_conditional(&mut self) {
         self.in_conditional = true;
         self.conditional_depth += 1;
     }
-    
+
     /// Exit conditional context
     pub fn exit_conditional(&mut self) {
         if self.conditional_depth > 0 {
@@ -147,7 +147,7 @@ impl ExtractionContext {
             }
         }
     }
-    
+
     /// Get current scope as qualified name
     pub fn current_scope(&self) -> String {
         self.scope_stack.join("::")
@@ -208,7 +208,8 @@ impl GlobalSymbolRegistry {
     /// Add symbols from a file to the global registry
     pub fn add_file_symbols(&mut self, file_path: String, symbols: Vec<Symbol>) {
         // Store symbols by file
-        self.symbols_by_file.insert(file_path.clone(), symbols.clone());
+        self.symbols_by_file
+            .insert(file_path.clone(), symbols.clone());
 
         // Index symbols globally
         for symbol in symbols {
@@ -240,7 +241,12 @@ impl GlobalSymbolRegistry {
     }
 
     /// Resolve a symbol reference across all files
-    pub fn resolve_symbol(&self, name: &str, context_file: &str, current_scope: &str) -> Vec<&SymbolReference> {
+    pub fn resolve_symbol(
+        &self,
+        name: &str,
+        context_file: &str,
+        current_scope: &str,
+    ) -> Vec<&SymbolReference> {
         let mut candidates = Vec::new();
 
         // 1. Look for exact matches in global registry
@@ -283,7 +289,12 @@ impl GlobalSymbolRegistry {
     }
 
     /// Calculate relevance score for symbol resolution
-    fn calculate_symbol_relevance(&self, symbol_ref: &SymbolReference, context_file: &str, current_scope: &str) -> f32 {
+    fn calculate_symbol_relevance(
+        &self,
+        symbol_ref: &SymbolReference,
+        context_file: &str,
+        current_scope: &str,
+    ) -> f32 {
         let mut score = 0.0;
 
         // Same file gets highest priority
@@ -380,7 +391,8 @@ impl GlobalSymbolRegistry {
         match symbol.language {
             LanguageId::JavaScript | LanguageId::TypeScript => {
                 // In JS/TS, functions and classes at module level are often exported
-                symbol.scope_chain.is_empty() && matches!(symbol.kind, SymbolKind::Function | SymbolKind::Class)
+                symbol.scope_chain.is_empty()
+                    && matches!(symbol.kind, SymbolKind::Function | SymbolKind::Class)
             }
             LanguageId::Python => {
                 // In Python, symbols not starting with _ are typically exported
@@ -440,10 +452,10 @@ pub trait DependencyExtractor {
         source: &str,
         context: &mut ExtractionContext,
     ) -> Vec<Dependency>;
-    
+
     /// Language this extractor handles
     fn language(&self) -> LanguageId;
-    
+
     /// Extract dependencies from a specific node
     fn extract_from_node(
         &self,
@@ -452,22 +464,22 @@ pub trait DependencyExtractor {
         context: &mut ExtractionContext,
         dependencies: &mut Vec<Dependency>,
     );
-    
+
     /// Check if a node represents a function call
     fn is_function_call(&self, node: &Node) -> bool;
-    
+
     /// Check if a node represents a variable reference
     fn is_variable_reference(&self, node: &Node) -> bool;
-    
+
     /// Check if a node represents an import/include statement
     fn is_import_statement(&self, node: &Node) -> bool;
-    
+
     /// Check if a node represents inheritance
     fn is_inheritance(&self, node: &Node) -> bool;
-    
+
     /// Check if a node represents an assignment
     fn is_assignment(&self, node: &Node) -> bool;
-    
+
     /// Extract function call dependencies
     fn extract_function_calls(
         &self,
@@ -476,7 +488,7 @@ pub trait DependencyExtractor {
         context: &mut ExtractionContext,
         dependencies: &mut Vec<Dependency>,
     );
-    
+
     /// Extract variable reference dependencies
     fn extract_variable_references(
         &self,
@@ -485,7 +497,7 @@ pub trait DependencyExtractor {
         context: &mut ExtractionContext,
         dependencies: &mut Vec<Dependency>,
     );
-    
+
     /// Extract import dependencies
     fn extract_imports(
         &self,
@@ -494,7 +506,7 @@ pub trait DependencyExtractor {
         context: &mut ExtractionContext,
         dependencies: &mut Vec<Dependency>,
     );
-    
+
     /// Extract inheritance dependencies
     fn extract_inheritance(
         &self,
@@ -503,7 +515,7 @@ pub trait DependencyExtractor {
         context: &mut ExtractionContext,
         dependencies: &mut Vec<Dependency>,
     );
-    
+
     /// Extract assignment dependencies
     fn extract_assignments(
         &self,
@@ -539,12 +551,12 @@ pub trait DependencyExtractor {
 
     /// Check if a node represents break/continue
     fn is_break_continue(&self, node: &Node) -> bool;
-    
+
     /// Get text content of a node
     fn get_node_text(&self, node: &Node, source: &str) -> String {
         node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
     }
-    
+
     /// Create a dependency with proper context
     fn create_dependency(
         &self,
@@ -555,19 +567,31 @@ pub trait DependencyExtractor {
         context: &ExtractionContext,
     ) -> Dependency {
         let location = Location::from_node(node, &context.file_path);
-        
+
         let mut dependency = if context.in_conditional {
-            Dependency::conditional(from_symbol, to_symbol, dependency_type, location, context.language)
+            Dependency::conditional(
+                from_symbol,
+                to_symbol,
+                dependency_type,
+                location,
+                context.language,
+            )
         } else {
-            Dependency::new(from_symbol, to_symbol, dependency_type, location, context.language)
+            Dependency::new(
+                from_symbol,
+                to_symbol,
+                dependency_type,
+                location,
+                context.language,
+            )
         };
-        
+
         // Add context information
         let node_text = self.get_node_text(node, ""); // Would need source parameter
         if !node_text.trim().is_empty() && node_text.len() < 200 {
             dependency = dependency.with_context(node_text);
         }
-        
+
         dependency
     }
 }
@@ -580,29 +604,38 @@ pub struct DependencyExtractorFactory {
 impl DependencyExtractorFactory {
     pub fn new() -> Self {
         let mut extractors: HashMap<LanguageId, Box<dyn DependencyExtractor>> = HashMap::new();
-        
+
         // Register language-specific extractors
         extractors.insert(LanguageId::Rust, Box::new(RustDependencyExtractor));
         extractors.insert(LanguageId::Python, Box::new(PythonDependencyExtractor));
-        extractors.insert(LanguageId::JavaScript, Box::new(JavaScriptDependencyExtractor));
-        extractors.insert(LanguageId::TypeScript, Box::new(JavaScriptDependencyExtractor)); // Same as JS
+        extractors.insert(
+            LanguageId::JavaScript,
+            Box::new(JavaScriptDependencyExtractor),
+        );
+        extractors.insert(
+            LanguageId::TypeScript,
+            Box::new(JavaScriptDependencyExtractor),
+        ); // Same as JS
         extractors.insert(LanguageId::Java, Box::new(JavaDependencyExtractor));
         extractors.insert(LanguageId::Go, Box::new(GoDependencyExtractor));
         extractors.insert(LanguageId::CSharp, Box::new(CSharpDependencyExtractor));
         extractors.insert(LanguageId::Swift, Box::new(SwiftDependencyExtractor));
         extractors.insert(LanguageId::PHP, Box::new(PhpDependencyExtractor));
         extractors.insert(LanguageId::Ruby, Box::new(RubyDependencyExtractor));
-        extractors.insert(LanguageId::ObjectiveC, Box::new(ObjectiveCDependencyExtractor));
+        extractors.insert(
+            LanguageId::ObjectiveC,
+            Box::new(ObjectiveCDependencyExtractor),
+        );
         extractors.insert(LanguageId::Scala, Box::new(ScalaDependencyExtractor));
         extractors.insert(LanguageId::Zig, Box::new(ZigDependencyExtractor));
         extractors.insert(LanguageId::Dart, Box::new(DartDependencyExtractor));
         extractors.insert(LanguageId::Lua, Box::new(LuaDependencyExtractor));
         extractors.insert(LanguageId::Bash, Box::new(BashDependencyExtractor));
         // Additional extractors will be added as we implement them
-        
+
         Self { extractors }
     }
-    
+
     /// Extract dependencies for a given language
     pub fn extract_dependencies(
         &self,
@@ -641,29 +674,29 @@ impl BaseDependencyExtractor {
     ) {
         // Track scope changes
         let entered_scope = Self::maybe_enter_scope(&node, source, context);
-        
+
         // Track conditional context
         let entered_conditional = Self::maybe_enter_conditional(&node, context);
-        
+
         // Extract dependencies from this node
         extractor.extract_from_node(node, source, context, dependencies);
-        
+
         // Recursively process children
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             Self::traverse_node(extractor, child, source, context, dependencies);
         }
-        
+
         // Clean up context
         if entered_conditional {
             context.exit_conditional();
         }
-        
+
         if entered_scope {
             context.pop_scope();
         }
     }
-    
+
     /// Check if we should enter a new scope for this node
     fn maybe_enter_scope(node: &Node, source: &str, context: &mut ExtractionContext) -> bool {
         match node.kind() {
@@ -686,7 +719,7 @@ impl BaseDependencyExtractor {
             _ => false,
         }
     }
-    
+
     /// Check if we should enter conditional context
     fn maybe_enter_conditional(node: &Node, context: &mut ExtractionContext) -> bool {
         match node.kind() {
@@ -700,14 +733,19 @@ impl BaseDependencyExtractor {
             _ => false,
         }
     }
-    
+
     /// Extract name from a declaration node
     fn extract_name_from_declaration(node: &Node, source: &str) -> Option<String> {
         // Look for name field or identifier child
         if let Some(name_node) = node.child_by_field_name("name") {
-            return Some(name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string());
+            return Some(
+                name_node
+                    .utf8_text(source.as_bytes())
+                    .unwrap_or("")
+                    .to_string(),
+            );
         }
-        
+
         // Fallback: look for first identifier child
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -715,43 +753,43 @@ impl BaseDependencyExtractor {
                 return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
             }
         }
-        
+
         None
     }
 }
 
 // Language-specific extractors
-pub mod rust_extractor;
-pub mod python_extractor;
-pub mod javascript_extractor;
-pub mod java_extractor;
-pub mod go_extractor;
-pub mod csharp_extractor;
-pub mod swift_extractor;
-pub mod php_extractor;
-pub mod ruby_extractor;
-pub mod objc_extractor;
-pub mod scala_extractor;
-pub mod zig_extractor;
-pub mod dart_extractor;
-pub mod lua_extractor;
 pub mod bash_extractor;
+pub mod csharp_extractor;
+pub mod dart_extractor;
+pub mod go_extractor;
+pub mod java_extractor;
+pub mod javascript_extractor;
+pub mod lua_extractor;
+pub mod objc_extractor;
+pub mod php_extractor;
+pub mod python_extractor;
+pub mod ruby_extractor;
+pub mod rust_extractor;
+pub mod scala_extractor;
+pub mod swift_extractor;
+pub mod zig_extractor;
 
-pub use rust_extractor::RustDependencyExtractor;
-pub use python_extractor::PythonDependencyExtractor;
-pub use javascript_extractor::JavaScriptDependencyExtractor;
-pub use java_extractor::JavaDependencyExtractor;
-pub use go_extractor::GoDependencyExtractor;
-pub use csharp_extractor::CSharpDependencyExtractor;
-pub use swift_extractor::SwiftDependencyExtractor;
-pub use php_extractor::PhpDependencyExtractor;
-pub use ruby_extractor::RubyDependencyExtractor;
-pub use objc_extractor::ObjectiveCDependencyExtractor;
-pub use scala_extractor::ScalaDependencyExtractor;
-pub use zig_extractor::ZigDependencyExtractor;
-pub use dart_extractor::DartDependencyExtractor;
-pub use lua_extractor::LuaDependencyExtractor;
 pub use bash_extractor::BashDependencyExtractor;
+pub use csharp_extractor::CSharpDependencyExtractor;
+pub use dart_extractor::DartDependencyExtractor;
+pub use go_extractor::GoDependencyExtractor;
+pub use java_extractor::JavaDependencyExtractor;
+pub use javascript_extractor::JavaScriptDependencyExtractor;
+pub use lua_extractor::LuaDependencyExtractor;
+pub use objc_extractor::ObjectiveCDependencyExtractor;
+pub use php_extractor::PhpDependencyExtractor;
+pub use python_extractor::PythonDependencyExtractor;
+pub use ruby_extractor::RubyDependencyExtractor;
+pub use rust_extractor::RustDependencyExtractor;
+pub use scala_extractor::ScalaDependencyExtractor;
+pub use swift_extractor::SwiftDependencyExtractor;
+pub use zig_extractor::ZigDependencyExtractor;
 
 // All major language extractors are now implemented
 
@@ -765,25 +803,23 @@ mod tests {
 
     #[test]
     fn test_extraction_context() {
-        let symbols = vec![
-            Symbol {
-                name: "test_func".to_string(),
-                kind: SymbolKind::Function,
-                location: Location {
-                    file_path: "test.rs".to_string(),
-                    start_line: 1,
-                    start_column: 0,
-                    end_line: 1,
-                    end_column: 10,
-                },
-                scope_chain: vec![],
-                language: LanguageId::Rust,
-                documentation: None,
-                modifiers: vec![],
-                signature: None,
-            }
-        ];
-        
+        let symbols = vec![Symbol {
+            name: "test_func".to_string(),
+            kind: SymbolKind::Function,
+            location: Location {
+                file_path: "test.rs".to_string(),
+                start_line: 1,
+                start_column: 0,
+                end_line: 1,
+                end_column: 10,
+            },
+            scope_chain: vec![],
+            language: LanguageId::Rust,
+            documentation: None,
+            modifiers: vec![],
+            signature: None,
+        }];
+
         let context = ExtractionContext::new("test.rs".to_string(), LanguageId::Rust, symbols);
         assert_eq!(context.file_path, "test.rs");
         assert_eq!(context.language, LanguageId::Rust);
@@ -863,24 +899,22 @@ mod tests {
 
     #[test]
     fn test_extraction_context_with_global_registry() {
-        let symbols = vec![
-            Symbol {
-                name: "local_var".to_string(),
-                kind: SymbolKind::Variable,
-                location: Location {
-                    file_path: "test.rs".to_string(),
-                    start_line: 1,
-                    start_column: 0,
-                    end_line: 1,
-                    end_column: 10,
-                },
-                scope_chain: vec![],
-                language: LanguageId::Rust,
-                documentation: None,
-                modifiers: vec![],
-                signature: None,
-            }
-        ];
+        let symbols = vec![Symbol {
+            name: "local_var".to_string(),
+            kind: SymbolKind::Variable,
+            location: Location {
+                file_path: "test.rs".to_string(),
+                start_line: 1,
+                start_column: 0,
+                end_line: 1,
+                end_column: 10,
+            },
+            scope_chain: vec![],
+            language: LanguageId::Rust,
+            documentation: None,
+            modifiers: vec![],
+            signature: None,
+        }];
 
         let mut registry = GlobalSymbolRegistry::new();
         registry.add_file_symbols("test.rs".to_string(), symbols.clone());

@@ -1,5 +1,5 @@
 //! Go-specific dependency extraction
-//! 
+//!
 //! Extracts dependency relationships from Go source code, including:
 //! - Function calls and method invocations
 //! - Variable references and assignments
@@ -10,9 +10,9 @@
 //! - Control flow (if/else, loops, switch, select)
 //! - Goroutines and channels
 
+use super::{BaseDependencyExtractor, DependencyExtractor, ExtractionContext};
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyType};
-use super::{DependencyExtractor, ExtractionContext, BaseDependencyExtractor};
 use tree_sitter::Node;
 
 /// Go-specific dependency extractor
@@ -22,7 +22,7 @@ impl DependencyExtractor for GoDependencyExtractor {
     fn language(&self) -> LanguageId {
         LanguageId::Go
     }
-    
+
     fn extract_dependencies(
         &self,
         tree: &tree_sitter::Tree,
@@ -31,11 +31,15 @@ impl DependencyExtractor for GoDependencyExtractor {
     ) -> Vec<Dependency> {
         let mut dependencies = Vec::new();
         BaseDependencyExtractor::traverse_node(
-            self, tree.root_node(), source, context, &mut dependencies
+            self,
+            tree.root_node(),
+            source,
+            context,
+            &mut dependencies,
         );
         dependencies
     }
-    
+
     fn extract_from_node(
         &self,
         node: Node,
@@ -87,28 +91,31 @@ impl DependencyExtractor for GoDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_function_call(&self, node: &Node) -> bool {
         matches!(node.kind(), "call_expression")
     }
-    
+
     fn is_variable_reference(&self, node: &Node) -> bool {
         matches!(node.kind(), "identifier" | "selector_expression")
     }
-    
+
     fn is_import_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "import_declaration" | "import_spec")
     }
-    
+
     fn is_inheritance(&self, node: &Node) -> bool {
         // Go doesn't have explicit inheritance, but has struct embedding
         node.kind() == "type_spec" && self.has_embedded_fields(node)
     }
-    
+
     fn is_assignment(&self, node: &Node) -> bool {
-        matches!(node.kind(), "assignment_expression" | "short_var_declaration" | "var_declaration")
+        matches!(
+            node.kind(),
+            "assignment_expression" | "short_var_declaration" | "var_declaration"
+        )
     }
-    
+
     fn extract_function_calls(
         &self,
         node: Node,
@@ -119,7 +126,7 @@ impl DependencyExtractor for GoDependencyExtractor {
         if let Some(function_node) = node.child_by_field_name("function") {
             let function_name = self.get_node_text(&function_node, source);
             let current_scope = context.current_scope();
-            
+
             if !function_name.trim().is_empty() && !function_name.contains('\n') {
                 // Try to resolve the function in known symbols
                 let resolved_functions = context.find_symbols_global(&function_name);
@@ -128,7 +135,7 @@ impl DependencyExtractor for GoDependencyExtractor {
                 } else {
                     function_name
                 };
-                
+
                 let dependency = self.create_dependency(
                     current_scope,
                     target_function,
@@ -136,9 +143,9 @@ impl DependencyExtractor for GoDependencyExtractor {
                     &node,
                     context,
                 );
-                
+
                 dependencies.push(dependency);
-                
+
                 // Extract arguments for variable references
                 if let Some(args_node) = node.child_by_field_name("arguments") {
                     self.extract_argument_references(args_node, source, context, dependencies);
@@ -146,7 +153,7 @@ impl DependencyExtractor for GoDependencyExtractor {
             }
         }
     }
-    
+
     fn extract_variable_references(
         &self,
         node: Node,
@@ -158,12 +165,12 @@ impl DependencyExtractor for GoDependencyExtractor {
         if self.is_reference_context(&node) {
             let var_name = self.get_node_text(&node, source);
             let current_scope = context.current_scope();
-            
+
             // Skip keywords and built-ins
             if self.is_go_keyword(&var_name) || var_name.trim().is_empty() {
                 return;
             }
-            
+
             // Try to resolve variable in known symbols
             let resolved_vars = context.find_symbols_global(&var_name);
             let target_var = if !resolved_vars.is_empty() {
@@ -171,7 +178,7 @@ impl DependencyExtractor for GoDependencyExtractor {
             } else {
                 var_name
             };
-            
+
             let dependency = self.create_dependency(
                 current_scope,
                 target_var,
@@ -179,11 +186,11 @@ impl DependencyExtractor for GoDependencyExtractor {
                 &node,
                 context,
             );
-            
+
             dependencies.push(dependency);
         }
     }
-    
+
     fn extract_imports(
         &self,
         node: Node,
@@ -192,14 +199,20 @@ impl DependencyExtractor for GoDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        
+
         match node.kind() {
             "import_declaration" => {
                 // import "package" or import ( ... )
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "import_spec" {
-                        self.extract_import_spec(child, source, context, dependencies, &current_scope);
+                        self.extract_import_spec(
+                            child,
+                            source,
+                            context,
+                            dependencies,
+                            &current_scope,
+                        );
                     }
                 }
             }
@@ -209,7 +222,7 @@ impl DependencyExtractor for GoDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_inheritance(
         &self,
         node: Node,
@@ -219,7 +232,7 @@ impl DependencyExtractor for GoDependencyExtractor {
     ) {
         self.extract_type_dependencies(node, source, context, dependencies);
     }
-    
+
     fn extract_assignments(
         &self,
         node: Node,
@@ -240,7 +253,7 @@ impl DependencyExtractor for GoDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn extract_control_flow(
         &self,
         node: Node,
@@ -267,28 +280,31 @@ impl DependencyExtractor for GoDependencyExtractor {
             _ => {}
         }
     }
-    
+
     fn is_conditional_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "if_statement")
     }
-    
+
     fn is_loop_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "for_statement" | "range_clause")
     }
-    
+
     fn is_exception_handling(&self, _node: &Node) -> bool {
         // Go doesn't have exceptions, but has error handling patterns
         false
     }
-    
+
     fn is_switch_statement(&self, node: &Node) -> bool {
-        matches!(node.kind(), "switch_statement" | "type_switch_statement" | "select_statement")
+        matches!(
+            node.kind(),
+            "switch_statement" | "type_switch_statement" | "select_statement"
+        )
     }
-    
+
     fn is_return_statement(&self, node: &Node) -> bool {
         matches!(node.kind(), "return_statement")
     }
-    
+
     fn is_break_continue(&self, node: &Node) -> bool {
         matches!(node.kind(), "break_statement" | "continue_statement")
     }
@@ -348,7 +364,8 @@ impl GoDependencyExtractor {
     ) {
         // import "package/path" or import alias "package/path"
         if let Some(path_node) = node.child_by_field_name("path") {
-            let import_path = self.get_node_text(&path_node, source)
+            let import_path = self
+                .get_node_text(&path_node, source)
                 .trim_matches('"')
                 .to_string();
 
@@ -394,10 +411,22 @@ impl GoDependencyExtractor {
             if let Some(type_node) = node.child_by_field_name("type") {
                 match type_node.kind() {
                     "struct_type" => {
-                        self.extract_struct_embedding(type_node, source, context, dependencies, &type_name);
+                        self.extract_struct_embedding(
+                            type_node,
+                            source,
+                            context,
+                            dependencies,
+                            &type_name,
+                        );
                     }
                     "interface_type" => {
-                        self.extract_interface_embedding(type_node, source, context, dependencies, &type_name);
+                        self.extract_interface_embedding(
+                            type_node,
+                            source,
+                            context,
+                            dependencies,
+                            &type_name,
+                        );
                     }
                     _ => {
                         // Type alias
@@ -581,7 +610,13 @@ impl GoDependencyExtractor {
                 }
 
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_expression_dependencies(value_node, source, context, dependencies, &current_scope);
+                    self.extract_expression_dependencies(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "receive_expression" => {
@@ -613,7 +648,9 @@ impl GoDependencyExtractor {
                     if child.kind() == "field_declaration_list" {
                         let mut field_cursor = child.walk();
                         for field in child.children(&mut field_cursor) {
-                            if field.kind() == "field_declaration" && field.child_by_field_name("name").is_none() {
+                            if field.kind() == "field_declaration"
+                                && field.child_by_field_name("name").is_none()
+                            {
                                 return true; // Found embedded field
                             }
                         }
@@ -626,7 +663,8 @@ impl GoDependencyExtractor {
 
     /// Check if a string is a Go keyword
     fn is_go_keyword(&self, name: &str) -> bool {
-        matches!(name,
+        matches!(
+            name,
             "break" | "case" | "chan" | "const" | "continue" | "default" | "defer" |
             "else" | "fallthrough" | "for" | "func" | "go" | "goto" | "if" |
             "import" | "interface" | "map" | "package" | "range" | "return" |
@@ -655,7 +693,11 @@ impl GoDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_name
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_name,
                 );
             }
         }
@@ -675,7 +717,11 @@ impl GoDependencyExtractor {
 
                 // Extract dependencies from the right-hand side
                 self.extract_expression_dependencies(
-                    right_node, source, context, dependencies, &var_names
+                    right_node,
+                    source,
+                    context,
+                    dependencies,
+                    &var_names,
                 );
             }
         }
@@ -698,7 +744,11 @@ impl GoDependencyExtractor {
 
                         // Extract dependencies from the value expression
                         self.extract_expression_dependencies(
-                            value_node, source, context, dependencies, &var_name
+                            value_node,
+                            source,
+                            context,
+                            dependencies,
+                            &var_name,
                         );
                     }
                 }
@@ -718,12 +768,24 @@ impl GoDependencyExtractor {
 
         // Extract condition dependencies
         if let Some(condition_node) = node.child_by_field_name("condition") {
-            self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                condition_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Extract initialization statement (if x := value; condition)
         if let Some(init_node) = node.child_by_field_name("initializer") {
-            self.extract_condition_variables(init_node, source, context, dependencies, &current_scope);
+            self.extract_condition_variables(
+                init_node,
+                source,
+                context,
+                dependencies,
+                &current_scope,
+            );
         }
 
         // Mark as conditional execution
@@ -768,7 +830,13 @@ impl GoDependencyExtractor {
                 // Recursively extract from child expressions
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    self.extract_expression_dependencies(child, source, context, dependencies, assigner);
+                    self.extract_expression_dependencies(
+                        child,
+                        source,
+                        context,
+                        dependencies,
+                        assigner,
+                    );
                 }
             }
         }
@@ -854,9 +922,14 @@ impl GoDependencyExtractor {
         while let Some(parent) = current.parent() {
             match parent.kind() {
                 // Skip identifiers in these declaration contexts
-                "function_declaration" | "method_declaration" | "type_declaration" |
-                "var_declaration" | "short_var_declaration" | "parameter_declaration" |
-                "import_spec" | "field_declaration" => {
+                "function_declaration"
+                | "method_declaration"
+                | "type_declaration"
+                | "var_declaration"
+                | "short_var_declaration"
+                | "parameter_declaration"
+                | "import_spec"
+                | "field_declaration" => {
                     // Check if this identifier is the name being declared
                     if let Some(name_field) = parent.child_by_field_name("name") {
                         if name_field.id() == node.id() {
@@ -894,13 +967,31 @@ impl GoDependencyExtractor {
             "for_statement" => {
                 // for init; condition; post
                 if let Some(condition_node) = node.child_by_field_name("condition") {
-                    self.extract_condition_variables(condition_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        condition_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(init_node) = node.child_by_field_name("initializer") {
-                    self.extract_condition_variables(init_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        init_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
                 if let Some(update_node) = node.child_by_field_name("update") {
-                    self.extract_condition_variables(update_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        update_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "range_clause" => {
@@ -920,7 +1011,13 @@ impl GoDependencyExtractor {
                 }
 
                 if let Some(right_node) = node.child_by_field_name("right") {
-                    self.extract_condition_variables(right_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        right_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             _ => {}
@@ -941,13 +1038,25 @@ impl GoDependencyExtractor {
             "switch_statement" => {
                 // switch expr { ... }
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "type_switch_statement" => {
                 // switch x := expr.(type) { ... }
                 if let Some(value_node) = node.child_by_field_name("value") {
-                    self.extract_condition_variables(value_node, source, context, dependencies, &current_scope);
+                    self.extract_condition_variables(
+                        value_node,
+                        source,
+                        context,
+                        dependencies,
+                        &current_scope,
+                    );
                 }
             }
             "select_statement" => {
@@ -979,7 +1088,13 @@ impl GoDependencyExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() != "return" {
-                self.extract_expression_dependencies(child, source, context, dependencies, &current_scope);
+                self.extract_expression_dependencies(
+                    child,
+                    source,
+                    context,
+                    dependencies,
+                    &current_scope,
+                );
             }
         }
 
@@ -1002,7 +1117,11 @@ impl GoDependencyExtractor {
         dependencies: &mut Vec<Dependency>,
     ) {
         let current_scope = context.current_scope();
-        let flow_type = if node.kind() == "break_statement" { "break" } else { "continue" };
+        let flow_type = if node.kind() == "break_statement" {
+            "break"
+        } else {
+            "continue"
+        };
 
         let dependency = self.create_dependency(
             current_scope,
