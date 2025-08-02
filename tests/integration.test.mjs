@@ -225,12 +225,13 @@ test('FastContextAnalyzer handles invalid project root', t => {
     enableWatching: false
   };
 
-  // Should not throw on construction
-  const analyzer = new FastContextAnalyzer(config);
-  t.truthy(analyzer);
-  
-  // Analysis should handle the invalid path gracefully
-  // (Implementation may vary - this tests API stability)
+  // Should throw on construction with invalid path
+  t.throws(() => {
+    new FastContextAnalyzer(config);
+  }, {
+    code: 'GenericFailure',
+    message: 'Project root does not exist: /non/existent/path'
+  });
 });
 
 test('FastContextAnalyzer with minimal configuration', async t => {

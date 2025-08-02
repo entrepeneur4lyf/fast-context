@@ -69,9 +69,9 @@ test('detectLanguage handles edge cases', t => {
   t.is(detectLanguage('bundle.min.js'), 'JavaScript');
   t.is(detectLanguage('types.d.ts'), 'TypeScript');
   
-  // No extension or unknown files
-  t.is(detectLanguage('Dockerfile'), null);
-  t.is(detectLanguage('Makefile'), null);
+  // Special files
+  t.is(detectLanguage('Dockerfile'), 'Dockerfile');
+  t.is(detectLanguage('Makefile'), 'Makefile');
   
   // Empty or invalid
   t.is(detectLanguage(''), null);

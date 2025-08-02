@@ -67,5 +67,14 @@
   "homepage": "https://github.com/entrepensur4lyf/fast-context#readme",
   "bugs": {
     "url": "https://github.com/entrepensur4lyf/fast-context/issues"
+  },
+  "optionalDependencies": {
+    "fast-context-win32-x64-msvc": "0.1.0",
+    "fast-context-darwin-x64": "0.1.0",
+    "fast-context-linux-x64-gnu": "0.1.0",
+    "fast-context-linux-x64-musl": "0.1.0",
+    "fast-context-linux-arm64-musl": "0.1.0",
+    "fast-context-darwin-arm64": "0.1.0",
+    "fast-context-win32-arm64-msvc": "0.1.0"
   }
 }

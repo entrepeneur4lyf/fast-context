@@ -1309,19 +1309,41 @@ impl CodeQueryEngine {
 
     /// Check if a decorator implements the same interface as what it wraps
     fn implements_wrapped_interface(&self, node_idx: NodeIndex) -> bool {
-        // This is a simplified check - in a full implementation, we'd analyze
-        // the composition relationship and interface implementation
-        for edge in self
-            .analysis
-            .graph
-            .edges_directed(node_idx, petgraph::Outgoing)
-        {
-            if edge.weight().kind == crate::analysis::RelationshipKind::Implements
-                || edge.weight().kind == crate::analysis::RelationshipKind::DependsOn
-            {
+        // Find the wrapped component (composition relationship)
+        let mut wrapped_components = Vec::new();
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if edge.weight().kind == crate::analysis::RelationshipKind::Composition {
+                wrapped_components.push(edge.target());
+            }
+        }
+
+        if wrapped_components.is_empty() {
+            return false; // No wrapped component found
+        }
+
+        // Get interfaces implemented by the decorator
+        let mut decorator_interfaces = std::collections::HashSet::new();
+        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+            if edge.weight().kind == crate::analysis::RelationshipKind::Implements {
+                decorator_interfaces.insert(edge.target());
+            }
+        }
+
+        // Check if any wrapped component implements the same interfaces
+        for wrapped_idx in wrapped_components {
+            let mut wrapped_interfaces = std::collections::HashSet::new();
+            for edge in self.analysis.graph.edges_directed(wrapped_idx, petgraph::Outgoing) {
+                if edge.weight().kind == crate::analysis::RelationshipKind::Implements {
+                    wrapped_interfaces.insert(edge.target());
+                }
+            }
+
+            // Check for interface overlap
+            if !decorator_interfaces.is_disjoint(&wrapped_interfaces) {
                 return true;
             }
         }
+
         false
     }
 
@@ -1474,5 +1496,126 @@ mod tests {
 
         assert_eq!(result.symbols.len(), 1);
         assert_eq!(result.symbols[0].symbol.name, "test_function");
+    }
+
+    #[test]
+    fn test_decorator_interface_checking() {
+        let mut graph = Graph::new();
+
+        // Create nodes for decorator, wrapped component, and interface
+        let decorator_idx = graph.add_node(crate::analysis::CodeNode {
+            symbol: Symbol {
+                name: "LoggingDecorator".to_string(),
+                kind: SymbolKind::Class,
+                location: Location {
+                    file_path: "/test/decorator.rs".to_string(),
+                    start_line: 1,
+                    start_column: 0,
+                    end_line: 10,
+                    end_column: 1,
+                },
+                signature: Some("class LoggingDecorator".to_string()),
+                scope_chain: vec![],
+                modifiers: vec![],
+                documentation: None,
+                language: LanguageId::Rust,
+            },
+            file_path: "/test/decorator.rs".to_string(),
+            metrics: CodeMetrics::default(),
+        });
+
+        let wrapped_idx = graph.add_node(crate::analysis::CodeNode {
+            symbol: Symbol {
+                name: "DatabaseService".to_string(),
+                kind: SymbolKind::Class,
+                location: Location {
+                    file_path: "/test/service.rs".to_string(),
+                    start_line: 1,
+                    start_column: 0,
+                    end_line: 10,
+                    end_column: 1,
+                },
+                signature: Some("class DatabaseService".to_string()),
+                scope_chain: vec![],
+                modifiers: vec![],
+                documentation: None,
+                language: LanguageId::Rust,
+            },
+            file_path: "/test/service.rs".to_string(),
+            metrics: CodeMetrics::default(),
+        });
+
+        let interface_idx = graph.add_node(crate::analysis::CodeNode {
+            symbol: Symbol {
+                name: "DataService".to_string(),
+                kind: SymbolKind::Interface,
+                location: Location {
+                    file_path: "/test/interface.rs".to_string(),
+                    start_line: 1,
+                    start_column: 0,
+                    end_line: 5,
+                    end_column: 1,
+                },
+                signature: Some("interface DataService".to_string()),
+                scope_chain: vec![],
+                modifiers: vec![],
+                documentation: None,
+                language: LanguageId::Rust,
+            },
+            file_path: "/test/interface.rs".to_string(),
+            metrics: CodeMetrics::default(),
+        });
+
+        // Add composition relationship (decorator wraps component)
+        graph.add_edge(
+            decorator_idx,
+            wrapped_idx,
+            crate::analysis::CodeRelationship {
+                kind: crate::analysis::RelationshipKind::Composition,
+                source_location: "test".to_string(),
+                confidence: 1.0,
+                metadata: std::collections::HashMap::new(),
+            },
+        );
+
+        // Add implements relationships (both implement same interface)
+        graph.add_edge(
+            decorator_idx,
+            interface_idx,
+            crate::analysis::CodeRelationship {
+                kind: crate::analysis::RelationshipKind::Implements,
+                source_location: "test".to_string(),
+                confidence: 1.0,
+                metadata: std::collections::HashMap::new(),
+            },
+        );
+
+        graph.add_edge(
+            wrapped_idx,
+            interface_idx,
+            crate::analysis::CodeRelationship {
+                kind: crate::analysis::RelationshipKind::Implements,
+                source_location: "test".to_string(),
+                confidence: 1.0,
+                metadata: std::collections::HashMap::new(),
+            },
+        );
+
+        let analysis = AnalysisResult {
+            graph,
+            file_count: 3,
+            symbol_count: 3,
+            relationship_count: 3,
+            languages: vec![LanguageId::Rust],
+        };
+
+        let engine = CodeQueryEngine::new(analysis);
+
+        // Test that the decorator implements the same interface as what it wraps
+        assert!(engine.implements_wrapped_interface(decorator_idx));
+
+        // Test that a non-decorator doesn't satisfy this condition
+        assert!(!engine.implements_wrapped_interface(wrapped_idx));
+        assert!(!engine.implements_wrapped_interface(interface_idx));
     }
 }

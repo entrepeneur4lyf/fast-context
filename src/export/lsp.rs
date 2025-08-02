@@ -609,7 +609,17 @@ mod tests {
                 end_line: 10,
                 end_column: 1,
             },
-            scope_chain: vec![],
+            scope_chain: vec![crate::symbols::Scope {
+                name: "main".to_string(),
+                kind: crate::symbols::SymbolKind::Function,
+                location: crate::symbols::Location {
+                    file_path: "/test/project/src/main.rs".to_string(),
+                    start_line: 1,
+                    start_column: 0,
+                    end_line: 15,
+                    end_column: 1,
+                },
+            }],
             language: LanguageId::Rust,
             documentation: Some("Test function documentation".to_string()),
             modifiers: vec!["pub".to_string()],

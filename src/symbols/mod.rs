@@ -13,6 +13,9 @@ pub mod extractors;
 // Dependency extractor module
 pub mod dependency_extractor;
 
+// Documentation analysis module
+pub mod documentation;
+
 /// Location information for a symbol
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {

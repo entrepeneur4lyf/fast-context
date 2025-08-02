@@ -16,9 +16,6 @@ import type {
     AnalysisResultJs,
     SymbolInfoJs,
     FileChangeBatchJs,
-    QueryResultJs,
-    StreamingOptionsJs,
-    QueryChunkJs,
     ExportOptionsJs
 } from '../index.js';
 
@@ -147,28 +144,6 @@ function setupFileWatching(analyzer: FastContextAnalyzer): void {
     });
 }
 
-// Example 5: Type-Safe Streaming Query (with proper callback typing)
-function performStreamingQuery(analyzer: FastContextAnalyzer): void {
-    const streamingOptions: StreamingOptionsJs = {
-        enabled: true,
-        chunkSize: 1000,
-        includeProgress: true,
-        chunkTimeoutMs: 5000
-    };
-    
-    // Note: This method doesn't exist in current implementation 
-    // but shows how it would work with TypeScript types
-    // analyzer.findSymbolsStreaming('.*', streamingOptions, (chunk: QueryChunkJs) => {
-    //     console.log(`📦 Chunk ${chunk.chunkIndex + 1}/${chunk.totalChunks}:`);
-    //     console.log(`  Symbols: ${chunk.symbols.length}`);
-    //     console.log(`  Progress: ${chunk.progress.toFixed(1)}%`);
-    //     console.log(`  Processing Time: ${chunk.processingTimeMs}ms`);
-    //     
-    //     if (chunk.isLast) {
-    //         console.log('✅ Streaming query completed');
-    //     }
-    // });
-}
 
 // Example 6: Export Configuration with Type Safety
 function configureExport(): ExportOptionsJs {

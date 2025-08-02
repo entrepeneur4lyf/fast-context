@@ -32,6 +32,8 @@ pub enum RelationshipKind {
     DependsOn,
     /// Symbol overrides another symbol
     Overrides,
+    /// Symbol has a composition relationship with another symbol (contains/wraps)
+    Composition,
 }
 
 /// Edge data for code relationships

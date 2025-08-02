@@ -374,7 +374,7 @@ async function runJavaScriptDemo() {
         demonstrateLanguageDetection();
 
         // 3. Configuration examples
-        const { basicConfig, advancedConfig } = demonstrateConfigurations();
+        const { advancedConfig } = demonstrateConfigurations();
 
         // 4. Create analyzer
         const analyzer = createAndTestAnalyzer(advancedConfig);
