@@ -87,7 +87,7 @@ impl DocumentationAnalyzer {
         return_patterns.insert("jsdoc".to_string(), 
             Regex::new(r"@returns?\s+\{([^}]+)\}\s+(.+)").unwrap());
         example_patterns.insert("jsdoc".to_string(), 
-            Regex::new(r"@example\s*\n((?:(?!\s*@).+\n?)*)").unwrap());
+            Regex::new(r"@example\s*\n((?:[^@]+\n?)*)").unwrap());
 
         // Javadoc patterns
         param_patterns.insert("javadoc".to_string(), 
@@ -235,7 +235,7 @@ impl DocumentationAnalyzer {
                         name: captures.get(2).map_or("".to_string(), |m| m.as_str().to_string()),
                         type_info: captures.get(1).map(|m| m.as_str().to_string()),
                         description: captures.get(3).map_or("".to_string(), |m| m.as_str().to_string()),
-                        is_optional: captures.get(1).map_or(false, |m| m.as_str().contains("?")),
+                        is_optional: captures.get(1).is_some_and(|m| m.as_str().contains("?")),
                         default_value: None,
                     },
                     "javadoc" | "rust" => ParameterDoc {
@@ -249,7 +249,7 @@ impl DocumentationAnalyzer {
                         name: captures.get(1).map_or("".to_string(), |m| m.as_str().to_string()),
                         type_info: captures.get(2).map(|m| m.as_str().to_string()),
                         description: captures.get(3).map_or("".to_string(), |m| m.as_str().to_string()),
-                        is_optional: captures.get(2).map_or(false, |m| m.as_str().contains("optional")),
+                        is_optional: captures.get(2).is_some_and(|m| m.as_str().contains("optional")),
                         default_value: None,
                     },
                     "csharp" => ParameterDoc {

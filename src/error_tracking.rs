@@ -246,7 +246,7 @@ impl ErrorTracker {
             inner.errors
                 .iter()
                 .rev()
-                .filter(|error| category.as_ref().map_or(true, |cat| &error.category == cat))
+                .filter(|error| category.as_ref().is_none_or(|cat| &error.category == cat))
                 .take(limit)
                 .cloned()
                 .collect()

@@ -100,11 +100,13 @@ pub struct AnalysisSession {
 /// Analysis engine - codebase analysis and intelligence
 pub struct AnalysisEngine {
     config: AnalysisConfig,
+    #[allow(dead_code)]
     runtime: Runtime,
     current_session: Option<AnalysisSession>,
     analysis_result: Option<AnalysisResult>,
     query_engine: Option<CodeQueryEngine>,
     cache_manager: Option<Arc<AdaptiveCacheManager<String>>>,
+    #[allow(dead_code)]
     watcher: Option<CodebaseWatcher>,
     metrics: Arc<Metrics>,
 }
@@ -113,7 +115,7 @@ impl AnalysisEngine {
     /// Create a new analysis engine
     pub fn new(config: AnalysisConfig, metrics: Arc<Metrics>) -> Result<Self, AnalysisError> {
         let runtime = Runtime::new().map_err(|e| AnalysisError::Project {
-            message: format!("Failed to create async runtime: {}", e),
+            message: format!("Failed to create async runtime: {e}"),
         })?;
         
         Ok(Self {
@@ -276,6 +278,15 @@ impl AnalysisEngine {
             relationship_count: 0,
             languages: vec![],
         })
+    }
+
+    /// Get the count of active analysis sessions
+    pub fn get_session_count(&self) -> u32 {
+        if self.current_session.is_some() {
+            1
+        } else {
+            0
+        }
     }
 }
 

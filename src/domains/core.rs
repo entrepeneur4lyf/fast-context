@@ -28,7 +28,7 @@ pub enum CoreError {
 pub type CoreResult<T> = Result<T, CoreError>;
 
 /// Configuration management for all domains
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CoreConfig {
     /// Global feature flags
     pub features: FeatureFlags,
@@ -124,16 +124,7 @@ impl Default for LoggingConfig {
     }
 }
 
-impl Default for CoreConfig {
-    fn default() -> Self {
-        Self {
-            features: FeatureFlags::default(),
-            performance: PerformanceConfig::default(),
-            logging: LoggingConfig::default(),
-            plugins: HashMap::new(),
-        }
-    }
-}
+
 
 /// Metrics collection for performance monitoring
 #[derive(Debug, Clone)]
@@ -220,7 +211,7 @@ impl Validator {
         if !std::path::Path::new(path).exists() {
             return Err(CoreError::Validation {
                 field: "path".to_string(),
-                message: format!("Path does not exist: {}", path),
+                message: format!("Path does not exist: {path}"),
             });
         }
         

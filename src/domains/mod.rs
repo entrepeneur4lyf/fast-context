@@ -117,8 +117,26 @@ impl DomainRegistry {
     pub fn broadcast_event(&mut self, event: DomainEvent) {
         for handler in &mut self.event_handlers {
             if let Err(e) = handler.handle_event(event.clone()) {
-                eprintln!("Event handler error: {}", e);
+                eprintln!("Event handler error: {e}");
             }
+        }
+    }
+
+    /// Get count of active graphs
+    pub fn get_active_graph_count(&self) -> u32 {
+        if let Some(graph_engine) = &self.graph_engine {
+            graph_engine.get_graph_count()
+        } else {
+            0
+        }
+    }
+
+    /// Get count of active analysis sessions
+    pub fn get_active_analysis_count(&self) -> u32 {
+        if let Some(analysis_engine) = &self.analysis_engine {
+            analysis_engine.get_session_count()
+        } else {
+            0
         }
     }
 }

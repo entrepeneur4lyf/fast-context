@@ -43,44 +43,59 @@ pub fn get_supported_languages() -> Vec<String> {
 
 /// Detect the programming language of a file based on its extension
 #[napi]
-pub fn detect_language(file_path: String) -> String {
+pub fn detect_language(file_path: String) -> Option<String> {
     let path = std::path::Path::new(&file_path);
+
+    // Handle special files without extensions
+    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
+        match file_name {
+            "Dockerfile" => return Some("Dockerfile".to_string()),
+            "Makefile" => return Some("Makefile".to_string()),
+            _ => {}
+        }
+    }
+
     let extension = path.extension()
         .and_then(|ext| ext.to_str())
-        .unwrap_or("")
-        .to_lowercase();
+        .map(|s| s.to_lowercase())?;
 
-    match extension.as_str() {
-        "rs" => "rust".to_string(),
-        "js" | "mjs" | "cjs" => "javascript".to_string(),
-        "ts" | "tsx" => "typescript".to_string(),
-        "py" | "pyw" | "pyi" => "python".to_string(),
-        "java" => "java".to_string(),
-        "go" => "go".to_string(),
-        "cpp" | "cc" | "cxx" | "c++" => "cpp".to_string(),
-        "c" | "h" => "c".to_string(),
-        "cs" => "csharp".to_string(),
-        "php" => "php".to_string(),
-        "rb" => "ruby".to_string(),
-        "swift" => "swift".to_string(),
-        "kt" | "kts" => "kotlin".to_string(),
-        "scala" | "sc" => "scala".to_string(),
-        "lua" => "lua".to_string(),
-        "sh" | "bash" | "zsh" | "fish" => "bash".to_string(),
-        "css" => "css".to_string(),
-        "html" | "htm" => "html".to_string(),
-        "xml" => "xml".to_string(),
-        "json" => "json".to_string(),
-        "yaml" | "yml" => "yaml".to_string(),
-        "toml" => "toml".to_string(),
-        "md" | "markdown" => "markdown".to_string(),
-        _ => "unknown".to_string(),
-    }
+    let language = match extension.as_str() {
+        "rs" => "Rust",
+        "js" | "mjs" | "cjs" => "JavaScript",
+        "ts" | "tsx" => "TypeScript",
+        "py" | "pyw" | "pyi" => "Python",
+        "java" => "Java",
+        "go" => "Go",
+        "cpp" | "cc" | "cxx" | "c++" => "C++",
+        "c" | "h" => "C",
+        "cs" => "CSharp",
+        "php" => "PHP",
+        "rb" => "Ruby",
+        "swift" => "Swift",
+        "kt" | "kts" => "Kotlin",
+        "scala" | "sc" => "Scala",
+        "lua" => "Lua",
+        "sh" | "bash" | "zsh" | "fish" => "Bash",
+        "css" => "CSS",
+        "html" | "htm" => "HTML",
+        "xml" => "XML",
+        "json" => "JSON",
+        "yaml" | "yml" => "YAML",
+        "toml" => "TOML",
+        "md" | "markdown" => "Markdown",
+        _ => return None,
+    };
+
+    Some(language.to_string())
 }
 
 /// Check if the analyzer configuration is valid
 #[napi]
-pub fn check_configuration(config: AnalyzerConfig) -> napi::Result<String> {
+pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<String> {
+    let config = match config {
+        Some(c) => c,
+        None => return Ok("Configuration check: No configuration provided. Using defaults.".to_string()),
+    };
     // Validate project root
     if config.project_root.trim().is_empty() {
         return Err(napi::Error::from_reason("Project root cannot be empty"));
@@ -100,8 +115,7 @@ pub fn check_configuration(config: AnalyzerConfig) -> napi::Result<String> {
         for lang in languages {
             if !supported.contains(lang) {
                 return Err(napi::Error::from_reason(format!(
-                    "Unsupported language: {}",
-                    lang
+                    "Unsupported language: {lang}"
                 )));
             }
         }
@@ -109,7 +123,7 @@ pub fn check_configuration(config: AnalyzerConfig) -> napi::Result<String> {
 
     // Validate cache policy if specified
     if let Some(cache_policy) = &config.cache_policy {
-        let valid_policies = vec!["auto", "minimal", "balanced", "adaptive", "persistent"];
+        let valid_policies = ["auto", "minimal", "balanced", "adaptive", "persistent"];
         if !valid_policies.contains(&cache_policy.as_str()) {
             return Err(napi::Error::from_reason(format!(
                 "Invalid cache policy: {}. Valid options: {}",
@@ -159,17 +173,17 @@ pub fn validate_file_path(path: &str) -> Result<(), String> {
     let path_obj = std::path::Path::new(path);
     
     if !path_obj.exists() {
-        return Err(format!("File does not exist: {}", path));
+        return Err(format!("File does not exist: {path}"));
     }
 
     if !path_obj.is_file() {
-        return Err(format!("Path is not a file: {}", path));
+        return Err(format!("Path is not a file: {path}"));
     }
 
     // Check file size (limit to 10MB for performance)
     if let Ok(metadata) = path_obj.metadata() {
         if metadata.len() > 10 * 1024 * 1024 {
-            return Err(format!("File too large (>10MB): {}", path));
+            return Err(format!("File too large (>10MB): {path}"));
         }
     }
 
@@ -185,11 +199,11 @@ pub fn validate_directory_path(path: &str) -> Result<(), String> {
     let path_obj = std::path::Path::new(path);
     
     if !path_obj.exists() {
-        return Err(format!("Directory does not exist: {}", path));
+        return Err(format!("Directory does not exist: {path}"));
     }
 
     if !path_obj.is_dir() {
-        return Err(format!("Path is not a directory: {}", path));
+        return Err(format!("Path is not a directory: {path}"));
     }
 
     Ok(())

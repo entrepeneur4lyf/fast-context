@@ -310,22 +310,13 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { RustworkxGraph, RustworkxDiGraph, completeGraph, pathGraph, cycleGraph, starGraph, gridGraph, completeDirectedGraph, pathDirectedGraph, cycleDirectedGraph, emptyGraph, emptyDirectedGraph, FastContextAnalyzer, getSupportedLanguages, detectLanguage, checkConfiguration, getVersion } = nativeBinding
+const { FastContextAnalyzer, RustworkxGraph, RustworkxDiGraph, getVersion, getSupportedLanguages, detectLanguage, checkConfiguration, getSystemInfo } = nativeBinding
 
+module.exports.FastContextAnalyzer = FastContextAnalyzer
 module.exports.RustworkxGraph = RustworkxGraph
 module.exports.RustworkxDiGraph = RustworkxDiGraph
-module.exports.completeGraph = completeGraph
-module.exports.pathGraph = pathGraph
-module.exports.cycleGraph = cycleGraph
-module.exports.starGraph = starGraph
-module.exports.gridGraph = gridGraph
-module.exports.completeDirectedGraph = completeDirectedGraph
-module.exports.pathDirectedGraph = pathDirectedGraph
-module.exports.cycleDirectedGraph = cycleDirectedGraph
-module.exports.emptyGraph = emptyGraph
-module.exports.emptyDirectedGraph = emptyDirectedGraph
-module.exports.FastContextAnalyzer = FastContextAnalyzer
+module.exports.getVersion = getVersion
 module.exports.getSupportedLanguages = getSupportedLanguages
 module.exports.detectLanguage = detectLanguage
 module.exports.checkConfiguration = checkConfiguration
-module.exports.getVersion = getVersion
+module.exports.getSystemInfo = getSystemInfo

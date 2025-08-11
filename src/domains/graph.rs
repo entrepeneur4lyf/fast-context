@@ -252,6 +252,11 @@ impl GraphEngine {
         
         Ok(())
     }
+
+    /// Get the count of managed graphs
+    pub fn get_graph_count(&self) -> u32 {
+        self.graphs.len() as u32
+    }
 }
 
 impl Domain for GraphEngine {

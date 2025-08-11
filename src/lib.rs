@@ -47,6 +47,7 @@
 pub mod types;
 
 // 🏗️ NEW MODULAR ARCHITECTURE - Proper separation of concerns
+#[cfg(feature = "nodejs")]
 pub mod analyzer;    // FastContextAnalyzer implementation
 pub mod graph;       // Graph algorithms and data structures
 pub mod utils;       // Utility functions
@@ -62,7 +63,12 @@ pub mod query;       // Query interface for AI assistants
 pub mod symbols;     // Symbol extraction and management
 pub mod watcher;     // File system monitoring
 
+// 🐍 PYTHON BINDINGS - Optional Python integration
+#[cfg(feature = "python")]
+pub mod python_bindings;
+
 // 🎯 RE-EXPORTS - Clean public API
+#[cfg(feature = "nodejs")]
 pub use analyzer::{FastContextAnalyzer, AnalyzerConfig, AnalysisResultJs, QueryResultJs};
 pub use graph::{RustworkxGraph, RustworkxDiGraph};
 pub use utils::{get_version, get_supported_languages, detect_language, check_configuration};

@@ -190,20 +190,447 @@ impl FastContext {
     pub async fn query(&self, query: String) -> napi::Result<String> {
         self.ensure_initialized()?;
         self.ensure_analysis_enabled()?;
-        
-        // Simplified query implementation
-        Ok(format!("Query result for: {}", query))
+
+        // Real query implementation
+        let query_lower = query.to_lowercase();
+
+        if query_lower.contains("find") && query_lower.contains("function") {
+            // Handle "find all functions" type queries
+            let result = self.find_functions_query().await?;
+            Ok(format!("Found functions: {}", result))
+        } else if query_lower.contains("find") && query_lower.contains("class") {
+            // Handle "find all classes" type queries
+            let result = self.find_classes_query().await?;
+            Ok(format!("Found classes: {}", result))
+        } else if query_lower.contains("complexity") {
+            // Handle complexity queries
+            let result = self.find_complex_code_query().await?;
+            Ok(format!("Complex code analysis: {}", result))
+        } else if query_lower.contains("dependency") || query_lower.contains("dependencies") {
+            // Handle dependency queries
+            let result = self.find_dependencies_query().await?;
+            Ok(format!("Dependencies analysis: {}", result))
+        } else if query_lower.contains("file") && query_lower.contains("count") {
+            // Handle file count queries
+            let result = self.get_file_count_query().await?;
+            Ok(format!("File count: {}", result))
+        } else {
+            // Generic search
+            let result = self.generic_search_query(&query).await?;
+            Ok(format!("Search results for '{}': {}", query, result))
+        }
     }
     
-    /// Get system metrics
+    /// Get system metrics with real calculations
     async fn get_system_metrics(&self) -> SystemMetrics {
+        // Calculate real memory usage
+        let memory_usage = self.calculate_memory_usage().await;
+
+        // Get real metrics from the registry
+        let registry = self.registry.read().await;
+        let active_graphs = registry.get_active_graph_count();
+        let analysis_sessions = registry.get_active_analysis_count();
+
         SystemMetrics {
-            memory_usage_mb: 0.0, // Would be calculated from actual usage
-            active_graphs: 0,
-            analysis_sessions: 0,
+            memory_usage_mb: memory_usage,
+            active_graphs,
+            analysis_sessions,
             cache_hit_rate: self.metrics.get_gauge("cache_hit_rate").await.unwrap_or(0.0),
             avg_operation_time_ms: self.metrics.get_average_timing("operation_time").await.unwrap_or(0.0),
         }
+    }
+
+    /// Calculate actual memory usage
+    async fn calculate_memory_usage(&self) -> f64 {
+        // Use system information to get real memory usage
+        use std::process;
+
+        // Get current process memory usage (simplified)
+        // In a real implementation, this would use a proper system info crate
+        let pid = process::id();
+
+        // Read from /proc/self/status on Linux (simplified)
+        if let Ok(status) = std::fs::read_to_string("/proc/self/status") {
+            for line in status.lines() {
+                if line.starts_with("VmRSS:") {
+                    if let Some(kb_str) = line.split_whitespace().nth(1) {
+                        if let Ok(kb) = kb_str.parse::<f64>() {
+                            return kb / 1024.0; // Convert KB to MB
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback estimation
+        0.0
+    }
+
+    /// Find functions query implementation
+    async fn find_functions_query(&self) -> napi::Result<String> {
+        use walkdir::WalkDir;
+        use std::fs;
+
+        let mut functions = Vec::new();
+        let project_root = self.get_project_root().await?;
+
+        for entry in WalkDir::new(&project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(path_str) = entry.path().to_str() {
+                    if let Some(language) = crate::utils::detect_language(path_str.to_string()) {
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            let file_functions = self.extract_functions_from_content(&content, &language);
+                            functions.extend(file_functions);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(format!("{} functions found: {}", functions.len(), functions.join(", ")))
+    }
+
+    /// Find classes query implementation
+    async fn find_classes_query(&self) -> napi::Result<String> {
+        use walkdir::WalkDir;
+        use std::fs;
+
+        let mut classes = Vec::new();
+        let project_root = self.get_project_root().await?;
+
+        for entry in WalkDir::new(&project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(path_str) = entry.path().to_str() {
+                    if let Some(language) = crate::utils::detect_language(path_str.to_string()) {
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            let file_classes = self.extract_classes_from_content(&content, &language);
+                            classes.extend(file_classes);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(format!("{} classes found: {}", classes.len(), classes.join(", ")))
+    }
+
+    /// Find complex code query implementation
+    async fn find_complex_code_query(&self) -> napi::Result<String> {
+        use walkdir::WalkDir;
+        use std::fs;
+
+        let mut complex_items = Vec::new();
+        let project_root = self.get_project_root().await?;
+
+        for entry in WalkDir::new(&project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(path_str) = entry.path().to_str() {
+                    if let Some(_language) = crate::utils::detect_language(path_str.to_string()) {
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            let complexity = self.calculate_file_complexity(&content);
+                            if complexity > 10 {
+                                let file_name = entry.path().file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("unknown");
+                                complex_items.push(format!("{} (complexity: {})", file_name, complexity));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(format!("{} complex files found: {}", complex_items.len(), complex_items.join(", ")))
+    }
+
+    /// Find dependencies query implementation
+    async fn find_dependencies_query(&self) -> napi::Result<String> {
+        use walkdir::WalkDir;
+        use std::fs;
+
+        let mut dependencies = Vec::new();
+        let project_root = self.get_project_root().await?;
+
+        for entry in WalkDir::new(&project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(file_name) = entry.path().file_name().and_then(|n| n.to_str()) {
+                    match file_name {
+                        "package.json" | "Cargo.toml" | "requirements.txt" | "pom.xml" | "build.gradle" => {
+                            if let Ok(content) = fs::read_to_string(entry.path()) {
+                                let file_deps = self.extract_dependencies_from_file(&content, file_name);
+                                dependencies.extend(file_deps);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(format!("{} dependencies found: {}", dependencies.len(), dependencies.join(", ")))
+    }
+
+    /// Get file count query implementation
+    async fn get_file_count_query(&self) -> napi::Result<String> {
+        use walkdir::WalkDir;
+
+        let project_root = self.get_project_root().await?;
+        let mut file_count = 0;
+        let mut code_files = 0;
+
+        for entry in WalkDir::new(&project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                file_count += 1;
+                if let Some(path_str) = entry.path().to_str() {
+                    if crate::utils::detect_language(path_str.to_string()).is_some() {
+                        code_files += 1;
+                    }
+                }
+            }
+        }
+
+        Ok(format!("Total files: {}, Code files: {}", file_count, code_files))
+    }
+
+    /// Generic search query implementation
+    async fn generic_search_query(&self, query: &str) -> napi::Result<String> {
+        use walkdir::WalkDir;
+        use std::fs;
+
+        let mut matches = Vec::new();
+        let project_root = self.get_project_root().await?;
+
+        for entry in WalkDir::new(&project_root)
+            .follow_links(false)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                if let Some(path_str) = entry.path().to_str() {
+                    if crate::utils::detect_language(path_str.to_string()).is_some() {
+                        if let Ok(content) = fs::read_to_string(entry.path()) {
+                            if content.contains(query) {
+                                let file_name = entry.path().file_name()
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("unknown");
+                                let line_count = content.lines().filter(|line| line.contains(query)).count();
+                                matches.push(format!("{} ({} matches)", file_name, line_count));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(format!("{} files contain '{}': {}", matches.len(), query, matches.join(", ")))
+    }
+
+    /// Get project root from configuration
+    async fn get_project_root(&self) -> napi::Result<String> {
+        // In a real implementation, this would be stored in the config
+        Ok(std::env::current_dir()
+            .map_err(|e| napi::Error::from_reason(format!("Failed to get current directory: {}", e)))?
+            .to_string_lossy()
+            .to_string())
+    }
+
+    /// Extract functions from content
+    fn extract_functions_from_content(&self, content: &str, language: &str) -> Vec<String> {
+        let mut functions = Vec::new();
+
+        match language {
+            "Rust" => {
+                for line in content.lines() {
+                    if line.trim().starts_with("fn ") || line.trim().starts_with("pub fn ") {
+                        if let Some(name) = self.extract_function_name_simple(line, "fn") {
+                            functions.push(name);
+                        }
+                    }
+                }
+            },
+            "JavaScript" => {
+                for line in content.lines() {
+                    if line.contains("function ") {
+                        if let Some(name) = self.extract_function_name_simple(line, "function") {
+                            functions.push(name);
+                        }
+                    }
+                }
+            },
+            "Python" => {
+                for line in content.lines() {
+                    if line.trim().starts_with("def ") {
+                        if let Some(name) = self.extract_function_name_simple(line, "def") {
+                            functions.push(name);
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        functions
+    }
+
+    /// Extract classes from content
+    fn extract_classes_from_content(&self, content: &str, language: &str) -> Vec<String> {
+        let mut classes = Vec::new();
+
+        match language {
+            "Rust" => {
+                for line in content.lines() {
+                    if line.trim().starts_with("struct ") || line.trim().starts_with("pub struct ") {
+                        if let Some(name) = self.extract_type_name_simple(line, "struct") {
+                            classes.push(name);
+                        }
+                    }
+                }
+            },
+            "JavaScript" | "Python" => {
+                for line in content.lines() {
+                    if line.trim().starts_with("class ") {
+                        if let Some(name) = self.extract_type_name_simple(line, "class") {
+                            classes.push(name);
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        classes
+    }
+
+    /// Calculate file complexity
+    fn calculate_file_complexity(&self, content: &str) -> u32 {
+        let mut complexity = 0;
+
+        for line in content.lines() {
+            let line = line.trim();
+
+            // Count complexity indicators
+            if line.contains("if ") || line.contains("else if ") {
+                complexity += 1;
+            }
+            if line.contains("for ") || line.contains("while ") || line.contains("loop ") {
+                complexity += 1;
+            }
+            if line.contains("match ") || line.contains("switch ") {
+                complexity += 1;
+            }
+            if line.contains("try ") || line.contains("catch ") || line.contains("except ") {
+                complexity += 1;
+            }
+        }
+
+        complexity
+    }
+
+    /// Extract dependencies from dependency files
+    fn extract_dependencies_from_file(&self, content: &str, file_name: &str) -> Vec<String> {
+        let mut dependencies = Vec::new();
+
+        match file_name {
+            "package.json" => {
+                // Simple JSON parsing for dependencies
+                for line in content.lines() {
+                    if line.contains("\"dependencies\"") || line.contains("\"devDependencies\"") {
+                        continue;
+                    }
+                    if line.trim().starts_with("\"") && line.contains(":") {
+                        if let Some(dep_name) = line.split("\"").nth(1) {
+                            if !dep_name.is_empty() {
+                                dependencies.push(format!("npm:{}", dep_name));
+                            }
+                        }
+                    }
+                }
+            },
+            "Cargo.toml" => {
+                let mut in_dependencies = false;
+                for line in content.lines() {
+                    if line.trim() == "[dependencies]" || line.trim() == "[dev-dependencies]" {
+                        in_dependencies = true;
+                        continue;
+                    }
+                    if line.trim().starts_with("[") && line.trim() != "[dependencies]" && line.trim() != "[dev-dependencies]" {
+                        in_dependencies = false;
+                        continue;
+                    }
+                    if in_dependencies && line.contains("=") {
+                        if let Some(dep_name) = line.split("=").next() {
+                            dependencies.push(format!("cargo:{}", dep_name.trim()));
+                        }
+                    }
+                }
+            },
+            "requirements.txt" => {
+                for line in content.lines() {
+                    let line = line.trim();
+                    if !line.is_empty() && !line.starts_with("#") {
+                        if let Some(dep_name) = line.split("==").next().or_else(|| line.split(">=").next()) {
+                            dependencies.push(format!("pip:{}", dep_name.trim()));
+                        }
+                    }
+                }
+            },
+            _ => {}
+        }
+
+        dependencies
+    }
+
+    /// Simple function name extraction
+    fn extract_function_name_simple(&self, line: &str, keyword: &str) -> Option<String> {
+        if let Some(start) = line.find(keyword) {
+            let after_keyword = &line[start + keyword.len()..].trim();
+            if let Some(paren_pos) = after_keyword.find('(') {
+                let name = after_keyword[..paren_pos].trim();
+                if !name.is_empty() {
+                    return Some(name.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    /// Simple type name extraction
+    fn extract_type_name_simple(&self, line: &str, keyword: &str) -> Option<String> {
+        if let Some(start) = line.find(keyword) {
+            let after_keyword = &line[start + keyword.len()..].trim();
+            if let Some(space_pos) = after_keyword.find(' ') {
+                let name = after_keyword[..space_pos].trim();
+                if !name.is_empty() {
+                    return Some(name.to_string());
+                }
+            } else if let Some(brace_pos) = after_keyword.find('{') {
+                let name = after_keyword[..brace_pos].trim();
+                if !name.is_empty() {
+                    return Some(name.to_string());
+                }
+            }
+        }
+        None
     }
     
     /// Check if graph domain is enabled
