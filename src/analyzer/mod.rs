@@ -3,8 +3,10 @@
 //! This module contains the main FastContextAnalyzer implementation
 //! extracted from the monolithic lib.rs for better organization.
 
+
 use crate::analysis::AnalysisResult;
 use crate::cache::AdaptiveCacheManager;
+use crate::parsers::LanguageId;
 use crate::query::{CodeQueryEngine, QueryResult};
 use crate::watcher::CodebaseWatcher;
 use crate::domains;
@@ -12,7 +14,7 @@ use crate::domains;
 use napi_derive::napi;
 use ts_rs::TS;
 use std::collections::{HashMap, VecDeque};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 use tokio::runtime::Runtime;
 
 /// Configuration options for Fast-Context analyzer
@@ -43,7 +45,7 @@ pub struct AnalyzerConfig {
 
     /// Enable parallel processing
     pub parallel_processing: Option<bool>,
-    
+
     /// Enable experimental harmonious architecture (default: false for compatibility)
     pub enable_experimental_architecture: Option<bool>,
 }
@@ -61,28 +63,30 @@ pub enum ArchitecturalMode {
 
 /// Fast-Context codebase analyzer for Node.js
 ///
-/// ARCHITECTURAL REMEDIATION: This analyzer now uses harmonious domain architecture
-/// internally while maintaining 100% backward compatibility.
+/// THREAD-SAFE ARCHITECTURE: This analyzer now uses proper synchronization
+/// for all shared state while maintaining 100% backward compatibility.
 #[napi]
 pub struct FastContextAnalyzer {
-    // Core runtime and state (preserved for compatibility)
+    // Core runtime and state (thread-safe)
     #[allow(dead_code)]
-    runtime: Runtime,
-    #[allow(dead_code)]
+    runtime: Arc<Runtime>,
     project_root: String,
-    analysis: Option<AnalysisResult>,
-    #[allow(dead_code)]
-    query_engine: Option<CodeQueryEngine>,
-    #[allow(dead_code)]
-    cache_manager: Option<Arc<AdaptiveCacheManager<String>>>,
-    #[allow(dead_code)]
-    watcher: Option<CodebaseWatcher>,
-    #[allow(dead_code)]
-    file_query_cache: HashMap<String, (QueryResult, std::time::Instant)>,
-    #[allow(dead_code)]
-    cache_access_order: VecDeque<String>,
 
-    // NEW: Harmonious domain architecture (internal)
+    // Thread-safe shared state using Arc<RwLock<T>>
+    analysis: Arc<RwLock<Option<AnalysisResult>>>,
+    #[allow(dead_code)]
+    query_engine: Arc<RwLock<Option<CodeQueryEngine>>>,
+    #[allow(dead_code)]
+    cache_manager: Arc<RwLock<Option<Arc<AdaptiveCacheManager<String>>>>>,
+    watcher: Arc<RwLock<Option<CodebaseWatcher>>>,
+
+    // Thread-safe caches with proper synchronization
+    #[allow(dead_code)]
+    file_query_cache: Arc<Mutex<HashMap<String, (QueryResult, std::time::Instant)>>>,
+    #[allow(dead_code)]
+    cache_access_order: Arc<Mutex<VecDeque<String>>>,
+
+    // Domain architecture components (thread-safe)
     #[allow(dead_code)]
     domain_metrics: Arc<domains::core::Metrics>,
     #[allow(dead_code)]
@@ -114,14 +118,14 @@ impl FastContextAnalyzer {
         };
 
         Ok(Self {
-            runtime,
+            runtime: Arc::new(runtime),
             project_root: config.project_root,
-            analysis: None,
-            query_engine: None,
-            cache_manager: None,
-            watcher: None,
-            file_query_cache: HashMap::new(),
-            cache_access_order: VecDeque::new(),
+            analysis: Arc::new(RwLock::new(None)),
+            query_engine: Arc::new(RwLock::new(None)),
+            cache_manager: Arc::new(RwLock::new(None)),
+            watcher: Arc::new(RwLock::new(None)),
+            file_query_cache: Arc::new(Mutex::new(HashMap::new())),
+            cache_access_order: Arc::new(Mutex::new(VecDeque::new())),
             domain_metrics,
             architectural_mode,
         })
@@ -129,126 +133,72 @@ impl FastContextAnalyzer {
 
     /// Analyze the codebase and return analysis results
     #[napi]
-    pub fn analyze(&mut self) -> napi::Result<AnalysisResultJs> {
-        use crate::analysis::CodeGraph;
-        use crate::parsers::LanguageId;
-        use std::fs;
-
+    pub fn analyze(&self) -> napi::Result<AnalysisResultJs> {
+        let core = crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None);
         let start_time = std::time::Instant::now();
-
-        // REAL file scanning implementation using walkdir
-        let mut file_count = 0;
-        let mut symbol_count = 0;
-        let mut languages = std::collections::HashSet::new();
-
-        // Use walkdir for proper recursive directory traversal
-        use walkdir::WalkDir;
-
-        for entry in WalkDir::new(&self.project_root)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                if let Some(path_str) = entry.path().to_str() {
-                    // Skip ignored patterns
-                    if self.should_ignore_file(path_str) {
-                        continue;
-                    }
-
-                    file_count += 1;
-
-                    // Detect language and count symbols
-                    if let Some(language) = crate::utils::detect_language(path_str.to_string()) {
-                        languages.insert(language.clone());
-
-                        // Count symbols by reading file content
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            symbol_count += self.count_symbols_in_content(&content, &language);
-                        }
-                    }
-                }
-            }
-        }
-
+        let summary = core.analyze().map_err(|e| napi::Error::from_reason(e.to_string()))?;
         let duration = start_time.elapsed();
 
-        // Convert languages to LanguageId enum
-        let language_ids: Vec<LanguageId> = languages.iter()
-            .filter_map(|lang| LanguageId::from_string(lang))
-            .collect();
-
-        let internal_result = AnalysisResult {
-            graph: CodeGraph::new(),
-            file_count,
-            symbol_count,
-            relationship_count: 0, // Could be implemented later
-            languages: language_ids,
-        };
-
-        // Convert to JavaScript-compatible format
         let js_result = AnalysisResultJs {
-            file_count: internal_result.file_count as u32,
-            symbol_count: internal_result.symbol_count as u32,
-            relationship_count: internal_result.relationship_count as u32,
-            languages: languages.into_iter().collect(),
+            file_count: summary.file_count,
+            symbol_count: summary.symbol_count,
+            relationship_count: 0,
+            languages: summary.languages.clone(),
             duration_ms: duration.as_millis() as u32,
             memory_usage_mb: None,
         };
 
-        self.analysis = Some(internal_result);
+        // Store analysis result in thread-safe manner
+        if let Ok(mut analysis) = self.analysis.write() {
+            // Convert string languages to LanguageId
+            let languages: Vec<LanguageId> = summary.languages.iter()
+                .filter_map(|s| {
+                    match s.to_lowercase().as_str() {
+                        "rust" => Some(LanguageId::Rust),
+                        "javascript" => Some(LanguageId::JavaScript),
+                        "typescript" => Some(LanguageId::TypeScript),
+                        "python" => Some(LanguageId::Python),
+                        "java" => Some(LanguageId::Java),
+                        "go" => Some(LanguageId::Go),
+                        "cpp" | "c++" | "c" => Some(LanguageId::Cpp),
+                        "csharp" | "c#" => Some(LanguageId::CSharp),
+                        "swift" => Some(LanguageId::Swift),
+                        "php" => Some(LanguageId::PHP),
+                        "ruby" => Some(LanguageId::Ruby),
+                        "bash" => Some(LanguageId::Bash),
+                        _ => None,
+                    }
+                })
+                .collect();
+
+            *analysis = Some(AnalysisResult {
+                file_count: summary.file_count as usize,
+                symbol_count: summary.symbol_count as usize,
+                relationship_count: 0,
+                languages,
+                graph: petgraph::Graph::new(),
+            });
+        }
+
         Ok(js_result)
     }
 
-    /// Count symbols in file content based on language
-    fn count_symbols_in_content(&self, content: &str, language: &str) -> usize {
-        let mut count = 0;
-
-        match language {
-            "Rust" => {
-                // Count Rust symbols: fn, struct, impl, pub, etc.
-                count += content.matches("fn ").count();
-                count += content.matches("struct ").count();
-                count += content.matches("impl ").count();
-                count += content.matches("pub ").count();
-                count += content.matches("enum ").count();
-                count += content.matches("trait ").count();
-            },
-            "JavaScript" => {
-                // Count JavaScript symbols: function, class, const, let, var
-                count += content.matches("function ").count();
-                count += content.matches("class ").count();
-                count += content.matches("const ").count();
-                count += content.matches("let ").count();
-                count += content.matches("var ").count();
-                count += content.matches("module.exports").count();
-            },
-            "Python" => {
-                // Count Python symbols: def, class, import, from
-                count += content.matches("def ").count();
-                count += content.matches("class ").count();
-                count += content.matches("import ").count();
-                count += content.matches("from ").count();
-            },
-            _ => {
-                // Generic symbol counting for other languages
-                count += content.lines().count(); // At least count lines as a proxy
-            }
-        }
-
-        count
-    }
 
     /// Start watching the codebase for changes
     #[napi]
-    pub fn start_watching(&mut self) -> napi::Result<()> {
+    pub fn start_watching(&self) -> napi::Result<()> {
         use crate::watcher::{WatcherConfig, CodebaseWatcher};
         use std::collections::HashSet;
         use std::path::PathBuf;
         use std::time::Duration;
 
-        if self.watcher.is_some() {
-            return Err(napi::Error::from_reason("File watcher is already running"));
+        // Check if watcher is already running (thread-safe)
+        if let Ok(watcher_guard) = self.watcher.read() {
+            if watcher_guard.is_some() {
+                return Err(napi::Error::from_reason("File watcher is already running"));
+            }
+        } else {
+            return Err(napi::Error::from_reason("Failed to acquire watcher lock"));
         }
 
         // Create watcher configuration
@@ -280,82 +230,61 @@ impl FastContextAnalyzer {
         let watcher = CodebaseWatcher::new(config)
             .map_err(|e| napi::Error::from_reason(format!("Failed to create watcher: {e}")))?;
 
-        self.watcher = Some(watcher);
+        // Store watcher in thread-safe manner
+        if let Ok(mut watcher_guard) = self.watcher.write() {
+            *watcher_guard = Some(watcher);
+        } else {
+            return Err(napi::Error::from_reason("Failed to acquire watcher write lock"));
+        }
+
         Ok(())
     }
 
     /// Stop watching the codebase
     #[napi]
-    pub fn stop_watching(&mut self) -> napi::Result<()> {
-        if self.watcher.is_none() {
-            return Err(napi::Error::from_reason("File watcher is not running"));
+    pub fn stop_watching(&self) -> napi::Result<()> {
+        // Check and stop watcher in thread-safe manner
+        if let Ok(mut watcher_guard) = self.watcher.write() {
+            if watcher_guard.is_none() {
+                return Err(napi::Error::from_reason("File watcher is not running"));
+            }
+            *watcher_guard = None;
+        } else {
+            return Err(napi::Error::from_reason("Failed to acquire watcher write lock"));
         }
 
-        self.watcher = None;
         Ok(())
     }
 
     /// Get the current analysis results
     #[napi]
     pub fn get_analysis(&self) -> Option<AnalysisResultJs> {
-        self.analysis.as_ref().map(|result| AnalysisResultJs {
-            file_count: result.file_count as u32,
-            symbol_count: result.symbol_count as u32,
-            relationship_count: result.relationship_count as u32,
-            languages: result.languages.iter().map(|l| format!("{l:?}")).collect(),
-            duration_ms: 0,
-            memory_usage_mb: None,
-        })
+        // Access analysis result in thread-safe manner
+        if let Ok(analysis_guard) = self.analysis.read() {
+            analysis_guard.as_ref().map(|result| AnalysisResultJs {
+                file_count: result.file_count as u32,
+                symbol_count: result.symbol_count as u32,
+                relationship_count: result.relationship_count as u32,
+                languages: result.languages.iter().map(|l| format!("{l:?}")).collect(),
+                duration_ms: 0,
+                memory_usage_mb: None,
+            })
+        } else {
+            None
+        }
     }
 
     /// Find symbols by kind (function, class, variable, etc.)
     #[napi]
     pub fn find_symbols_by_kind(&self, kind: String) -> napi::Result<Vec<String>> {
-        use crate::symbols::SymbolKind;
-        use std::fs;
-        use walkdir::WalkDir;
-
-        let mut symbols = Vec::new();
-
-        // Convert string to SymbolKind
-        let target_kind = match kind.to_lowercase().as_str() {
-            "function" => SymbolKind::Function,
-            "class" => SymbolKind::Class,
-            "variable" => SymbolKind::Variable,
-            "method" => SymbolKind::Method,
-            "interface" => SymbolKind::Interface,
-            "enum" => SymbolKind::Enum,
-            "struct" => SymbolKind::Struct,
-            "trait" => SymbolKind::Trait,
-            _ => return Err(napi::Error::from_reason(format!("Unknown symbol kind: {kind}"))),
-        };
-
-        // Walk through project files
-        for entry in WalkDir::new(&self.project_root)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                if let Some(path_str) = entry.path().to_str() {
-                    if let Some(language) = crate::utils::detect_language(path_str.to_string()) {
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            // Simple pattern matching for symbols
-                            let found_symbols = self.extract_symbols_by_kind(&content, &language, &target_kind);
-                            symbols.extend(found_symbols);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(symbols)
+        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+            .find_symbols_by_kind(kind)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     /// Find symbols in a specific file
     #[napi]
     pub fn find_symbols_in_file(&self, file_path: String) -> napi::Result<Vec<String>> {
-        use std::fs;
         use std::path::Path;
 
         let full_path = if Path::new(&file_path).is_absolute() {
@@ -368,363 +297,35 @@ impl FastContextAnalyzer {
             return Err(napi::Error::from_reason(format!("File not found: {full_path}")));
         }
 
-        let content = fs::read_to_string(&full_path)
-            .map_err(|e| napi::Error::from_reason(format!("Failed to read file: {e}")))?;
-
-        if let Some(language) = crate::utils::detect_language(full_path.clone()) {
-            Ok(self.extract_all_symbols(&content, &language))
-        } else {
-            Ok(vec!["Unknown file type".to_string()])
-        }
+        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+            .find_symbols_in_file(full_path)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     /// Find dependencies of a symbol
     #[napi]
     pub fn find_dependencies(&self, symbol_name: String) -> napi::Result<Vec<String>> {
-        use std::fs;
-        use walkdir::WalkDir;
-
-        let mut dependencies = Vec::new();
-
-        // Search through all files for references to the symbol
-        for entry in WalkDir::new(&self.project_root)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                if let Some(path_str) = entry.path().to_str() {
-                    if let Some(_language) = crate::utils::detect_language(path_str.to_string()) {
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            // Look for imports, includes, or references
-                            if content.contains(&symbol_name) {
-                                let file_name = entry.path().file_name()
-                                    .and_then(|n| n.to_str())
-                                    .unwrap_or("unknown");
-                                dependencies.push(format!("{file_name}:{symbol_name}"));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(dependencies)
+        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+            .find_dependencies(symbol_name)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     /// Find complex symbols (high complexity)
     #[napi]
     pub fn find_complex_symbols(&self, complexity_threshold: u32) -> napi::Result<Vec<String>> {
-        use std::fs;
-        use walkdir::WalkDir;
-
-        let mut complex_symbols = Vec::new();
-
-        // Walk through project files
-        for entry in WalkDir::new(&self.project_root)
-            .follow_links(false)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() {
-                if let Some(path_str) = entry.path().to_str() {
-                    if let Some(language) = crate::utils::detect_language(path_str.to_string()) {
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            let symbols = self.find_complex_symbols_in_content(&content, &language, complexity_threshold);
-                            complex_symbols.extend(symbols);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(complex_symbols)
+        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+            .find_complex_symbols(complexity_threshold)
+            .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
-    /// Extract symbols by kind from content
-    fn extract_symbols_by_kind(&self, content: &str, language: &str, target_kind: &crate::symbols::SymbolKind) -> Vec<String> {
-        use crate::symbols::SymbolKind;
-        let mut symbols = Vec::new();
 
-        match language {
-            "Rust" => {
-                match target_kind {
-                    SymbolKind::Function => {
-                        for line in content.lines() {
-                            if line.trim().starts_with("fn ") || line.trim().starts_with("pub fn ") {
-                                if let Some(name) = self.extract_function_name(line, "fn") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    SymbolKind::Struct => {
-                        for line in content.lines() {
-                            if line.trim().starts_with("struct ") || line.trim().starts_with("pub struct ") {
-                                if let Some(name) = self.extract_type_name(line, "struct") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    SymbolKind::Enum => {
-                        for line in content.lines() {
-                            if line.trim().starts_with("enum ") || line.trim().starts_with("pub enum ") {
-                                if let Some(name) = self.extract_type_name(line, "enum") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            },
-            "JavaScript" => {
-                match target_kind {
-                    SymbolKind::Function => {
-                        for line in content.lines() {
-                            if line.contains("function ") {
-                                if let Some(name) = self.extract_function_name(line, "function") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    SymbolKind::Class => {
-                        for line in content.lines() {
-                            if line.trim().starts_with("class ") {
-                                if let Some(name) = self.extract_type_name(line, "class") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            },
-            "Python" => {
-                match target_kind {
-                    SymbolKind::Function => {
-                        for line in content.lines() {
-                            if line.trim().starts_with("def ") {
-                                if let Some(name) = self.extract_function_name(line, "def") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    SymbolKind::Class => {
-                        for line in content.lines() {
-                            if line.trim().starts_with("class ") {
-                                if let Some(name) = self.extract_type_name(line, "class") {
-                                    symbols.push(name);
-                                }
-                            }
-                        }
-                    },
-                    _ => {}
-                }
-            },
-            _ => {}
-        }
 
-        symbols
-    }
 
-    /// Extract all symbols from content
-    fn extract_all_symbols(&self, content: &str, language: &str) -> Vec<String> {
-        let mut symbols = Vec::new();
 
-        match language {
-            "Rust" => {
-                for line in content.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.starts_with("fn ") || trimmed.starts_with("pub fn ") {
-                        if let Some(name) = self.extract_function_name(line, "fn") {
-                            symbols.push(format!("function: {name}"));
-                        }
-                    } else if trimmed.starts_with("struct ") || trimmed.starts_with("pub struct ") {
-                        if let Some(name) = self.extract_type_name(line, "struct") {
-                            symbols.push(format!("struct: {name}"));
-                        }
-                    } else if trimmed.starts_with("enum ") || trimmed.starts_with("pub enum ") {
-                        if let Some(name) = self.extract_type_name(line, "enum") {
-                            symbols.push(format!("enum: {name}"));
-                        }
-                    }
-                }
-            },
-            "JavaScript" => {
-                for line in content.lines() {
-                    if line.contains("function ") {
-                        if let Some(name) = self.extract_function_name(line, "function") {
-                            symbols.push(format!("function: {name}"));
-                        }
-                    } else if line.trim().starts_with("class ") {
-                        if let Some(name) = self.extract_type_name(line, "class") {
-                            symbols.push(format!("class: {name}"));
-                        }
-                    }
-                }
-            },
-            "Python" => {
-                for line in content.lines() {
-                    let trimmed = line.trim();
-                    if trimmed.starts_with("def ") {
-                        if let Some(name) = self.extract_function_name(line, "def") {
-                            symbols.push(format!("function: {name}"));
-                        }
-                    } else if trimmed.starts_with("class ") {
-                        if let Some(name) = self.extract_type_name(line, "class") {
-                            symbols.push(format!("class: {name}"));
-                        }
-                    }
-                }
-            },
-            _ => {
-                symbols.push(format!("Unsupported language: {language}"));
-            }
-        }
 
-        symbols
-    }
-
-    /// Find complex symbols in content
-    fn find_complex_symbols_in_content(&self, content: &str, language: &str, threshold: u32) -> Vec<String> {
-        let mut complex_symbols = Vec::new();
-
-        match language {
-            "Rust" | "JavaScript" | "Python" => {
-                let lines: Vec<&str> = content.lines().collect();
-                let mut i = 0;
-
-                while i < lines.len() {
-                    let line = lines[i].trim();
-
-                    // Look for function definitions
-                    if line.contains("fn ") || line.contains("function ") || line.contains("def ") {
-                        if let Some(name) = self.extract_function_name(lines[i], "") {
-                            // Calculate complexity by counting control flow statements
-                            let complexity = self.calculate_function_complexity(&lines, i);
-                            if complexity >= threshold {
-                                complex_symbols.push(format!("{name} (complexity: {complexity})"));
-                            }
-                        }
-                    }
-                    i += 1;
-                }
-            },
-            _ => {}
-        }
-
-        complex_symbols
-    }
-
-    /// Extract function name from a line
-    fn extract_function_name(&self, line: &str, keyword: &str) -> Option<String> {
-        let line = line.trim();
-
-        // Handle different function declaration patterns
-        if keyword.is_empty() {
-            // Auto-detect keyword
-            if line.contains("fn ") {
-                return Self::extract_function_name_static(line, "fn");
-            } else if line.contains("function ") {
-                return Self::extract_function_name_static(line, "function");
-            } else if line.contains("def ") {
-                return Self::extract_function_name_static(line, "def");
-            }
-        }
-
-        Self::extract_function_name_static(line, keyword)
-    }
-
-    /// Static function name extraction (no recursion)
-    fn extract_function_name_static(line: &str, keyword: &str) -> Option<String> {
-        if let Some(start) = line.find(keyword) {
-            let after_keyword = &line[start + keyword.len()..].trim();
-            if let Some(paren_pos) = after_keyword.find('(') {
-                let name = after_keyword[..paren_pos].trim();
-                if !name.is_empty() {
-                    return Some(name.to_string());
-                }
-            } else if let Some(space_pos) = after_keyword.find(' ') {
-                let name = after_keyword[..space_pos].trim();
-                if !name.is_empty() {
-                    return Some(name.to_string());
-                }
-            }
-        }
-        None
-    }
-
-    /// Extract type name (struct, class, enum) from a line
-    fn extract_type_name(&self, line: &str, keyword: &str) -> Option<String> {
-        let line = line.trim();
-
-        if let Some(start) = line.find(keyword) {
-            let after_keyword = &line[start + keyword.len()..].trim();
-            if let Some(space_pos) = after_keyword.find(' ') {
-                let name = after_keyword[..space_pos].trim();
-                if !name.is_empty() {
-                    return Some(name.to_string());
-                }
-            } else if let Some(brace_pos) = after_keyword.find('{') {
-                let name = after_keyword[..brace_pos].trim();
-                if !name.is_empty() {
-                    return Some(name.to_string());
-                }
-            }
-        }
-
-        None
-    }
-
-    /// Calculate function complexity by counting control flow statements
-    fn calculate_function_complexity(&self, lines: &[&str], start_index: usize) -> u32 {
-        let mut complexity = 1; // Base complexity
-        let mut brace_count = 0;
-        let mut in_function = false;
-
-        for line in lines.iter().skip(start_index) {
-            let line = line.trim();
-
-            // Track braces to know when we're inside the function
-            if line.contains('{') {
-                brace_count += line.matches('{').count() as i32;
-                in_function = true;
-            }
-            if line.contains('}') {
-                brace_count -= line.matches('}').count() as i32;
-                if brace_count <= 0 && in_function {
-                    break; // End of function
-                }
-            }
-
-            if in_function {
-                // Count complexity-adding constructs
-                if line.contains("if ") || line.contains("else if ") {
-                    complexity += 1;
-                }
-                if line.contains("for ") || line.contains("while ") || line.contains("loop ") {
-                    complexity += 1;
-                }
-                if line.contains("match ") || line.contains("switch ") {
-                    complexity += 1;
-                }
-                if line.contains("catch ") || line.contains("except ") {
-                    complexity += 1;
-                }
-                // Count case statements
-                complexity += line.matches("case ").count() as u32;
-                complexity += line.matches("=>").count() as u32; // Rust match arms
-            }
-        }
-
-        complexity
-    }
 
     /// Check if a file should be ignored based on common patterns
+    #[cfg(any())]
     fn should_ignore_file(&self, path: &str) -> bool {
         let ignore_patterns = [
             "node_modules/",

@@ -3,9 +3,9 @@
 //! Provides semantic analysis of code documentation including parameter extraction,
 //! return type analysis, example detection, and cross-reference resolution.
 
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use regex::Regex;
 
 /// Enhanced documentation information with semantic analysis
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,44 +82,69 @@ impl DocumentationAnalyzer {
         let mut reference_patterns = HashMap::new();
 
         // JSDoc patterns
-        param_patterns.insert("jsdoc".to_string(), 
-            Regex::new(r"@param\s+\{([^}]+)\}\s+(\w+)\s+(.+)").unwrap());
-        return_patterns.insert("jsdoc".to_string(), 
-            Regex::new(r"@returns?\s+\{([^}]+)\}\s+(.+)").unwrap());
-        example_patterns.insert("jsdoc".to_string(), 
-            Regex::new(r"@example\s*\n((?:[^@]+\n?)*)").unwrap());
+        param_patterns.insert(
+            "jsdoc".to_string(),
+            Regex::new(r"@param\s+\{([^}]+)\}\s+(\w+)\s+(.+)").unwrap(),
+        );
+        return_patterns.insert(
+            "jsdoc".to_string(),
+            Regex::new(r"@returns?\s+\{([^}]+)\}\s+(.+)").unwrap(),
+        );
+        example_patterns.insert(
+            "jsdoc".to_string(),
+            Regex::new(r"@example\s*\n((?:[^@]+\n?)*)").unwrap(),
+        );
 
         // Javadoc patterns
-        param_patterns.insert("javadoc".to_string(), 
-            Regex::new(r"@param\s+(\w+)\s+(.+)").unwrap());
-        return_patterns.insert("javadoc".to_string(), 
-            Regex::new(r"@return\s+(.+)").unwrap());
+        param_patterns.insert(
+            "javadoc".to_string(),
+            Regex::new(r"@param\s+(\w+)\s+(.+)").unwrap(),
+        );
+        return_patterns.insert(
+            "javadoc".to_string(),
+            Regex::new(r"@return\s+(.+)").unwrap(),
+        );
 
         // Python docstring patterns (Google style)
-        param_patterns.insert("python".to_string(), 
-            Regex::new(r"(\w+)\s*\(([^)]+)\):\s*(.+)").unwrap());
-        return_patterns.insert("python".to_string(), 
-            Regex::new(r"Returns:\s*(.+)").unwrap());
+        param_patterns.insert(
+            "python".to_string(),
+            Regex::new(r"(\w+)\s*\(([^)]+)\):\s*(.+)").unwrap(),
+        );
+        return_patterns.insert(
+            "python".to_string(),
+            Regex::new(r"Returns:\s*(.+)").unwrap(),
+        );
 
         // Rust doc patterns
-        param_patterns.insert("rust".to_string(), 
-            Regex::new(r"#\s*(\w+)\s*-\s*(.+)").unwrap());
-        return_patterns.insert("rust".to_string(), 
-            Regex::new(r"Returns?\s*:?\s*(.+)").unwrap());
+        param_patterns.insert(
+            "rust".to_string(),
+            Regex::new(r"#\s*(\w+)\s*-\s*(.+)").unwrap(),
+        );
+        return_patterns.insert(
+            "rust".to_string(),
+            Regex::new(r"Returns?\s*:?\s*(.+)").unwrap(),
+        );
 
         // C# XML doc patterns
-        param_patterns.insert("csharp".to_string(),
-            Regex::new(r#"<param name="(\w+)">(.+?)</param>"#).unwrap());
-        return_patterns.insert("csharp".to_string(),
-            Regex::new(r"<returns>(.+?)</returns>").unwrap());
+        param_patterns.insert(
+            "csharp".to_string(),
+            Regex::new(r#"<param name="(\w+)">(.+?)</param>"#).unwrap(),
+        );
+        return_patterns.insert(
+            "csharp".to_string(),
+            Regex::new(r"<returns>(.+?)</returns>").unwrap(),
+        );
 
         // Reference patterns (common across languages)
-        reference_patterns.insert("see".to_string(), 
-            Regex::new(r"@see\s+([^\s]+)").unwrap());
-        reference_patterns.insert("link".to_string(), 
-            Regex::new(r"\{@link\s+([^}]+)\}").unwrap());
-        reference_patterns.insert("ref".to_string(),
-            Regex::new(r#"<see cref="([^"]+)"/>"#).unwrap());
+        reference_patterns.insert("see".to_string(), Regex::new(r"@see\s+([^\s]+)").unwrap());
+        reference_patterns.insert(
+            "link".to_string(),
+            Regex::new(r"\{@link\s+([^}]+)\}").unwrap(),
+        );
+        reference_patterns.insert(
+            "ref".to_string(),
+            Regex::new(r#"<see cref="([^"]+)"/>"#).unwrap(),
+        );
 
         Self {
             param_patterns,
@@ -139,7 +164,8 @@ impl DocumentationAnalyzer {
         let references = self.extract_references(&cleaned_text);
         let tags = self.extract_tags(&cleaned_text, doc_format);
         let issues = self.detect_issues(&cleaned_text, &parameters, &returns);
-        let quality_score = self.calculate_quality_score(&description, &parameters, &returns, &examples);
+        let quality_score =
+            self.calculate_quality_score(&description, &parameters, &returns, &examples);
 
         DocumentationInfo {
             raw_text: raw_text.to_string(),
@@ -161,38 +187,51 @@ impl DocumentationAnalyzer {
         match format {
             "jsdoc" | "javadoc" => {
                 // Remove /** */ wrapper
-                cleaned = cleaned.trim_start_matches("/**").trim_end_matches("*/").to_string();
+                cleaned = cleaned
+                    .trim_start_matches("/**")
+                    .trim_end_matches("*/")
+                    .to_string();
                 // Remove leading * from each line
-                cleaned = cleaned.lines()
+                cleaned = cleaned
+                    .lines()
                     .map(|line| line.trim().trim_start_matches('*').trim())
                     .filter(|line| !line.is_empty())
                     .collect::<Vec<_>>()
                     .join("\n");
-            },
+            }
             "python" => {
                 // Remove triple quotes
-                cleaned = cleaned.trim_start_matches("\"\"\"").trim_end_matches("\"\"\"").to_string();
-                cleaned = cleaned.trim_start_matches("'''").trim_end_matches("'''").to_string();
-            },
+                cleaned = cleaned
+                    .trim_start_matches("\"\"\"")
+                    .trim_end_matches("\"\"\"")
+                    .to_string();
+                cleaned = cleaned
+                    .trim_start_matches("'''")
+                    .trim_end_matches("'''")
+                    .to_string();
+            }
             "rust" => {
                 // Remove /// prefix from each line
-                cleaned = cleaned.lines()
+                cleaned = cleaned
+                    .lines()
                     .map(|line| line.trim().trim_start_matches("///").trim())
                     .filter(|line| !line.is_empty())
                     .collect::<Vec<_>>()
                     .join("\n");
-            },
+            }
             "csharp" => {
                 // Remove /// prefix and clean XML
-                cleaned = cleaned.lines()
+                cleaned = cleaned
+                    .lines()
                     .map(|line| line.trim().trim_start_matches("///").trim())
                     .filter(|line| !line.is_empty())
                     .collect::<Vec<_>>()
                     .join("\n");
-            },
+            }
             _ => {
                 // Generic cleaning
-                cleaned = cleaned.lines()
+                cleaned = cleaned
+                    .lines()
                     .map(|line| line.trim())
                     .filter(|line| !line.is_empty())
                     .collect::<Vec<_>>()
@@ -211,11 +250,12 @@ impl DocumentationAnalyzer {
 
         for line in lines {
             let trimmed = line.trim();
-            if trimmed.starts_with('@') || 
-               trimmed.starts_with("Parameters:") ||
-               trimmed.starts_with("Returns:") ||
-               trimmed.starts_with("Args:") ||
-               trimmed.starts_with("Example") {
+            if trimmed.starts_with('@')
+                || trimmed.starts_with("Parameters:")
+                || trimmed.starts_with("Returns:")
+                || trimmed.starts_with("Args:")
+                || trimmed.starts_with("Example")
+            {
                 break;
             }
             description_lines.push(trimmed);
@@ -232,30 +272,48 @@ impl DocumentationAnalyzer {
             for captures in pattern.captures_iter(text) {
                 let param = match format {
                     "jsdoc" => ParameterDoc {
-                        name: captures.get(2).map_or("".to_string(), |m| m.as_str().to_string()),
+                        name: captures
+                            .get(2)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         type_info: captures.get(1).map(|m| m.as_str().to_string()),
-                        description: captures.get(3).map_or("".to_string(), |m| m.as_str().to_string()),
+                        description: captures
+                            .get(3)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         is_optional: captures.get(1).is_some_and(|m| m.as_str().contains("?")),
                         default_value: None,
                     },
                     "javadoc" | "rust" => ParameterDoc {
-                        name: captures.get(1).map_or("".to_string(), |m| m.as_str().to_string()),
+                        name: captures
+                            .get(1)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         type_info: None,
-                        description: captures.get(2).map_or("".to_string(), |m| m.as_str().to_string()),
+                        description: captures
+                            .get(2)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         is_optional: false,
                         default_value: None,
                     },
                     "python" => ParameterDoc {
-                        name: captures.get(1).map_or("".to_string(), |m| m.as_str().to_string()),
+                        name: captures
+                            .get(1)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         type_info: captures.get(2).map(|m| m.as_str().to_string()),
-                        description: captures.get(3).map_or("".to_string(), |m| m.as_str().to_string()),
-                        is_optional: captures.get(2).is_some_and(|m| m.as_str().contains("optional")),
+                        description: captures
+                            .get(3)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
+                        is_optional: captures
+                            .get(2)
+                            .is_some_and(|m| m.as_str().contains("optional")),
                         default_value: None,
                     },
                     "csharp" => ParameterDoc {
-                        name: captures.get(1).map_or("".to_string(), |m| m.as_str().to_string()),
+                        name: captures
+                            .get(1)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         type_info: None,
-                        description: captures.get(2).map_or("".to_string(), |m| m.as_str().to_string()),
+                        description: captures
+                            .get(2)
+                            .map_or("".to_string(), |m| m.as_str().to_string()),
                         is_optional: false,
                         default_value: None,
                     },
@@ -299,7 +357,9 @@ impl DocumentationAnalyzer {
         for captures in code_block_pattern.captures_iter(text) {
             examples.push(CodeExample {
                 language: captures.get(1).map(|m| m.as_str().to_string()),
-                code: captures.get(2).map_or("".to_string(), |m| m.as_str().to_string()),
+                code: captures
+                    .get(2)
+                    .map_or("".to_string(), |m| m.as_str().to_string()),
                 description: None,
             });
         }
@@ -340,7 +400,9 @@ impl DocumentationAnalyzer {
         for (tag_name, pattern_str) in &tag_patterns {
             if let Ok(pattern) = Regex::new(pattern_str) {
                 if let Some(captures) = pattern.captures(text) {
-                    let value = captures.get(1).map_or("".to_string(), |m| m.as_str().to_string());
+                    let value = captures
+                        .get(1)
+                        .map_or("".to_string(), |m| m.as_str().to_string());
                     tags.insert(tag_name.to_string(), value);
                 }
             }
@@ -350,7 +412,12 @@ impl DocumentationAnalyzer {
     }
 
     /// Detect issues in documentation
-    fn detect_issues(&self, text: &str, parameters: &[ParameterDoc], returns: &Option<String>) -> Vec<DocIssue> {
+    fn detect_issues(
+        &self,
+        text: &str,
+        parameters: &[ParameterDoc],
+        returns: &Option<String>,
+    ) -> Vec<DocIssue> {
         let mut issues = Vec::new();
 
         // Check for empty documentation
@@ -387,7 +454,9 @@ impl DocumentationAnalyzer {
             issues.push(DocIssue {
                 severity: DocIssueSeverity::Info,
                 message: "Return value not documented".to_string(),
-                suggestion: Some("Add @returns or @return tag to document return value".to_string()),
+                suggestion: Some(
+                    "Add @returns or @return tag to document return value".to_string(),
+                ),
             });
         }
 
@@ -395,8 +464,13 @@ impl DocumentationAnalyzer {
     }
 
     /// Calculate documentation quality score
-    fn calculate_quality_score(&self, description: &str, parameters: &[ParameterDoc],
-                              returns: &Option<String>, examples: &[CodeExample]) -> u8 {
+    fn calculate_quality_score(
+        &self,
+        description: &str,
+        parameters: &[ParameterDoc],
+        returns: &Option<String>,
+        examples: &[CodeExample],
+    ) -> u8 {
         let mut score = 0.0;
         let mut max_score = 0.0;
 
@@ -418,7 +492,8 @@ impl DocumentationAnalyzer {
         // Parameter documentation (30% of total score)
         max_score += 30.0;
         if !parameters.is_empty() {
-            let documented_params = parameters.iter()
+            let documented_params = parameters
+                .iter()
                 .filter(|p| !p.description.trim().is_empty())
                 .count();
             score += (documented_params as f32 / parameters.len() as f32) * 30.0;

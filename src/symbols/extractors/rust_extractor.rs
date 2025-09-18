@@ -75,6 +75,22 @@ impl RustExtractor {
                         .to_string();
                     let location = Location::from_node(&node, file_path);
 
+                    // Enhanced struct analysis with generics and traits
+                    let mut modifiers = self.extract_item_modifiers(&node, source);
+                    
+                    // Extract generic parameters and lifetimes
+                    if let Some(type_params) = node.child_by_field_name("type_parameters") {
+                        let generics = self.extract_generic_parameters(&type_params, source);
+                        modifiers.extend(generics);
+                    }
+                    
+                    // Extract trait implementations
+                    let traits = self.extract_trait_bounds(&node, source);
+                    modifiers.extend(traits);
+                    
+                    // Enhanced signature with generics and traits
+                    let signature = self.extract_struct_signature(&node, source);
+
                     // Push struct as scope for nested items
                     let scope = Scope {
                         name: name.clone(),
@@ -90,8 +106,8 @@ impl RustExtractor {
                         scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
                         language: LanguageId::Rust,
                         documentation: self.extract_doc_comments(&node, source),
-                        modifiers: self.extract_item_modifiers(&node, source),
-                        signature: None,
+                        modifiers,
+                        signature: Some(signature),
                     });
                 }
             }
@@ -239,6 +255,110 @@ impl RustExtractor {
         }
 
         modifiers
+    }
+
+    /// Extract generic parameters and lifetimes from type parameters
+    fn extract_generic_parameters(&self, node: &Node, source: &str) -> Vec<String> {
+        let mut generics = Vec::new();
+        
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            match child.kind() {
+                "type_parameter" => {
+                    if let Some(name_node) = child.child_by_field_name("name") {
+                        let name = name_node.utf8_text(source.as_bytes()).unwrap_or("");
+                        if !name.is_empty() {
+                            generics.push(format!("generic:{}", name));
+                        }
+                    }
+                }
+                "lifetime_parameter" => {
+                    if let Some(name_node) = child.child_by_field_name("name") {
+                        let name = name_node.utf8_text(source.as_bytes()).unwrap_or("");
+                        if !name.is_empty() {
+                            generics.push(format!("lifetime:{}", name));
+                        }
+                    }
+                }
+                "bounded_type" => {
+                    if let Some(type_node) = child.child_by_field_name("type") {
+                        let type_name = type_node.utf8_text(source.as_bytes()).unwrap_or("");
+                        if !type_name.is_empty() {
+                            // Extract trait bounds
+                            let mut bounds = Vec::new();
+                            let mut bound_cursor = child.walk();
+                            for bound_child in child.children(&mut bound_cursor) {
+                                if bound_child.kind() == "type_bound" {
+                                    if let Some(bound_node) = bound_child.child_by_field_name("type") {
+                                        let bound_name = bound_node.utf8_text(source.as_bytes()).unwrap_or("");
+                                        if !bound_name.is_empty() {
+                                            bounds.push(bound_name);
+                                        }
+                                    }
+                                }
+                            }
+                            if !bounds.is_empty() {
+                                generics.push(format!("generic:{}:{}", type_name, bounds.join("+")));
+                            } else {
+                                generics.push(format!("generic:{}", type_name));
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        
+        generics
+    }
+
+    /// Extract trait bounds and implementations
+    fn extract_trait_bounds(&self, node: &Node, source: &str) -> Vec<String> {
+        let mut traits = Vec::new();
+        
+        // Check for trait implementations in the same node (e.g., impl Trait for Struct)
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "trait_bound" {
+                if let Some(trait_node) = child.child_by_field_name("type") {
+                    let trait_name = trait_node.utf8_text(source.as_bytes()).unwrap_or("");
+                    if !trait_name.is_empty() {
+                        traits.push(format!("trait:{}", trait_name));
+                    }
+                }
+            }
+        }
+        
+        traits
+    }
+
+    /// Extract enhanced struct signature with generics and traits
+    fn extract_struct_signature(&self, node: &Node, source: &str) -> String {
+        let mut signature = String::new();
+        
+        // Get struct name
+        if let Some(name_node) = node.child_by_field_name("name") {
+            signature.push_str(name_node.utf8_text(source.as_bytes()).unwrap_or(""));
+        }
+        
+        // Add generic parameters
+        if let Some(type_params) = node.child_by_field_name("type_parameters") {
+            let generics_text = type_params.utf8_text(source.as_bytes()).unwrap_or("");
+            if !generics_text.is_empty() {
+                signature.push_str(generics_text);
+            }
+        }
+        
+        // Add where clause if present
+        if let Some(where_clause) = node.child_by_field_name("where_clause") {
+            let where_text = where_clause.utf8_text(source.as_bytes()).unwrap_or("");
+            if !where_text.is_empty() {
+                signature.push(' ');
+                signature.push_str(where_text);
+            }
+        }
+        
+        signature
     }
 }
 

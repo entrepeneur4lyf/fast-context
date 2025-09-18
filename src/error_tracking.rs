@@ -126,34 +126,62 @@ pub struct ErrorSummary {
 #[derive(Debug, Error)]
 pub enum AnalyzerError {
     #[error("File system error: {message}")]
-    FileSystem { message: String, path: Option<String> },
-    
+    FileSystem {
+        message: String,
+        path: Option<String>,
+    },
+
     #[error("Parsing error in {language}: {message}")]
-    Parsing { language: String, message: String, file_path: Option<String> },
-    
+    Parsing {
+        language: String,
+        message: String,
+        file_path: Option<String>,
+    },
+
     #[error("Symbol extraction failed: {message}")]
-    SymbolExtraction { message: String, symbol: Option<String> },
-    
+    SymbolExtraction {
+        message: String,
+        symbol: Option<String>,
+    },
+
     #[error("Graph construction error: {message}")]
     GraphConstruction { message: String },
-    
+
     #[error("Query execution failed: {message}")]
-    QueryExecution { message: String, query: Option<String> },
-    
+    QueryExecution {
+        message: String,
+        query: Option<String>,
+    },
+
     #[error("Cache operation failed: {message}")]
-    Cache { message: String, operation: Option<String> },
-    
+    Cache {
+        message: String,
+        operation: Option<String>,
+    },
+
     #[error("File watching error: {message}")]
-    FileWatching { message: String, path: Option<String> },
-    
+    FileWatching {
+        message: String,
+        path: Option<String>,
+    },
+
     #[error("Configuration error: {message}")]
-    Configuration { message: String, field: Option<String> },
-    
+    Configuration {
+        message: String,
+        field: Option<String>,
+    },
+
     #[error("Resource error: {message}")]
-    Resource { message: String, resource_type: Option<String> },
-    
+    Resource {
+        message: String,
+        resource_type: Option<String>,
+    },
+
     #[error("Network error: {message}")]
-    Network { message: String, endpoint: Option<String> },
+    Network {
+        message: String,
+        endpoint: Option<String>,
+    },
 }
 
 impl ErrorTracker {
@@ -172,18 +200,21 @@ impl ErrorTracker {
     /// Track a new error
     pub fn track_error(&self, error: AnalyzerError, context: ErrorContext) {
         let tracked_error = self.create_tracked_error(error, context);
-        
+
         if let Ok(mut inner) = self.inner.lock() {
             // Add to error history
             inner.errors.push_back(tracked_error.clone());
-            
+
             // Maintain size limit
             while inner.errors.len() > MAX_ERROR_HISTORY {
                 inner.errors.pop_front();
             }
-            
+
             // Update counts
-            *inner.error_counts.entry(tracked_error.category.clone()).or_insert(0) += 1;
+            *inner
+                .error_counts
+                .entry(tracked_error.category.clone())
+                .or_insert(0) += 1;
             inner.last_error_time = Some(SystemTime::now());
         }
     }
@@ -191,33 +222,38 @@ impl ErrorTracker {
     /// Get error summary and statistics
     pub fn get_summary(&self) -> ErrorSummary {
         if let Ok(inner) = self.inner.lock() {
-            let session_duration = inner.session_start
+            let session_duration = inner
+                .session_start
                 .elapsed()
                 .unwrap_or(Duration::from_secs(0))
                 .as_secs();
-            
+
             let total_errors = inner.errors.len() as u32;
             let error_rate = if session_duration > 0 {
                 (total_errors as f64) / (session_duration as f64 / 60.0)
             } else {
                 0.0
             };
-            
-            let most_common_category = inner.error_counts
+
+            let most_common_category = inner
+                .error_counts
                 .iter()
                 .max_by_key(|(_, count)| *count)
                 .map(|(category, _)| category.clone());
-            
+
             let mut errors_by_severity = HashMap::new();
             for error in &inner.errors {
-                *errors_by_severity.entry(error.severity.clone()).or_insert(0) += 1;
+                *errors_by_severity
+                    .entry(error.severity.clone())
+                    .or_insert(0) += 1;
             }
-            
+
             ErrorSummary {
                 total_errors,
                 errors_by_category: inner.error_counts.clone(),
                 errors_by_severity,
-                last_error_time: inner.last_error_time
+                last_error_time: inner
+                    .last_error_time
                     .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
                     .map(|d| d.as_secs()),
                 session_duration_seconds: session_duration,
@@ -240,10 +276,15 @@ impl ErrorTracker {
     }
 
     /// Get recent errors with optional filtering
-    pub fn get_recent_errors(&self, limit: Option<usize>, category: Option<ErrorCategory>) -> Vec<TrackedError> {
+    pub fn get_recent_errors(
+        &self,
+        limit: Option<usize>,
+        category: Option<ErrorCategory>,
+    ) -> Vec<TrackedError> {
         if let Ok(inner) = self.inner.lock() {
             let limit = limit.unwrap_or(10);
-            inner.errors
+            inner
+                .errors
                 .iter()
                 .rev()
                 .filter(|error| category.as_ref().is_none_or(|cat| &error.category == cat))
@@ -267,9 +308,12 @@ impl ErrorTracker {
     /// Check if there are any critical or fatal errors
     pub fn has_critical_errors(&self) -> bool {
         if let Ok(inner) = self.inner.lock() {
-            inner.errors.iter().any(|error| 
-                matches!(error.severity, ErrorSeverity::Critical | ErrorSeverity::Fatal)
-            )
+            inner.errors.iter().any(|error| {
+                matches!(
+                    error.severity,
+                    ErrorSeverity::Critical | ErrorSeverity::Fatal
+                )
+            })
         } else {
             false
         }
@@ -277,7 +321,7 @@ impl ErrorTracker {
 
     fn create_tracked_error(&self, error: AnalyzerError, context: ErrorContext) -> TrackedError {
         let (category, severity, recovery_suggestions) = self.categorize_error(&error);
-        
+
         TrackedError {
             id: self.generate_error_id(),
             category,
@@ -293,7 +337,10 @@ impl ErrorTracker {
         }
     }
 
-    fn categorize_error(&self, error: &AnalyzerError) -> (ErrorCategory, ErrorSeverity, Vec<String>) {
+    fn categorize_error(
+        &self,
+        error: &AnalyzerError,
+    ) -> (ErrorCategory, ErrorSeverity, Vec<String>) {
         match error {
             AnalyzerError::FileSystem { .. } => (
                 ErrorCategory::FileSystem,
@@ -301,7 +348,7 @@ impl ErrorTracker {
                 vec![
                     "Check file permissions and disk space".to_string(),
                     "Verify the file path exists and is accessible".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::Parsing { .. } => (
                 ErrorCategory::Parsing,
@@ -309,7 +356,7 @@ impl ErrorTracker {
                 vec![
                     "Check file syntax and encoding".to_string(),
                     "Ensure the file is valid for the detected language".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::SymbolExtraction { .. } => (
                 ErrorCategory::SymbolExtraction,
@@ -317,7 +364,7 @@ impl ErrorTracker {
                 vec![
                     "Review symbol definitions and syntax".to_string(),
                     "Check for unsupported language features".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::GraphConstruction { .. } => (
                 ErrorCategory::GraphConstruction,
@@ -325,7 +372,7 @@ impl ErrorTracker {
                 vec![
                     "Check for circular dependencies".to_string(),
                     "Verify symbol relationships are valid".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::QueryExecution { .. } => (
                 ErrorCategory::QueryExecution,
@@ -333,7 +380,7 @@ impl ErrorTracker {
                 vec![
                     "Simplify the query or add more specific filters".to_string(),
                     "Ensure the analyzer has been initialized".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::Cache { .. } => (
                 ErrorCategory::Cache,
@@ -341,7 +388,7 @@ impl ErrorTracker {
                 vec![
                     "Clear cache and retry operation".to_string(),
                     "Check available disk space".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::FileWatching { .. } => (
                 ErrorCategory::FileWatching,
@@ -349,7 +396,7 @@ impl ErrorTracker {
                 vec![
                     "Restart file watching if needed".to_string(),
                     "Check system file descriptor limits".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::Configuration { .. } => (
                 ErrorCategory::Configuration,
@@ -357,7 +404,7 @@ impl ErrorTracker {
                 vec![
                     "Review configuration settings".to_string(),
                     "Check configuration file syntax".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::Resource { .. } => (
                 ErrorCategory::Resource,
@@ -365,7 +412,7 @@ impl ErrorTracker {
                 vec![
                     "Free up system resources".to_string(),
                     "Reduce analysis scope or enable streaming".to_string(),
-                ]
+                ],
             ),
             AnalyzerError::Network { .. } => (
                 ErrorCategory::Network,
@@ -373,7 +420,7 @@ impl ErrorTracker {
                 vec![
                     "Check network connectivity".to_string(),
                     "Retry operation after network issues are resolved".to_string(),
-                ]
+                ],
             ),
         }
     }
@@ -381,7 +428,7 @@ impl ErrorTracker {
     fn generate_error_id(&self) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         SystemTime::now().hash(&mut hasher);
         format!("ERR_{:x}", hasher.finish())

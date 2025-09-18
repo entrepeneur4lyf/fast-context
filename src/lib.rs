@@ -45,6 +45,7 @@
 // All imports moved to respective modules for better organization
 
 pub mod types;
+pub mod errors;      // Standardized error types
 
 // 🏗️ NEW MODULAR ARCHITECTURE - Proper separation of concerns
 #[cfg(feature = "nodejs")]
@@ -62,13 +63,32 @@ pub mod parsers;     // Tree-sitter language parsers
 pub mod query;       // Query interface for AI assistants
 pub mod symbols;     // Symbol extraction and management
 pub mod watcher;     // File system monitoring
+pub mod core;        // Shared Send + Sync CoreAnalyzer
 
 // 🐍 PYTHON BINDINGS - Optional Python integration
 #[cfg(feature = "python")]
 pub mod python_bindings;
+#[cfg(feature = "python")]
+pub mod python_bindings_util;
+#[cfg(feature = "python")]
+pub mod python_bindings_graph;
+#[cfg(feature = "python")]
+pub mod python_bindings_export;
+#[cfg(feature = "python")]
+pub mod python_bindings_query;
+#[cfg(feature = "python")]
+pub mod python_bindings_config;
+#[cfg(feature = "python")]
+pub mod python_bindings_cache;
 
 // 🎯 RE-EXPORTS - Clean public API
 #[cfg(feature = "nodejs")]
 pub use analyzer::{FastContextAnalyzer, AnalyzerConfig, AnalysisResultJs, QueryResultJs};
+#[cfg(feature = "nodejs")]
 pub use graph::{RustworkxGraph, RustworkxDiGraph};
-pub use utils::{get_version, get_supported_languages, detect_language, check_configuration};
+#[cfg(feature = "nodejs")]
+pub use utils::{get_version, get_supported_languages, detect_language, check_configuration, should_ignore_file_default};
+
+// Additional re-exports for testing and advanced usage
+pub use core::CoreAnalyzer;
+pub use parsers::LanguageId;

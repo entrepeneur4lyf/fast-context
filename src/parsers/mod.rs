@@ -7,10 +7,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tree_sitter::{Language, Parser, Tree};
 
-// Import tree-sitter language crates
-extern crate tree_sitter_cpp;
-extern crate tree_sitter_php;
-extern crate tree_sitter_xml;
 
 /// Supported programming languages for analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -73,6 +69,37 @@ impl LanguageId {
             "regex" => Some(Self::Regex),
             _ => None,
         }
+    }
+
+    /// Convert LanguageId to lowercase string for consistency
+    pub fn to_lowercase_string(&self) -> String {
+        match self {
+            Self::Rust => "rust",
+            Self::Python => "python",
+            Self::JavaScript => "javascript",
+            Self::TypeScript => "typescript",
+            Self::Java => "java",
+            Self::Go => "go",
+            Self::CSharp => "csharp",
+            Self::Cpp => "cpp",
+            Self::Swift => "swift",
+            Self::ObjectiveC => "objectivec",
+            Self::PHP => "php",
+            Self::Ruby => "ruby",
+            Self::Scala => "scala",
+            Self::Zig => "zig",
+            Self::Dart => "dart",
+            Self::Lua => "lua",
+            Self::Bash => "bash",
+            Self::CSS => "css",
+            Self::HTML => "html",
+            Self::XML => "xml",
+            Self::JSON => "json",
+            Self::YAML => "yaml",
+            Self::Markdown => "markdown",
+            Self::JSDoc => "jsdoc",
+            Self::Regex => "regex",
+        }.to_string()
     }
 
     /// Detect language from file extension

@@ -100,12 +100,11 @@ where
         let project_profile = analyzer.analyze_project(&project_root)?;
         let config = CacheConfig::from_project_profile(&project_profile);
 
-        // Create multi-level cache with optimized configuration
+        // Create two-level cache with optimized configuration
         let cache = MultiLevelCache::new(
             config.l1_capacity,
             config.cache_dir.clone(),
             config.disk_limit_mb as u64,
-            None, // L3 Redis URL - not implemented yet
         )
         .map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
 
@@ -132,8 +131,7 @@ where
                 config_changes: vec![
                     format!("L1 capacity: {}", config.l1_capacity),
                     format!("L2 enabled: {}", config.enable_l2_cache),
-                    format!("L3 enabled: {}", config.enable_l3_cache),
-                ],
+                                    ],
             }],
         };
 
@@ -157,7 +155,6 @@ where
             config.l1_capacity,
             config.cache_dir.clone(),
             config.disk_limit_mb as u64,
-            None,
         )
         .map_err(|e| AdaptiveCacheError::CacheError(e.to_string()))?;
 
@@ -259,8 +256,7 @@ where
             new_config.policy_type != current_config.policy_type
                 || new_config.memory_limit_mb != current_config.memory_limit_mb
                 || new_config.enable_l2_cache != current_config.enable_l2_cache
-                || new_config.enable_l3_cache != current_config.enable_l3_cache
-        };
+                        };
 
         if config_changed {
             // Apply new configuration
@@ -292,7 +288,6 @@ where
                     config_changes: vec![
                         format!("Memory limit: {}MB", new_config.memory_limit_mb),
                         format!("L2 enabled: {}", new_config.enable_l2_cache),
-                        format!("L3 enabled: {}", new_config.enable_l3_cache),
                     ],
                 });
 
@@ -417,7 +412,7 @@ where
                     config.background_warming_threads = 2;
                 }
                 CachePolicyType::Persistent => {
-                    config.enable_l3_cache = true;
+                     true;
                     config.compression_enabled = true;
                 }
                 CachePolicyType::Enterprise => {
@@ -460,12 +455,12 @@ where
             match new_policy {
                 CachePolicyType::Minimal => {
                     config.enable_l2_cache = false;
-                    config.enable_l3_cache = false;
+                     false;
                     config.enable_predictive_caching = false;
                     config.enable_cache_warming = false;
                 }
                 CachePolicyType::Balanced => {
-                    config.enable_l3_cache = false;
+                     false;
                     config.compression_enabled = false;
                     config.background_warming_threads = 1;
                 }
@@ -551,8 +546,7 @@ mod tests {
             cache_dir: temp_path.join(".cache"),
             enable_l1_cache: true,
             enable_l2_cache: false,
-            enable_l3_cache: false,
-            symbol_ttl: std::time::Duration::from_secs(24 * 3600),
+                        symbol_ttl: std::time::Duration::from_secs(24 * 3600),
             ast_ttl: std::time::Duration::from_secs(12 * 3600),
             graph_ttl: std::time::Duration::from_secs(6 * 3600),
             analysis_ttl: std::time::Duration::from_secs(3600),
@@ -574,8 +568,7 @@ mod tests {
         // Should start with minimal policy for tiny project
         assert_eq!(config.policy_type, CachePolicyType::Minimal);
         assert!(!config.enable_l2_cache);
-        assert!(!config.enable_l3_cache);
-    }
+            }
 
     #[tokio::test]
     async fn test_cache_operations() {
@@ -604,8 +597,7 @@ mod tests {
             cache_dir: temp_path.join(".cache"),
             enable_l1_cache: true,
             enable_l2_cache: false,
-            enable_l3_cache: false,
-            symbol_ttl: std::time::Duration::from_secs(24 * 3600),
+                        symbol_ttl: std::time::Duration::from_secs(24 * 3600),
             ast_ttl: std::time::Duration::from_secs(12 * 3600),
             graph_ttl: std::time::Duration::from_secs(6 * 3600),
             analysis_ttl: std::time::Duration::from_secs(3600),
@@ -671,8 +663,7 @@ mod tests {
             cache_dir: temp_path.join(".cache"),
             enable_l1_cache: true,
             enable_l2_cache: false,
-            enable_l3_cache: false,
-            symbol_ttl: std::time::Duration::from_secs(24 * 3600),
+                        symbol_ttl: std::time::Duration::from_secs(24 * 3600),
             ast_ttl: std::time::Duration::from_secs(12 * 3600),
             graph_ttl: std::time::Duration::from_secs(6 * 3600),
             analysis_ttl: std::time::Duration::from_secs(3600),

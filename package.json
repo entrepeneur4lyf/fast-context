@@ -19,10 +19,16 @@
   "license": "Apache-2.0",
   "devDependencies": {
     "@napi-rs/cli": "^2.18.0",
+    "@types/events": "^3.0.3",
+    "@types/node": "^20.0.0",
     "ava": "^6.0.0",
-    "typescript": "^5.0.0",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.1",
+    "inquirer": "^12.9.6",
+    "ora": "^9.0.0",
     "ts-node": "^10.9.0",
-    "@types/node": "^20.0.0"
+    "typescript": "^5.0.0",
+    "zod": "^4.1.9"
   },
   "engines": {
     "node": ">= 10"
@@ -62,19 +68,19 @@
   "author": "Shawn McAllister x.com/entrepeneur4lyf",
   "repository": {
     "type": "git",
-    "url": "https://github.com/entrepensur4lyf/fast-context.git"
+    "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs.git"
   },
-  "homepage": "https://github.com/entrepensur4lyf/fast-context#readme",
+  "homepage": "https://github.com/entrepeneur4lyf/rustworkx-nodejs#readme",
   "bugs": {
-    "url": "https://github.com/entrepensur4lyf/fast-context/issues"
+    "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs/issues"
   },
   "optionalDependencies": {
-    "fast-context-win32-x64-msvc": "0.1.0",
+    "fast-context-darwin-arm64": "0.1.0",
     "fast-context-darwin-x64": "0.1.0",
+    "fast-context-linux-arm64-musl": "0.1.0",
     "fast-context-linux-x64-gnu": "0.1.0",
     "fast-context-linux-x64-musl": "0.1.0",
-    "fast-context-linux-arm64-musl": "0.1.0",
-    "fast-context-darwin-arm64": "0.1.0",
-    "fast-context-win32-arm64-msvc": "0.1.0"
+    "fast-context-win32-arm64-msvc": "0.1.0",
+    "fast-context-win32-x64-msvc": "0.1.0"
   }
 }

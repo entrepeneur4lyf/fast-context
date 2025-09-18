@@ -1,7 +1,7 @@
 //! # Intelligent Caching System
 //!
 //! Multi-level cache system for parsed ASTs, symbol extraction results, and analysis data.
-//! Provides L1 (memory), L2 (disk), and L3 (distributed) caching with intelligent invalidation.
+//! Provides L1 (memory) and L2 (disk) caching with intelligent invalidation.
 //!
 //! ## Modules
 //!
@@ -21,14 +21,16 @@ pub use policies::{CacheConfig, CacheConfigBuilder, CachePolicyType};
 pub use size_detector::{CodebaseAnalyzer, ProjectProfile, ProjectSize};
 
 use lru::LruCache;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::fs as async_fs;
 use tokio::sync::RwLock;
 
 /// Cache key for identifying cached items
@@ -415,43 +417,10 @@ impl L2Cache {
     }
 }
 
-/// L3 Cache: Distributed cache for team sharing (placeholder)
-pub struct L3Cache {
-    _enabled: bool,
-    _redis_url: Option<String>,
-}
-
-impl L3Cache {
-    pub fn new(redis_url: Option<String>) -> Self {
-        Self {
-            _enabled: redis_url.is_some(),
-            _redis_url: redis_url,
-        }
-    }
-
-    pub async fn get<T>(&self, _key: &CacheKey) -> Option<T>
-    where
-        T: for<'de> Deserialize<'de>,
-    {
-        // Placeholder for distributed cache implementation
-        // Would use Redis or similar distributed cache
-        None
-    }
-
-    pub async fn put<T>(&self, _key: CacheKey, _data: T) -> Result<(), Box<dyn std::error::Error>>
-    where
-        T: Serialize,
-    {
-        // Placeholder for distributed cache implementation
-        Ok(())
-    }
-}
-
-/// Complete multi-level cache system
+/// Two-level cache system
 pub struct MultiLevelCache<T> {
     l1: L1Cache<T>,
     l2: L2Cache,
-    l3: L3Cache,
 }
 
 impl<T> MultiLevelCache<T>
@@ -462,12 +431,10 @@ where
         l1_capacity: usize,
         l2_cache_dir: PathBuf,
         l2_max_size_mb: u64,
-        redis_url: Option<String>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
             l1: L1Cache::new(l1_capacity),
             l2: L2Cache::new(l2_cache_dir, l2_max_size_mb)?,
-            l3: L3Cache::new(redis_url),
         })
     }
 
@@ -484,14 +451,6 @@ where
             return Some(data);
         }
 
-        // Try L3 cache
-        if let Some(data) = self.l3.get::<T>(key).await {
-            // Promote to L1 and L2 caches
-            self.l1.put(key.clone(), data.clone(), 0, vec![]);
-            let _ = self.l2.put(key.clone(), data.clone(), vec![]).await;
-            return Some(data);
-        }
-
         None
     }
 
@@ -501,11 +460,10 @@ where
         data: T,
         dependencies: Vec<String>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Store in all cache levels
+        // Store in both cache levels
         self.l1
             .put(key.clone(), data.clone(), 0, dependencies.clone());
         self.l2.put(key.clone(), data.clone(), dependencies).await?;
-        let _ = self.l3.put(key, data).await;
 
         Ok(())
     }
@@ -513,8 +471,7 @@ where
     pub async fn invalidate(&self, key: &CacheKey) {
         self.l1.remove(key);
         self.l2.remove(key).await;
-        // L3 invalidation would go here
-    }
+      }
 
     pub async fn invalidate_dependencies(&self, changed_file: &str) {
         // For L1 cache, track and invalidate file-specific dependencies
@@ -549,11 +506,185 @@ where
     }
 
     async fn get_file_dependencies(&self, file: &str) -> Option<Vec<String>> {
-        // Get dependencies from L2 cache analysis or return None if not available
-        // This would typically come from import/dependency analysis
-        // For now, return None since dependency tracking isn't fully implemented
-        let _ = file; // Suppress unused parameter warning
+        // Extract dependencies from L2 cache index based on file analysis
+        let index = self.l2.index.read().await;
+        let mut dependencies = Vec::new();
+        
+        // Find all entries that depend on this file (reverse dependency lookup)
+        for (key, metadata) in index.iter() {
+            if metadata.dependencies.contains(&file.to_string()) {
+                // This entry depends on our file, so our file depends on it
+                dependencies.push(key.file_path.clone());
+            }
+        }
+        
+        // Also check if this file has stored dependency information
+        if let Some(entry_key) = self.find_cache_key_for_file(file).await {
+            if let Some(metadata) = index.get(&entry_key) {
+                // Add direct dependencies stored in metadata
+                for dep in &metadata.dependencies {
+                    if !dependencies.contains(dep) {
+                        dependencies.push(dep.clone());
+                    }
+                }
+            }
+        }
+        
+        // Extract language-specific dependencies using symbol analysis
+        let lang_deps = self.extract_language_dependencies(file).await;
+        for dep in lang_deps {
+            if !dependencies.contains(&dep) {
+                dependencies.push(dep);
+            }
+        }
+        
+        if dependencies.is_empty() {
+            None
+        } else {
+            Some(dependencies)
+        }
+    }
+
+    /// Find cache key for a specific file
+    async fn find_cache_key_for_file(&self, file: &str) -> Option<CacheKey> {
+        let index = self.l2.index.read().await;
+        
+        for (key, _) in index.iter() {
+            if key.file_path == file {
+                return Some(key.clone());
+            }
+        }
+        
         None
+    }
+
+    /// Extract language-specific dependencies using import/require analysis
+    async fn extract_language_dependencies(&self, file: &str) -> Vec<String> {
+        let mut dependencies = Vec::new();
+        
+        // Determine file type based on extension
+        let file_path = Path::new(file);
+        let extension = file_path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+        
+        match extension {
+            "rs" => {
+                // Rust dependencies: use, mod, extern crate
+                dependencies.extend(self.extract_rust_dependencies(file).await);
+            }
+            "py" => {
+                // Python dependencies: import, from ... import
+                dependencies.extend(self.extract_python_dependencies(file).await);
+            }
+            "js" | "ts" | "jsx" | "tsx" => {
+                // JavaScript/TypeScript dependencies: require, import
+                dependencies.extend(self.extract_javascript_dependencies(file).await);
+            }
+            "cpp" | "cc" | "cxx" | "h" | "hpp" => {
+                // C++ dependencies: #include
+                dependencies.extend(self.extract_cpp_dependencies(file).await);
+            }
+            _ => {}
+        }
+        
+        dependencies
+    }
+
+    /// Extract Rust import dependencies
+    async fn extract_rust_dependencies(&self, file: &str) -> Vec<String> {
+        let mut deps = Vec::new();
+        
+        // This would typically use the Rust extractor to analyze the file
+        // For now, implement a simple file-based approach
+        if let Ok(content) = async_fs::read_to_string(file).await {
+            // Simple regex-based extraction for demonstration
+            let use_re = Regex::new(r"use\s+([^;]+);").unwrap();
+            let mod_re = Regex::new(r"mod\s+([^;]+);").unwrap();
+            
+            for cap in use_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    let import = matched.as_str().trim();
+                    // Convert use paths to file paths
+                    let file_path = import.replace("::", "/").replace(" ", "");
+                    deps.push(file_path);
+                }
+            }
+            
+            for cap in mod_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    deps.push(format!("{}.rs", matched.as_str().trim()));
+                }
+            }
+        }
+        
+        deps
+    }
+
+    /// Extract Python import dependencies
+    async fn extract_python_dependencies(&self, file: &str) -> Vec<String> {
+        let mut deps = Vec::new();
+        
+        if let Ok(content) = async_fs::read_to_string(file).await {
+            let import_re = Regex::new(r"import\s+([^#\n]+)").unwrap();
+            let from_re = Regex::new(r"from\s+([^#\s]+)\s+import").unwrap();
+            
+            for cap in import_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    let import = matched.as_str().trim().split(',').next().unwrap_or("").trim();
+                    if !import.is_empty() {
+                        deps.push(import.to_string());
+                    }
+                }
+            }
+            
+            for cap in from_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    deps.push(matched.as_str().to_string());
+                }
+            }
+        }
+        
+        deps
+    }
+
+    /// Extract JavaScript/TypeScript dependencies
+    async fn extract_javascript_dependencies(&self, file: &str) -> Vec<String> {
+        let mut deps = Vec::new();
+        
+        if let Ok(content) = async_fs::read_to_string(file).await {
+            let require_re = Regex::new(r#"(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)"#).unwrap();
+            let import_re = Regex::new(r#"import\s+.*?from\s+["']([^"']+)["']"#).unwrap();
+            
+            for cap in require_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    deps.push(matched.as_str().to_string());
+                }
+            }
+            
+            for cap in import_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    deps.push(matched.as_str().to_string());
+                }
+            }
+        }
+        
+        deps
+    }
+
+    /// Extract C++ include dependencies
+    async fn extract_cpp_dependencies(&self, file: &str) -> Vec<String> {
+        let mut deps = Vec::new();
+        
+        if let Ok(content) = async_fs::read_to_string(file).await {
+            let include_re = Regex::new(r#"#include\s*[<"]([^>"]+)[>"]"#).unwrap();
+            
+            for cap in include_re.captures_iter(&content) {
+                if let Some(matched) = cap.get(1) {
+                    deps.push(matched.as_str().to_string());
+                }
+            }
+        }
+        
+        deps
     }
 
     pub fn l1_stats(&self) -> CacheStats {

@@ -3,12 +3,17 @@
 //! This module contains all graph-related functionality
 //! extracted from the monolithic lib.rs for better organization.
 
-use petgraph::graph::{DiGraph, NodeIndex, UnGraph};
-use petgraph::visit::EdgeRef;
+#[cfg(feature = "nodejs")]
 use napi_derive::napi;
+#[cfg(feature = "nodejs")]
+use petgraph::graph::{DiGraph, NodeIndex, UnGraph};
+#[cfg(feature = "nodejs")]
+use petgraph::visit::EdgeRef;
+#[cfg(feature = "nodejs")]
 use ts_rs::TS;
 
 /// Undirected graph implementation
+#[cfg(feature = "nodejs")]
 #[napi]
 #[derive(TS)]
 #[ts(export)]
@@ -17,12 +22,14 @@ pub struct RustworkxGraph {
     inner: UnGraph<String, f64>,
 }
 
+#[cfg(feature = "nodejs")]
 impl Default for RustworkxGraph {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "nodejs")]
 #[napi]
 impl RustworkxGraph {
     #[napi(constructor)]
@@ -32,12 +39,14 @@ impl RustworkxGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn add_node(&mut self, weight: String) -> u32 {
         self.inner.add_node(weight).index() as u32
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn add_edge(&mut self, node_a: u32, node_b: u32, weight: f64) -> Option<u32> {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
@@ -51,17 +60,20 @@ impl RustworkxGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn node_count(&self) -> u32 {
         self.inner.node_count() as u32
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn edge_count(&self) -> u32 {
         self.inner.edge_count() as u32
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn remove_node(&mut self, node: u32) -> bool {
         let node_idx = NodeIndex::new(node as usize);
         if self.inner.node_weight(node_idx).is_some() {
@@ -72,11 +84,12 @@ impl RustworkxGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn remove_edge(&mut self, node_a: u32, node_b: u32) -> bool {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
-        
+
         if let Some(edge) = self.inner.find_edge(node_a_idx, node_b_idx) {
             self.inner.remove_edge(edge);
             true
@@ -85,24 +98,27 @@ impl RustworkxGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn has_edge(&self, node_a: u32, node_b: u32) -> bool {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
         self.inner.find_edge(node_a_idx, node_b_idx).is_some()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn get_node_data(&self, node: u32) -> Option<String> {
         let node_idx = NodeIndex::new(node as usize);
         self.inner.node_weight(node_idx).cloned()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn get_edge_data(&self, node_a: u32, node_b: u32) -> Option<f64> {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
-        
+
         if let Some(edge) = self.inner.find_edge(node_a_idx, node_b_idx) {
             self.inner.edge_weight(edge).copied()
         } else {
@@ -110,7 +126,8 @@ impl RustworkxGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn neighbors(&self, node: u32) -> Vec<u32> {
         let node_idx = NodeIndex::new(node as usize);
         self.inner
@@ -119,14 +136,16 @@ impl RustworkxGraph {
             .collect()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn clear(&mut self) {
         self.inner.clear();
     }
 
     /// Dijkstra's shortest path algorithm
     /// Returns a list of [nodeId, distance] pairs for JavaScript compatibility
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn dijkstra_shortest_paths(&self, source: u32, target: Option<u32>) -> Vec<Vec<f64>> {
         use petgraph::algo::dijkstra;
 
@@ -151,7 +170,8 @@ impl RustworkxGraph {
 
     /// All-pairs shortest paths using a simple implementation
     /// Returns a 2D matrix of shortest distances between all pairs of nodes
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn all_pairs_shortest_paths(&self) -> Vec<Vec<Option<f64>>> {
         let node_count = self.inner.node_count();
         let mut result = vec![vec![None; node_count]; node_count];
@@ -198,7 +218,8 @@ impl RustworkxGraph {
 
     /// Betweenness centrality for undirected graphs
     /// Returns a list of [nodeId, centrality] pairs
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn betweenness_centrality(&self, normalized: Option<bool>) -> Vec<Vec<f64>> {
         let node_count = self.inner.node_count();
         if node_count == 0 {
@@ -277,7 +298,8 @@ impl RustworkxGraph {
 
     /// Closeness centrality for undirected graphs
     /// Returns a list of [nodeId, centrality] pairs
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn closeness_centrality(&self, normalized: Option<bool>) -> Vec<Vec<f64>> {
         let node_count = self.inner.node_count();
         if node_count == 0 {
@@ -326,14 +348,16 @@ impl RustworkxGraph {
 
     /// Check if the undirected graph is bipartite
     /// Returns true if the graph can be colored with two colors
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn is_bipartite(&self) -> bool {
         use petgraph::algo::is_bipartite_undirected;
         is_bipartite_undirected(&self.inner, NodeIndex::new(0))
     }
 
     /// Get the number of connected components
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn number_connected_components(&self) -> u32 {
         use petgraph::algo::connected_components;
         connected_components(&self.inner) as u32
@@ -341,7 +365,8 @@ impl RustworkxGraph {
 
     /// Get connected components using a simple DFS approach
     /// Returns a list of component IDs for each node
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn connected_components(&self) -> Vec<u32> {
         let node_count = self.inner.node_count();
         let mut visited = vec![false; node_count];
@@ -376,7 +401,8 @@ impl RustworkxGraph {
 
     /// Depth-first search edges from a starting node
     /// Returns a list of [source, target] edge pairs in DFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn dfs_edges(&self, start: u32) -> Vec<Vec<u32>> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -406,7 +432,8 @@ impl RustworkxGraph {
 
     /// Breadth-first search edges from a starting node
     /// Returns a list of [source, target] edge pairs in BFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn bfs_edges(&self, start: u32) -> Vec<Vec<u32>> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -436,7 +463,8 @@ impl RustworkxGraph {
 
     /// Depth-first search tree from a starting node
     /// Returns a list of nodes in DFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn dfs_tree(&self, start: u32) -> Vec<u32> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -468,7 +496,8 @@ impl RustworkxGraph {
 
     /// Breadth-first search tree from a starting node
     /// Returns a list of nodes in BFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn bfs_tree(&self, start: u32) -> Vec<u32> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -498,6 +527,7 @@ impl RustworkxGraph {
 }
 
 /// Directed graph implementation
+#[cfg(feature = "nodejs")]
 #[napi]
 #[derive(TS)]
 #[ts(export)]
@@ -506,12 +536,14 @@ pub struct RustworkxDiGraph {
     inner: DiGraph<String, f64>,
 }
 
+#[cfg(feature = "nodejs")]
 impl Default for RustworkxDiGraph {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(feature = "nodejs")]
 #[napi]
 impl RustworkxDiGraph {
     #[napi(constructor)]
@@ -521,12 +553,14 @@ impl RustworkxDiGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn add_node(&mut self, weight: String) -> u32 {
         self.inner.add_node(weight).index() as u32
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn add_edge(&mut self, node_a: u32, node_b: u32, weight: f64) -> Option<u32> {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
@@ -540,17 +574,20 @@ impl RustworkxDiGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn node_count(&self) -> u32 {
         self.inner.node_count() as u32
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn edge_count(&self) -> u32 {
         self.inner.edge_count() as u32
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn remove_node(&mut self, node: u32) -> bool {
         let node_idx = NodeIndex::new(node as usize);
         if self.inner.node_weight(node_idx).is_some() {
@@ -561,11 +598,12 @@ impl RustworkxDiGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn remove_edge(&mut self, node_a: u32, node_b: u32) -> bool {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
-        
+
         if let Some(edge) = self.inner.find_edge(node_a_idx, node_b_idx) {
             self.inner.remove_edge(edge);
             true
@@ -574,24 +612,27 @@ impl RustworkxDiGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn has_edge(&self, node_a: u32, node_b: u32) -> bool {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
         self.inner.find_edge(node_a_idx, node_b_idx).is_some()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn get_node_data(&self, node: u32) -> Option<String> {
         let node_idx = NodeIndex::new(node as usize);
         self.inner.node_weight(node_idx).cloned()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn get_edge_data(&self, node_a: u32, node_b: u32) -> Option<f64> {
         let node_a_idx = NodeIndex::new(node_a as usize);
         let node_b_idx = NodeIndex::new(node_b as usize);
-        
+
         if let Some(edge) = self.inner.find_edge(node_a_idx, node_b_idx) {
             self.inner.edge_weight(edge).copied()
         } else {
@@ -599,7 +640,8 @@ impl RustworkxDiGraph {
         }
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn neighbors(&self, node: u32) -> Vec<u32> {
         let node_idx = NodeIndex::new(node as usize);
         self.inner
@@ -608,7 +650,8 @@ impl RustworkxDiGraph {
             .collect()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn predecessors(&self, node: u32) -> Vec<u32> {
         let node_idx = NodeIndex::new(node as usize);
         self.inner
@@ -617,7 +660,8 @@ impl RustworkxDiGraph {
             .collect()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn successors(&self, node: u32) -> Vec<u32> {
         let node_idx = NodeIndex::new(node as usize);
         self.inner
@@ -626,14 +670,16 @@ impl RustworkxDiGraph {
             .collect()
     }
 
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn clear(&mut self) {
         self.inner.clear();
     }
 
     /// Dijkstra's shortest path algorithm for directed graphs
     /// Returns a list of [nodeId, distance] pairs for JavaScript compatibility
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn dijkstra_shortest_paths(&self, source: u32, target: Option<u32>) -> Vec<Vec<f64>> {
         use petgraph::algo::dijkstra;
 
@@ -658,7 +704,8 @@ impl RustworkxDiGraph {
 
     /// All-pairs shortest paths for directed graphs
     /// Returns a 2D matrix of shortest distances between all pairs of nodes
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn all_pairs_shortest_paths(&self) -> Vec<Vec<Option<f64>>> {
         let node_count = self.inner.node_count();
         let mut result = vec![vec![None; node_count]; node_count];
@@ -705,7 +752,8 @@ impl RustworkxDiGraph {
 
     /// Betweenness centrality for directed graphs
     /// Returns a list of [nodeId, centrality] pairs
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn betweenness_centrality(&self, normalized: Option<bool>) -> Vec<Vec<f64>> {
         let node_count = self.inner.node_count();
         if node_count == 0 {
@@ -784,7 +832,8 @@ impl RustworkxDiGraph {
 
     /// Closeness centrality for directed graphs
     /// Returns a list of [nodeId, centrality] pairs
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn closeness_centrality(&self, normalized: Option<bool>) -> Vec<Vec<f64>> {
         let node_count = self.inner.node_count();
         if node_count == 0 {
@@ -833,7 +882,8 @@ impl RustworkxDiGraph {
 
     /// Check if the directed graph is acyclic (DAG)
     /// Returns true if the graph contains no cycles
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn is_directed_acyclic_graph(&self) -> bool {
         use petgraph::algo::is_cyclic_directed;
         !is_cyclic_directed(&self.inner)
@@ -841,7 +891,8 @@ impl RustworkxDiGraph {
 
     /// Topological sort of the directed graph
     /// Returns nodes in topological order, or empty if graph has cycles
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn topological_sort(&self) -> Vec<u32> {
         use petgraph::algo::toposort;
 
@@ -853,7 +904,8 @@ impl RustworkxDiGraph {
 
     /// Get strongly connected components using Tarjan's algorithm
     /// Returns a list of component IDs for each node
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn strongly_connected_components(&self) -> Vec<u32> {
         use petgraph::algo::tarjan_scc;
 
@@ -870,7 +922,8 @@ impl RustworkxDiGraph {
     }
 
     /// Get the number of strongly connected components
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn number_strongly_connected_components(&self) -> u32 {
         use petgraph::algo::tarjan_scc;
         tarjan_scc(&self.inner).len() as u32
@@ -878,7 +931,8 @@ impl RustworkxDiGraph {
 
     /// Get weakly connected components (treating edges as undirected)
     /// Returns a list of component IDs for each node
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn weakly_connected_components(&self) -> Vec<u32> {
         let node_count = self.inner.node_count();
         let mut visited = vec![false; node_count];
@@ -905,7 +959,10 @@ impl RustworkxDiGraph {
                         }
 
                         // Also check incoming edges (predecessors)
-                        for edge in self.inner.edges_directed(node_idx, petgraph::Direction::Incoming) {
+                        for edge in self
+                            .inner
+                            .edges_directed(node_idx, petgraph::Direction::Incoming)
+                        {
                             let neighbor_idx = edge.source().index();
                             if !visited[neighbor_idx] {
                                 stack.push(neighbor_idx);
@@ -922,7 +979,8 @@ impl RustworkxDiGraph {
 
     /// Depth-first search edges from a starting node (directed)
     /// Returns a list of [source, target] edge pairs in DFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn dfs_edges(&self, start: u32) -> Vec<Vec<u32>> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -952,7 +1010,8 @@ impl RustworkxDiGraph {
 
     /// Breadth-first search edges from a starting node (directed)
     /// Returns a list of [source, target] edge pairs in BFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn bfs_edges(&self, start: u32) -> Vec<Vec<u32>> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -982,7 +1041,8 @@ impl RustworkxDiGraph {
 
     /// Depth-first search tree from a starting node (directed)
     /// Returns a list of nodes in DFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn dfs_tree(&self, start: u32) -> Vec<u32> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {
@@ -1014,7 +1074,8 @@ impl RustworkxDiGraph {
 
     /// Breadth-first search tree from a starting node (directed)
     /// Returns a list of nodes in BFS order
-    #[napi]
+    #[cfg(feature = "nodejs")]
+#[napi]
     pub fn bfs_tree(&self, start: u32) -> Vec<u32> {
         let start_idx = NodeIndex::new(start as usize);
         if self.inner.node_weight(start_idx).is_none() {

@@ -59,11 +59,6 @@ impl ProjectSize {
     pub fn should_enable_l2(&self) -> bool {
         !matches!(self, ProjectSize::Tiny)
     }
-
-    /// Whether to enable L3 cache for this project size
-    pub fn should_enable_l3(&self) -> bool {
-        matches!(self, ProjectSize::Large | ProjectSize::Massive)
-    }
 }
 
 /// Comprehensive project profile for cache optimization
@@ -705,7 +700,6 @@ impl ProjectProfile {
             },
             l2_enabled: self.size.should_enable_l2(),
             l2_disk_limit_mb: self.size.recommended_disk_mb(),
-            l3_enabled: self.size.should_enable_l3(),
             memory_limit_mb: self.estimated_memory_usage_mb,
             enable_predictive: matches!(
                 self.size,
@@ -731,7 +725,6 @@ pub struct CacheRecommendations {
     pub l1_capacity: usize,
     pub l2_enabled: bool,
     pub l2_disk_limit_mb: usize,
-    pub l3_enabled: bool,
     pub memory_limit_mb: usize,
     pub enable_predictive: bool,
     pub cache_warming_enabled: bool,
@@ -772,7 +765,6 @@ mod tests {
     fn test_project_size_recommendations() {
         let medium = ProjectSize::Medium;
         assert!(medium.should_enable_l2());
-        assert!(!medium.should_enable_l3());
         assert_eq!(medium.recommended_memory_mb(), 500);
         assert_eq!(medium.recommended_disk_mb(), 500);
     }

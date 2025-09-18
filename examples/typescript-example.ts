@@ -15,7 +15,6 @@ import type {
     AnalyzerConfig,
     AnalysisResultJs,
     SymbolInfoJs,
-    FileChangeBatchJs,
     ExportOptionsJs
 } from '../index.js';
 
@@ -95,65 +94,67 @@ function processAnalysisResult(result: AnalysisResultJs): void {
 // Example 3: Type-Safe Symbol Processing
 function analyzeSymbols(symbols: SymbolInfoJs[]): void {
     const functionSymbols = symbols.filter(s => s.kind === 'function');
-    const complexSymbols = symbols.filter(s => s.complexity > 10);
-    
+    const classSymbols = symbols.filter(s => s.kind === 'class');
+
     console.log(`🔍 Symbol Analysis:`);
     console.log(`  Functions: ${functionSymbols.length}`);
-    console.log(`  Complex symbols (>10): ${complexSymbols.length}`);
-    
-    // Find most complex symbol
-    const mostComplex = symbols.reduce((max, current) => 
-        current.complexity > max.complexity ? current : max
+    console.log(`  Classes: ${classSymbols.length}`);
+    console.log(`  Total symbols: ${symbols.length}`);
+
+    // Find symbol with longest name (as a proxy for complexity)
+    const longestNameSymbol = symbols.reduce((max, current) =>
+        current.name.length > max.name.length ? current : max
     );
-    
-    console.log(`  Most complex: ${mostComplex.name} (${mostComplex.complexity})`);
-    console.log(`    File: ${mostComplex.filePath}`);
-    console.log(`    Lines: ${mostComplex.startLine}-${mostComplex.endLine}`);
-    
-    if (mostComplex.signature) {
-        console.log(`    Signature: ${mostComplex.signature}`);
+
+    console.log(`  Longest name: ${longestNameSymbol.name} (${longestNameSymbol.name.length} chars)`);
+    console.log(`    File: ${longestNameSymbol.filePath}`);
+    console.log(`    Position: Line ${longestNameSymbol.line}, Column ${longestNameSymbol.column}`);
+    console.log(`    Language: ${longestNameSymbol.language}`);
+    console.log(`    Scope: ${longestNameSymbol.scope}`);
+
+    if (longestNameSymbol.signature) {
+        console.log(`    Signature: ${longestNameSymbol.signature}`);
+    }
+
+    if (longestNameSymbol.documentation) {
+        console.log(`    Documentation: ${longestNameSymbol.documentation.substring(0, 100)}...`);
     }
 }
 
 // Example 4: Type-Safe File Watching
 function setupFileWatching(analyzer: FastContextAnalyzer): void {
-    analyzer.startWatching((changeBatch: FileChangeBatchJs) => {
-        console.log(`📁 File Changes Detected:`);
-        console.log(`  Count: ${changeBatch.changeCount}`);
-        console.log(`  Impact: ${changeBatch.impactLevel}`);
-        console.log(`  Needs Reanalysis: ${changeBatch.requiresReanalysis}`);
-        
-        changeBatch.changes.forEach((change, index) => {
-            console.log(`  ${index + 1}. ${change.changeType.toUpperCase()}: ${change.filePath}`);
-            
-            if (change.language) {
-                console.log(`     Language: ${change.language}`);
+    try {
+        console.log('📁 Starting file watcher...');
+        analyzer.startWatching();
+        console.log('✅ File watcher started successfully');
+
+        // Note: The actual file watching events would be handled internally
+        // This is a simplified example showing how to start/stop watching
+
+        // Simulate stopping the watcher after some time
+        setTimeout(() => {
+            try {
+                analyzer.stopWatching();
+                console.log('🛑 File watcher stopped');
+            } catch {
+                console.log('ℹ️ Watcher was not running or already stopped');
             }
-            
-            if (change.oldPath) {
-                console.log(`     From: ${change.oldPath}`);
-            }
-        });
-        
-        // Type-safe reanalysis trigger
-        if (changeBatch.requiresReanalysis && changeBatch.impactLevel !== 'low') {
-            console.log('🔄 Triggering reanalysis...');
-            const newResult = analyzer.analyze();
-            processAnalysisResult(newResult);
-        }
-    });
+        }, 5000);
+
+    } catch (error) {
+        console.error('❌ Failed to start file watcher:', error);
+    }
 }
 
 
 // Example 6: Export Configuration with Type Safety
 function configureExport(): ExportOptionsJs {
     return {
-        prettyPrint: true,
-        includeDetails: true,
-        includeRelationships: true,
-        maxSymbols: 50000,
         format: 'json',
-        streaming: true
+        outputPath: './analysis-output.json',
+        includeSource: true,
+        includeDocs: true,
+        minify: false
     };
 }
 
@@ -204,7 +205,7 @@ function generateProjectReport(analyzer: FastContextAnalyzer): ProjectStats | nu
     
     const complexityReport = {
         averageComplexity: 0, // Would be calculated from symbols
-        highComplexityCount: topSymbols.filter(s => s.complexity > 15).length,
+        highComplexityCount: topSymbols.filter(s => s.name.length > 15).length, // Using name length as proxy
         fileComplexityMap: new Map<string, number>()
     };
     
@@ -219,7 +220,8 @@ function generateProjectReport(analyzer: FastContextAnalyzer): ProjectStats | nu
 async function runTypeScriptDemo(): Promise<void> {
     try {
         // Create analyzer with type safety
-        const _analyzer = createAnalyzer();
+        const analyzer = createAnalyzer();
+        console.log(`✅ Analyzer created for project: ${analyzer.constructor.name}`);
 
         // Demonstrate language detection
         demonstrateLanguageDetection();
@@ -263,16 +265,14 @@ function isValidSymbol(symbol: any): symbol is SymbolInfoJs {
     return (
         typeof symbol === 'object' &&
         typeof symbol.name === 'string' &&
-        typeof symbol.qualifiedName === 'string' &&
         typeof symbol.kind === 'string' &&
         typeof symbol.filePath === 'string' &&
+        typeof symbol.line === 'number' &&
+        typeof symbol.column === 'number' &&
+        typeof symbol.scope === 'string' &&
         typeof symbol.language === 'string' &&
-        typeof symbol.startLine === 'number' &&
-        typeof symbol.endLine === 'number' &&
-        typeof symbol.complexity === 'number' &&
-        Array.isArray(symbol.dependencies) &&
-        Array.isArray(symbol.dependents) &&
-        Array.isArray(symbol.modifiers)
+        (symbol.documentation === undefined || typeof symbol.documentation === 'string') &&
+        (symbol.signature === undefined || typeof symbol.signature === 'string')
     );
 }
 

@@ -1,0 +1,4 @@
+CoreAnalyzer is a temporary shared core scaffold to transition Node & Python bindings
+toward a unified, Send+Sync analysis service. It initially reuses Python stateless
+helpers and will be filled with proper parser/extractor/graph logic.
+

@@ -1,7 +1,9 @@
 use std::io;
+#[cfg(feature = "nodejs")]
 use ts_rs::TS;
 
 // Re-export main structs for type generation
+#[cfg(feature = "nodejs")]
 pub use crate::{RustworkxDiGraph, RustworkxGraph};
 
 /// Error type for TypeScript type export operations
@@ -14,6 +16,7 @@ pub enum TypeExportError {
 }
 
 /// Export all TypeScript types to a bindings directory with proper error handling
+#[cfg(feature = "nodejs")]
 pub fn export_types() -> Result<(), TypeExportError> {
     // Create bindings directory with proper error handling
     std::fs::create_dir_all("bindings").map_err(TypeExportError::DirectoryCreation)?;
@@ -34,6 +37,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "nodejs")]
     fn generate_typescript_types() {
         // Test that type export works without panicking
         match export_types() {

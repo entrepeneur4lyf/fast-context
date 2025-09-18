@@ -29,6 +29,7 @@ pub mod ruby_extractor;
 pub mod rust_extractor;
 pub mod scala_extractor;
 pub mod swift_extractor;
+pub mod typescript_extractor;
 pub mod xml_extractor;
 pub mod yaml_extractor;
 pub mod zig_extractor;
@@ -56,22 +57,24 @@ pub use scala_extractor::ScalaExtractor;
 pub use swift_extractor::SwiftExtractor;
 pub use xml_extractor::XmlExtractor;
 pub use yaml_extractor::YamlExtractor;
+pub use typescript_extractor::TypeScriptExtractor;
 pub use zig_extractor::ZigExtractor;
 
 /// Symbol extractor factory
 pub struct SymbolExtractorFactory {
-    extractors: HashMap<LanguageId, Box<dyn SymbolExtractor>>,
+    extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>>,
 }
 
 impl SymbolExtractorFactory {
     pub fn new() -> Self {
-        let mut extractors: HashMap<LanguageId, Box<dyn SymbolExtractor>> = HashMap::new();
+        let mut extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>> =
+            HashMap::new();
 
         // Register language extractors
         extractors.insert(LanguageId::Rust, Box::new(RustExtractor));
         extractors.insert(LanguageId::Python, Box::new(PythonExtractor));
         extractors.insert(LanguageId::JavaScript, Box::new(JavaScriptExtractor));
-        extractors.insert(LanguageId::TypeScript, Box::new(JavaScriptExtractor)); // Same extractor for both
+        extractors.insert(LanguageId::TypeScript, Box::new(TypeScriptExtractor)); // ✅ Dedicated TypeScript extractor
         extractors.insert(LanguageId::Java, Box::new(JavaExtractor));
         extractors.insert(LanguageId::Go, Box::new(GoExtractor));
         extractors.insert(LanguageId::CSharp, Box::new(CSharpExtractor));

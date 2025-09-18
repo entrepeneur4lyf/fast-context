@@ -327,7 +327,7 @@ impl Dependency {
 }
 
 /// Symbol extractor for different languages
-pub trait SymbolExtractor {
+pub trait SymbolExtractor: Send + Sync {
     fn extract_symbols(&self, tree: &Tree, source: &str, file_path: &str) -> Vec<Symbol>;
     fn language(&self) -> LanguageId;
 }

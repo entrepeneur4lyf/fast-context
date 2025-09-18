@@ -91,7 +91,6 @@ pub struct CacheConfig {
     /// Cache level enablement
     pub enable_l1_cache: bool,
     pub enable_l2_cache: bool,
-    pub enable_l3_cache: bool,
 
     /// TTL settings for different data types
     pub symbol_ttl: Duration,
@@ -167,8 +166,7 @@ impl Default for CacheConfig {
             cache_dir: default_cache_dir(),
             enable_l1_cache: true,
             enable_l2_cache: true,
-            enable_l3_cache: false,
-            symbol_ttl: Duration::from_secs(3600),    // 1 hour
+                        symbol_ttl: Duration::from_secs(3600),    // 1 hour
             ast_ttl: Duration::from_secs(1800),       // 30 minutes
             graph_ttl: Duration::from_secs(21600),    // 6 hours
             analysis_ttl: Duration::from_secs(86400), // 24 hours
@@ -198,7 +196,6 @@ impl CacheConfig {
             cache_dir: default_cache_dir(),
             enable_l1_cache: true, // Always enabled
             enable_l2_cache: recommendations.l2_enabled,
-            enable_l3_cache: recommendations.l3_enabled,
             enable_predictive_caching: recommendations.enable_predictive,
             enable_cache_warming: recommendations.cache_warming_enabled,
             policy_type,
@@ -216,7 +213,6 @@ impl CacheConfig {
             CachePolicyType::Minimal => {
                 // Optimize for speed and simplicity
                 self.enable_l2_cache = false;
-                self.enable_l3_cache = false;
                 self.enable_predictive_caching = false;
                 self.enable_cache_warming = false;
                 self.enable_dependency_cascade = false;
@@ -268,8 +264,7 @@ impl CacheConfig {
             CachePolicyType::Persistent => {
                 // Optimize for large codebases with persistence
                 self.enable_l2_cache = true;
-                self.enable_l3_cache = true;
-                self.compression_enabled = true;
+                                self.compression_enabled = true;
                 self.background_warming_threads = 3;
 
                 // Longer TTLs for stability
@@ -285,8 +280,7 @@ impl CacheConfig {
 
             CachePolicyType::Enterprise => {
                 // Future: Enterprise features for massive codebases
-                self.enable_l3_cache = true;
-                self.compression_enabled = true;
+                                self.compression_enabled = true;
                 self.streaming_enabled = true;
                 self.background_warming_threads = 4;
 
@@ -407,10 +401,7 @@ impl CacheConfig {
             return Err(ConfigValidationError::L1CacheRequired);
         }
 
-        if self.enable_l3_cache && !self.enable_l2_cache {
-            return Err(ConfigValidationError::L3RequiresL2);
-        }
-
+        
         if self.enable_cache_warming && self.background_warming_threads == 0 {
             self.background_warming_threads = 1;
         }
@@ -448,11 +439,10 @@ impl CacheConfig {
     /// Get configuration summary for logging/debugging
     pub fn summary(&self) -> String {
         format!(
-            "CacheConfig[{}]: L1={}MB, L2={}, L3={}, TTL={}h, Threads={}",
+            "CacheConfig[{}]: L1={}MB, L2={}, TTL={}h, Threads={}",
             self.policy_type.description(),
             self.estimated_memory_usage_mb(),
             if self.enable_l2_cache { "ON" } else { "OFF" },
-            if self.enable_l3_cache { "ON" } else { "OFF" },
             self.symbol_ttl.as_secs() / 3600,
             self.background_warming_threads
         )
@@ -493,11 +483,6 @@ impl CacheConfigBuilder {
 
     pub fn enable_l2_cache(mut self, enabled: bool) -> Self {
         self.config.enable_l2_cache = enabled;
-        self
-    }
-
-    pub fn enable_l3_cache(mut self, enabled: bool) -> Self {
-        self.config.enable_l3_cache = enabled;
         self
     }
 
@@ -599,8 +584,7 @@ mod tests {
 
         assert!(config.enable_l1_cache);
         assert!(config.enable_l2_cache);
-        assert!(!config.enable_l3_cache);
-        assert_eq!(config.policy_type, CachePolicyType::Balanced);
+                assert_eq!(config.policy_type, CachePolicyType::Balanced);
         assert!(config.memory_limit_mb > 0);
         assert!(config.l1_capacity > 0);
     }
@@ -635,8 +619,7 @@ mod tests {
                 assert_eq!(config.policy_type, CachePolicyType::Minimal);
                 // Note: Minimal policy disables these features in apply_policy_optimizations
                 assert!(!config.enable_l2_cache);
-                assert!(!config.enable_l3_cache);
-                assert!(!config.enable_predictive_caching);
+                                assert!(!config.enable_predictive_caching);
             }
             Err(e) => {
                 // If no files found, create a simple test
@@ -661,12 +644,6 @@ mod tests {
         // Reset and test L1 capacity
         config = CacheConfig::default();
         config.l1_capacity = 0;
-        assert!(config.validate_and_constrain().is_err());
-
-        // Test L3 without L2
-        config = CacheConfig::default();
-        config.enable_l2_cache = false;
-        config.enable_l3_cache = true;
         assert!(config.validate_and_constrain().is_err());
     }
 
@@ -725,7 +702,6 @@ mod tests {
         assert!(summary.contains("CacheConfig"));
         assert!(summary.contains("L1="));
         assert!(summary.contains("L2="));
-        assert!(summary.contains("L3="));
         assert!(summary.contains("TTL="));
         assert!(summary.contains("Threads="));
     }

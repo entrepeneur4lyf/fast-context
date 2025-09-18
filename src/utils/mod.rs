@@ -2,99 +2,84 @@
 //!
 //! This module contains utility functions extracted from the monolithic lib.rs
 
-use napi_derive::napi;
+#[cfg(feature = "nodejs")]
 use crate::analyzer::AnalyzerConfig;
+#[cfg(feature = "nodejs")]
+use napi_derive::napi;
 
 /// Get the version of the fast-context package
+#[cfg(feature = "nodejs")]
 #[napi]
 pub fn get_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
 /// Get list of supported programming languages
+#[cfg(feature = "nodejs")]
 #[napi]
 pub fn get_supported_languages() -> Vec<String> {
+    // Use the actual LanguageId enum to ensure consistency
     vec![
-        "rust".to_string(),
-        "javascript".to_string(),
-        "typescript".to_string(),
-        "python".to_string(),
-        "java".to_string(),
-        "go".to_string(),
-        "cpp".to_string(),
-        "c".to_string(),
-        "csharp".to_string(),
-        "php".to_string(),
-        "ruby".to_string(),
-        "swift".to_string(),
-        "kotlin".to_string(),
-        "scala".to_string(),
-        "lua".to_string(),
-        "bash".to_string(),
-        "css".to_string(),
-        "html".to_string(),
-        "xml".to_string(),
-        "json".to_string(),
-        "yaml".to_string(),
-        "toml".to_string(),
-        "markdown".to_string(),
+        LanguageId::Rust.to_lowercase_string(),
+        LanguageId::JavaScript.to_lowercase_string(),
+        LanguageId::TypeScript.to_lowercase_string(),
+        LanguageId::Python.to_lowercase_string(),
+        LanguageId::Java.to_lowercase_string(),
+        LanguageId::Go.to_lowercase_string(),
+        LanguageId::Cpp.to_lowercase_string(),
+        LanguageId::CSharp.to_lowercase_string(),
+        LanguageId::Swift.to_lowercase_string(),
+        LanguageId::ObjectiveC.to_lowercase_string(),
+        LanguageId::PHP.to_lowercase_string(),
+        LanguageId::Ruby.to_lowercase_string(),
+        LanguageId::Scala.to_lowercase_string(),
+        LanguageId::Zig.to_lowercase_string(),
+        LanguageId::Dart.to_lowercase_string(),
+        LanguageId::Lua.to_lowercase_string(),
+        LanguageId::Bash.to_lowercase_string(),
+        LanguageId::CSS.to_lowercase_string(),
+        LanguageId::HTML.to_lowercase_string(),
+        LanguageId::XML.to_lowercase_string(),
+        LanguageId::JSON.to_lowercase_string(),
+        LanguageId::YAML.to_lowercase_string(),
+        LanguageId::Markdown.to_lowercase_string(),
+        LanguageId::JSDoc.to_lowercase_string(),
+        LanguageId::Regex.to_lowercase_string(),
     ]
 }
+use crate::parsers::LanguageId;
+
+/// Internal: Detect language as enum for internal use
+pub fn detect_language_id(file_path: &str) -> Option<LanguageId> {
+    let path = std::path::Path::new(file_path);
+    // Handle special files without extensions
+    if let Some("Dockerfile" | "Makefile") = path.file_name().and_then(|n| n.to_str()) {
+        return None; // These aren't in LanguageId enum
+    }
+    let ext = path.extension()?.to_str()?;
+    LanguageId::from_extension(ext)
+}
+
 
 /// Detect the programming language of a file based on its extension
+#[cfg(feature = "nodejs")]
 #[napi]
 pub fn detect_language(file_path: String) -> Option<String> {
-    let path = std::path::Path::new(&file_path);
-
-    // Handle special files without extensions
-    if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
-        match file_name {
-            "Dockerfile" => return Some("Dockerfile".to_string()),
-            "Makefile" => return Some("Makefile".to_string()),
-            _ => {}
-        }
-    }
-
-    let extension = path.extension()
-        .and_then(|ext| ext.to_str())
-        .map(|s| s.to_lowercase())?;
-
-    let language = match extension.as_str() {
-        "rs" => "Rust",
-        "js" | "mjs" | "cjs" => "JavaScript",
-        "ts" | "tsx" => "TypeScript",
-        "py" | "pyw" | "pyi" => "Python",
-        "java" => "Java",
-        "go" => "Go",
-        "cpp" | "cc" | "cxx" | "c++" => "C++",
-        "c" | "h" => "C",
-        "cs" => "CSharp",
-        "php" => "PHP",
-        "rb" => "Ruby",
-        "swift" => "Swift",
-        "kt" | "kts" => "Kotlin",
-        "scala" | "sc" => "Scala",
-        "lua" => "Lua",
-        "sh" | "bash" | "zsh" | "fish" => "Bash",
-        "css" => "CSS",
-        "html" | "htm" => "HTML",
-        "xml" => "XML",
-        "json" => "JSON",
-        "yaml" | "yml" => "YAML",
-        "toml" => "TOML",
-        "md" | "markdown" => "Markdown",
-        _ => return None,
-    };
-
-    Some(language.to_string())
+    // Use the internal LanguageId detection and convert to string
+    detect_language_id(&file_path).map(|lang_id| lang_id.to_lowercase_string())
 }
 
 /// Check if the analyzer configuration is valid
+#[cfg(feature = "nodejs")]
 #[napi]
 pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<String> {
     let config = match config {
         Some(c) => c,
-        None => return Ok("Configuration check: No configuration provided. Using defaults.".to_string()),
+        None => {
+            return Ok(
+                "Configuration check: No configuration provided. Using defaults.".to_string(),
+            )
+        }
     };
     // Validate project root
     if config.project_root.trim().is_empty() {
@@ -111,9 +96,9 @@ pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<Strin
 
     // Validate languages if specified
     if let Some(languages) = &config.languages {
-        let supported = get_supported_languages();
         for lang in languages {
-            if !supported.contains(lang) {
+            // Use the actual LanguageId::from_string to validate
+            if LanguageId::from_string(lang).is_none() {
                 return Err(napi::Error::from_reason(format!(
                     "Unsupported language: {lang}"
                 )));
@@ -137,7 +122,7 @@ pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<Strin
     if let Some(max_files) = config.max_files {
         if max_files > 100000 {
             return Err(napi::Error::from_reason(
-                "max_files cannot exceed 100,000 for performance reasons"
+                "max_files cannot exceed 100,000 for performance reasons",
             ));
         }
     }
@@ -146,6 +131,7 @@ pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<Strin
 }
 
 /// Get system information
+#[cfg(feature = "nodejs")]
 #[napi]
 pub fn get_system_info() -> String {
     format!(
@@ -171,7 +157,7 @@ pub fn validate_file_path(path: &str) -> Result<(), String> {
     }
 
     let path_obj = std::path::Path::new(path);
-    
+
     if !path_obj.exists() {
         return Err(format!("File does not exist: {path}"));
     }
@@ -197,7 +183,7 @@ pub fn validate_directory_path(path: &str) -> Result<(), String> {
     }
 
     let path_obj = std::path::Path::new(path);
-    
+
     if !path_obj.exists() {
         return Err(format!("Directory does not exist: {path}"));
     }
@@ -217,14 +203,42 @@ pub fn get_file_extension(path: &str) -> Option<String> {
         .map(|ext| ext.to_lowercase())
 }
 
-/// Check if file should be ignored based on patterns
+/// Check if file should be ignored based on glob patterns (e.g., "node_modules/**", ".git/**")
 pub fn should_ignore_file(path: &str, ignore_patterns: &[String]) -> bool {
-    for pattern in ignore_patterns {
-        if path.contains(pattern) {
-            return true;
+    if ignore_patterns.is_empty() {
+        return false;
+    }
+
+    // Build a GlobSet for the provided patterns. On invalid patterns, fall back to non-ignore.
+    let mut builder = globset::GlobSetBuilder::new();
+    let mut added = false;
+    for pat in ignore_patterns {
+        if let Ok(glob) = globset::Glob::new(pat) {
+            builder.add(glob);
+            added = true;
         }
     }
-    false
+    if !added {
+        return false;
+    }
+
+    match builder.build() {
+        Ok(set) => set.is_match(path),
+        Err(_) => false,
+    }
+}
+
+/// Check if file should be ignored using default patterns (for testing)
+pub fn should_ignore_file_default(path: &str) -> bool {
+    let default_patterns = vec![
+        "node_modules/**".to_string(),
+        ".git/**".to_string(),
+        "target/**".to_string(),
+        "dist/**".to_string(),
+        "coverage/**".to_string(),
+        ".nyc_output/**".to_string(),
+    ];
+    should_ignore_file(path, &default_patterns)
 }
 
 /// Format file size in human readable format
@@ -239,4 +253,88 @@ pub fn format_file_size(size: u64) -> String {
     }
 
     format!("{:.1} {}", size, UNITS[unit_index])
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::{should_ignore_file, detect_language_id};
+    #[cfg(feature = "nodejs")]
+    use super::detect_language;
+
+    #[test]
+    fn test_should_ignore_file_basic_globs() {
+        let patterns = vec![
+            "**/node_modules/**".to_string(),
+            "**/.git/**".to_string(),
+            "**/target/**".to_string(),
+        ];
+        assert!(should_ignore_file("project/node_modules/lodash/index.js", &patterns));
+        assert!(should_ignore_file("project/.git/objects/abc", &patterns));
+        assert!(should_ignore_file("project/target/debug/fast-context", &patterns));
+        assert!(!should_ignore_file("src/main.rs", &patterns));
+        assert!(!should_ignore_file("README.md", &patterns));
+    }
+
+    #[test]
+    fn test_should_ignore_file_invalid_patterns() {
+        let patterns = vec!["[invalid[".to_string()];
+        assert!(!should_ignore_file("src/lib.rs", &patterns));
+    }
+
+    #[test]
+    fn test_language_detection_consistency() {
+        // Test that language detection is now consistent between string and ID detection
+        let test_files = vec![
+            ("test.rs", Some("rust")),
+            ("test.js", Some("javascript")),
+            ("test.py", Some("python")),
+            ("test.cs", Some("csharp")),
+            ("test.cpp", Some("cpp")),
+            ("test.html", Some("html")),
+            ("test.css", Some("css")),
+            ("test.xml", Some("xml")),
+        ];
+
+        for (file_path, expected) in test_files {
+            #[cfg(feature = "nodejs")]
+            let detected_string = detect_language(file_path.to_string());
+            let detected_id = detect_language_id(file_path);
+
+            match expected {
+                Some(expected_lang) => {
+                    #[cfg(feature = "nodejs")]
+                    assert_eq!(detected_string, Some(expected_lang.to_string()),
+                              "String detection failed for {}", file_path);
+                    assert!(detected_id.is_some(), "ID detection failed for {}", file_path);
+                    assert_eq!(detected_id.unwrap().to_lowercase_string(), expected_lang,
+                              "ID->string conversion failed for {}", file_path);
+                }
+                None => {
+                    #[cfg(feature = "nodejs")]
+                    assert!(detected_string.is_none(), "Should not detect language for {}", file_path);
+                    assert!(detected_id.is_none(), "Should not detect language ID for {}", file_path);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_special_files() {
+        // Test special files that don't have extensions
+        // Note: These return None for LanguageId since they're not in the enum
+        assert!(detect_language_id("Dockerfile").is_none());
+        assert!(detect_language_id("Makefile").is_none());
+    }
+
+    #[test]
+    fn test_unknown_extensions() {
+        // Test unknown file extensions
+        #[cfg(feature = "nodejs")]
+        assert!(detect_language("test.unknown".to_string()).is_none());
+        assert!(detect_language_id("test.unknown").is_none());
+        #[cfg(feature = "nodejs")]
+        assert!(detect_language("file_without_extension".to_string()).is_none());
+        assert!(detect_language_id("file_without_extension").is_none());
+    }
 }

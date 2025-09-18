@@ -5,16 +5,16 @@ edition = "2021"
 description = "Intelligent codebase analysis engine for coding assistants with graph-powered code comprehension"
 license = "Apache-2.0"
 authors = ["Shawn McAllister x.com/entrepeneur4lyf"]
-repository = "https://github.com/entrepensur4lyf/fast-context"
+repository = "https://github.com/entrepeneur4lyf/rustworkx-nodejs"
 keywords = ["codebase-analysis", "tree-sitter", "code-intelligence", "graph", "ai-assistant"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [features]
-default = ["nodejs"]
+default = []
 nodejs = ["napi", "napi-derive"]
-python = ["pyo3", "pyo3-asyncio"]
+python = ["pyo3", "pyo3-asyncio/tokio-runtime"]
 
 [dependencies]
 # Core NAPI bindings (optional for Node.js)
@@ -87,6 +87,8 @@ dirs = "5.0"
 # Python bindings (optional)
 pyo3 = { version = "0.20", features = ["extension-module"], optional = true }
 pyo3-asyncio = { version = "0.20", features = ["tokio-runtime"], optional = true }
+pyo3-asyncio-macros = "0.20.0"
+globset = "0.4"
 
 [dev-dependencies]
 tempfile = "3.8"

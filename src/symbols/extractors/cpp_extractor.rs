@@ -98,8 +98,11 @@ impl CppExtractor {
     ) {
         if let Some(path_node) = node.child_by_field_name("path") {
             let include_path = self.get_node_text(&path_node, source);
-            let clean_path = include_path.trim_matches('"').trim_matches('<').trim_matches('>');
-            
+            let clean_path = include_path
+                .trim_matches('"')
+                .trim_matches('<')
+                .trim_matches('>');
+
             symbols.push(Symbol {
                 name: clean_path.to_string(),
                 kind: SymbolKind::Import,
@@ -123,7 +126,7 @@ impl CppExtractor {
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
-            
+
             symbols.push(Symbol {
                 name: name.clone(),
                 kind: SymbolKind::Module,
@@ -162,12 +165,22 @@ impl CppExtractor {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
             let mut modifiers = vec!["class".to_string()];
-            
-            // Check for template parameters
-            if let Some(_template_params) = node.child_by_field_name("template_parameters") {
-                modifiers.push("template".to_string());
+
+            // Enhanced template parameter analysis
+            if let Some(template_params) = node.child_by_field_name("template_parameters") {
+                let template_info = self.extract_template_parameters(&template_params, source);
+                modifiers.extend(template_info);
             }
-            
+
+            // Enhanced inheritance analysis
+            let base_classes = self.extract_base_classes(node, source);
+            if !base_classes.is_empty() {
+                modifiers.push(format!("inherits:{}", base_classes.join(",")));
+            }
+
+            // Enhanced signature with templates and inheritance
+            let signature = self.extract_class_signature(node, source, &base_classes);
+
             symbols.push(Symbol {
                 name: name.clone(),
                 kind: SymbolKind::Class,
@@ -175,7 +188,7 @@ impl CppExtractor {
                 scope_chain: scope_stack.clone(),
                 language: LanguageId::Cpp,
                 modifiers,
-                signature: Some(format!("class {name}")),
+                signature: Some(signature),
                 documentation: None,
             });
 
@@ -205,7 +218,7 @@ impl CppExtractor {
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
-            
+
             symbols.push(Symbol {
                 name: name.clone(),
                 kind: SymbolKind::Struct,
@@ -244,7 +257,7 @@ impl CppExtractor {
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = self.get_node_text(&name_node, source);
-            
+
             symbols.push(Symbol {
                 name: name.clone(),
                 kind: SymbolKind::Union,
@@ -267,7 +280,14 @@ impl CppExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         if let Some(declarator) = node.child_by_field_name("declarator") {
-            self.extract_function_from_declarator(&declarator, source, file_path, symbols, scope_stack, true);
+            self.extract_function_from_declarator(
+                &declarator,
+                source,
+                file_path,
+                symbols,
+                scope_stack,
+                true,
+            );
         }
     }
 
@@ -295,20 +315,23 @@ impl CppExtractor {
         if let Some(name_node) = node.child_by_field_name("declarator") {
             let name = self.get_node_text(&name_node, source);
             let mut modifiers = vec![];
-            
+
             if is_definition {
                 modifiers.push("definition".to_string());
             } else {
                 modifiers.push("declaration".to_string());
             }
-            
+
             // Check if it's a method (inside a class/struct)
-            let kind = if scope_stack.iter().any(|s| matches!(s.kind, SymbolKind::Class | SymbolKind::Struct)) {
+            let kind = if scope_stack
+                .iter()
+                .any(|s| matches!(s.kind, SymbolKind::Class | SymbolKind::Struct))
+            {
                 SymbolKind::Method
             } else {
                 SymbolKind::Function
             };
-            
+
             symbols.push(Symbol {
                 name: name.clone(),
                 kind,
@@ -336,7 +359,7 @@ impl CppExtractor {
             if let Some(child) = node.child(i) {
                 if child.kind() == "field_identifier" {
                     let name = self.get_node_text(&child, source);
-                    
+
                     symbols.push(Symbol {
                         name: name.clone(),
                         kind: SymbolKind::Field,
@@ -366,7 +389,7 @@ impl CppExtractor {
             if let Some(child) = node.child(i) {
                 if child.kind() == "identifier" {
                     let name = self.get_node_text(&child, source);
-                    
+
                     symbols.push(Symbol {
                         name: name.clone(),
                         kind: SymbolKind::Variable,
@@ -411,5 +434,105 @@ impl CppExtractor {
         }
     }
 
+    /// Extract template parameters with detailed analysis
+    fn extract_template_parameters(&self, node: &Node, source: &str) -> Vec<String> {
+        let mut template_info = Vec::new();
+        template_info.push("template".to_string());
 
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            match child.kind() {
+                "template_parameter_list" => {
+                    let mut param_cursor = child.walk();
+                    for param in child.children(&mut param_cursor) {
+                        match param.kind() {
+                            "type_parameter" => {
+                                if let Some(name_node) = param.child_by_field_name("name") {
+                                    let name = self.get_node_text(&name_node, source);
+                                    template_info.push(format!("tparam:{}", name));
+                                }
+                            }
+                            "parameter_declaration" => {
+                                if let Some(type_node) = param.child_by_field_name("type") {
+                                    let type_name = self.get_node_text(&type_node, source);
+                                    if let Some(name_node) = param.child_by_field_name("declarator") {
+                                        let name = self.get_node_text(&name_node, source);
+                                        template_info.push(format!("nparam:{}:{}", type_name, name));
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        template_info
+    }
+
+    /// Extract base classes with inheritance analysis
+    fn extract_base_classes(&self, node: &Node, source: &str) -> Vec<String> {
+        let mut base_classes = Vec::new();
+
+        // Look for base class clauses
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "base_class_clause" {
+                let mut base_cursor = child.walk();
+                for base in child.children(&mut base_cursor) {
+                    match base.kind() {
+                        "type_identifier" => {
+                            let base_name = self.get_node_text(&base, source);
+                            if !base_name.is_empty() {
+                                base_classes.push(base_name);
+                            }
+                        }
+                        "template_type" => {
+                            if let Some(name_node) = base.child_by_field_name("name") {
+                                let base_name = self.get_node_text(&name_node, source);
+                                if !base_name.is_empty() {
+                                    base_classes.push(base_name);
+                                }
+                            }
+                        }
+                        "qualified_identifier" => {
+                            let base_name = self.get_node_text(&base, source);
+                            if !base_name.is_empty() {
+                                base_classes.push(base_name);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        base_classes
+    }
+
+    /// Extract enhanced class signature with templates and inheritance
+    fn extract_class_signature(&self, node: &Node, source: &str, base_classes: &[String]) -> String {
+        let mut signature = String::from("class ");
+
+        // Get class name
+        if let Some(name_node) = node.child_by_field_name("name") {
+            signature.push_str(&self.get_node_text(&name_node, source));
+        }
+
+        // Add template parameters
+        if let Some(template_params) = node.child_by_field_name("template_parameters") {
+            let template_text = self.get_node_text(&template_params, source);
+            signature.push_str(&template_text);
+        }
+
+        // Add inheritance
+        if !base_classes.is_empty() {
+            signature.push_str(" : ");
+            signature.push_str(&base_classes.join(", "));
+        }
+
+        signature
+    }
 }

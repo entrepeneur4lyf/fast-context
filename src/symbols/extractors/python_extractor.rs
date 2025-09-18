@@ -147,17 +147,26 @@ impl PythonExtractor {
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        // Extract just the function definition line
-        if let Some(parameters) = node.child_by_field_name("parameters") {
-            let func_name = node
-                .child_by_field_name("name")?
-                .utf8_text(source.as_bytes())
-                .ok()?;
-            let params = parameters.utf8_text(source.as_bytes()).ok()?;
-            Some(format!("def {func_name}{params}"))
-        } else {
-            None
+        // Extract complete function signature including return type
+        let func_name = node
+            .child_by_field_name("name")?
+            .utf8_text(source.as_bytes())
+            .ok()?;
+        
+        let parameters = node.child_by_field_name("parameters")?;
+        let params = parameters.utf8_text(source.as_bytes()).ok()?;
+        
+        let mut signature = format!("def {func_name}{params}");
+        
+        // Add return type annotation if present
+        if let Some(return_type) = node.child_by_field_name("return_type") {
+            if let Ok(return_annotation) = return_type.utf8_text(source.as_bytes()) {
+                signature.push_str(" -> ");
+                signature.push_str(return_annotation.trim());
+            }
         }
+        
+        Some(signature)
     }
 
     fn extract_docstring(&self, node: &Node, source: &str) -> Option<String> {
@@ -240,12 +249,45 @@ impl PythonExtractor {
     fn extract_function_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
 
+        // Check for async keyword
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "async" {
+                modifiers.push("async".to_string());
+                break;
+            }
+        }
+
+        // Check for generator (yield keyword in function body)
+        if let Some(body) = node.child_by_field_name("body") {
+            let mut body_cursor = body.walk();
+            for body_child in body.children(&mut body_cursor) {
+                if body_child.kind() == "yield" || body_child.kind() == "yield_expression" {
+                    modifiers.push("generator".to_string());
+                    break;
+                }
+            }
+        }
+
         // Check for decorators by looking at previous siblings
         let mut current = *node;
         while let Some(sibling) = current.prev_sibling() {
             if sibling.kind() == "decorator" {
                 if let Ok(decorator_text) = sibling.utf8_text(source.as_bytes()) {
-                    modifiers.push(decorator_text.to_string());
+                    let decorator = decorator_text.to_string();
+                    
+                    // Identify common decorator patterns
+                    if decorator.contains("@property") {
+                        modifiers.push("property".to_string());
+                    } else if decorator.contains("@staticmethod") {
+                        modifiers.push("staticmethod".to_string());
+                    } else if decorator.contains("@classmethod") {
+                        modifiers.push("classmethod".to_string());
+                    } else if decorator.contains("@abstractmethod") {
+                        modifiers.push("abstractmethod".to_string());
+                    } else {
+                        modifiers.push(decorator);
+                    }
                 }
                 current = sibling;
             } else {
@@ -264,15 +306,108 @@ impl PythonExtractor {
             }
         }
 
+        // Extract type annotations from function signature
+        if let Some(parameters) = node.child_by_field_name("parameters") {
+            if self.has_type_annotations(&parameters, source) {
+                modifiers.push("typed".to_string());
+            }
+        }
+
+        // Check return type annotation
+        if let Some(_return_type) = node.child_by_field_name("return_type") {
+            modifiers.push("return_typed".to_string());
+        }
+
         modifiers
     }
 
-    fn extract_class_modifiers(&self, node: &Node, _source: &str) -> Vec<String> {
+    /// Check if parameters contain type annotations
+    fn has_type_annotations(&self, parameters: &Node, _source: &str) -> bool {
+        let mut cursor = parameters.walk();
+        for child in parameters.children(&mut cursor) {
+            if child.kind() == "typed_parameter" || child.kind() == "type_annotation" {
+                return true;
+            }
+            // Check for default values with type hints
+            if child.kind() == "parameters" {
+                let mut param_cursor = child.walk();
+                for param_child in child.children(&mut param_cursor) {
+                    if param_child.kind() == "typed_parameter" {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn extract_class_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
 
-        // Check for inheritance
-        if let Some(_superclasses) = node.child_by_field_name("superclasses") {
-            modifiers.push("inherits".to_string());
+        // Check for inheritance and extract parent classes
+        if let Some(superclasses) = node.child_by_field_name("superclasses") {
+            let mut parent_count = 0;
+            let mut cursor = superclasses.walk();
+            for child in superclasses.children(&mut cursor) {
+                if child.kind() == "argument_list" {
+                    let mut arg_cursor = child.walk();
+                    for arg_child in child.children(&mut arg_cursor) {
+                        if arg_child.kind() == "identifier" || arg_child.kind() == "dotted_name" {
+                            if let Ok(parent_name) = arg_child.utf8_text(source.as_bytes()) {
+                                parent_count += 1;
+                                modifiers.push(format!("inherits:{}", parent_name));
+                                
+                                // Check for common base classes
+                                if parent_name == "Exception" || parent_name == "BaseException" {
+                                    modifiers.push("exception_class".to_string());
+                                } else if parent_name == "ABC" || parent_name.contains("abc.") {
+                                    modifiers.push("abstract_base".to_string());
+                                } else if parent_name == "enum.Enum" {
+                                    modifiers.push("enum_class".to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if parent_count > 1 {
+                modifiers.push("multiple_inheritance".to_string());
+            }
+        }
+
+        // Check for class decorators
+        let mut current = *node;
+        while let Some(sibling) = current.prev_sibling() {
+            if sibling.kind() == "decorator" {
+                if let Ok(decorator_text) = sibling.utf8_text(source.as_bytes()) {
+                    let decorator = decorator_text.to_string();
+                    
+                    if decorator.contains("@dataclass") {
+                        modifiers.push("dataclass".to_string());
+                    } else if decorator.contains("@enum") {
+                        modifiers.push("enum_decorator".to_string());
+                    } else if decorator.contains("@abstractmethod") {
+                        modifiers.push("abstract_class".to_string());
+                    } else {
+                        modifiers.push(decorator);
+                    }
+                }
+                current = sibling;
+            } else {
+                break;
+            }
+        }
+
+        // Check if class name suggests it's private/exception
+        if let Some(name_node) = node.child_by_field_name("name") {
+            if let Ok(name) = name_node.utf8_text(source.as_bytes()) {
+                if name.starts_with('_') {
+                    modifiers.push("private_class".to_string());
+                } else if name.ends_with("Exception") || name.ends_with("Error") {
+                    modifiers.push("exception_class".to_string());
+                }
+            }
         }
 
         modifiers
