@@ -11,6 +11,8 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+
+
 /// C++ Symbol Extractor
 /// Extracts classes, functions, variables, namespaces, and includes from C++ code
 pub struct CppExtractor;
@@ -421,7 +423,9 @@ impl CppExtractor {
 
     // Helper methods
     fn get_node_text(&self, node: &Node, source: &str) -> String {
-        source[node.start_byte()..node.end_byte()].to_string()
+        let start = node.start_byte();
+        let end = node.end_byte();
+        source.get(start..end).unwrap_or("").to_string()
     }
 
     fn node_to_location(&self, node: &Node, file_path: &str) -> Location {

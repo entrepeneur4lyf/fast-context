@@ -3,7 +3,6 @@
  */
 
 import { z } from 'zod';
-import type { AnalysisConfig, SymbolInfo, DependencyInfo, AnalysisResult } from '@fast-context/core';
 
 // Tool Input Schemas
 export const AnalyzeCodebaseInputSchema = z.object({

@@ -2,9 +2,11 @@
 //!
 //! Provides sophisticated code analysis capabilities for AI assistants and development tools
 
-use crate::python_bindings::{AnalysisResult, PySymbol, PyDependency, PyLocation};
+#![allow(non_local_definitions)]
+
+use crate::python_bindings::{AnalysisResult, PySymbol, PyLocation};
 use pyo3::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 /// Advanced query engine for code intelligence
 #[cfg(feature = "python")]

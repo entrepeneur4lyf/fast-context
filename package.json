@@ -7,16 +7,13 @@
   "napi": {
     "name": "fast-context",
     "triples": {
-      "defaults": true,
-      "additional": [
-        "x86_64-unknown-linux-musl",
-        "aarch64-unknown-linux-musl",
-        "aarch64-apple-darwin",
-        "aarch64-pc-windows-msvc"
-      ]
+      "defaults": true
     }
   },
   "license": "Apache-2.0",
+  "workspaces": [
+    "packages/*"
+  ],
   "devDependencies": {
     "@napi-rs/cli": "^2.18.0",
     "@types/events": "^3.0.3",
@@ -45,7 +42,12 @@
     "example": "ts-node examples/typescript-example.ts",
     "example:js": "node examples/javascript-example.js",
     "universal": "napi universal",
-    "version": "napi version"
+    "version": "napi version",
+    "build:packages": "npm run build --workspace=packages/core && npm run build --workspace=packages/mcp-server && npm run build --workspace=packages/cli",
+    "clean:packages": "npm run clean --workspace=packages/core && npm run clean --workspace=packages/mcp-server && npm run clean --workspace=packages/cli",
+    "test:packages": "npm run test --workspace=packages/core && npm run test --workspace=packages/mcp-server && npm run test --workspace=packages/cli",
+    "publish:packages": "npm run build:packages && npm publish --workspace=packages/core && npm publish --workspace=packages/mcp-server && npm publish --workspace=packages/cli",
+    "publish:dry-run": "npm run build:packages && npm publish --dry-run --workspace=packages/core && npm publish --dry-run --workspace=packages/mcp-server && npm publish --dry-run --workspace=packages/cli"
   },
   "ava": {
     "files": [

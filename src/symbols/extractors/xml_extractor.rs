@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// XML Symbol Extractor
 /// Extracts elements, attributes, namespaces from XML code
 pub struct XmlExtractor;
@@ -763,7 +780,7 @@ impl XmlExtractor {
     }
 
     fn get_node_text(&self, node: &Node, source: &str) -> String {
-        node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+        safe_node_text(&node, source)
     }
 
     fn clean_attribute_value(&self, value: &str) -> String {

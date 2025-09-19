@@ -3,7 +3,9 @@
 //! Provides sophisticated configuration management with cache policies,
 //! performance tuning, and dynamic configuration updates
 
-use crate::python_bindings::{PyLocation, PyScope};
+#![allow(non_local_definitions)]
+
+// Removed unused imports
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -565,7 +567,7 @@ impl PyAdvancedAnalyzerConfig {
     
     fn estimate_project_size(project_path: &PathBuf) -> PyResult<u64> {
         let mut total_size = 0;
-        let mut file_count = 0;
+        let mut _file_count = 0;
         
         if let Ok(entries) = std::fs::read_dir(project_path) {
             for entry in entries.flatten() {
@@ -573,7 +575,7 @@ impl PyAdvancedAnalyzerConfig {
                 if path.is_file() {
                     if let Ok(metadata) = path.metadata() {
                         total_size += metadata.len();
-                        file_count += 1;
+                        _file_count += 1;
                     }
                 }
             }

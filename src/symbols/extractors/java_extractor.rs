@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// Java Symbol Extractor
 /// Extracts classes, methods, fields, imports, and packages from Java code
 pub struct JavaExtractor;
@@ -72,10 +89,7 @@ impl JavaExtractor {
             }
             "class_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     // Push class as scope for nested items
@@ -103,10 +117,7 @@ impl JavaExtractor {
             }
             "interface_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     // Push interface as scope for nested items
@@ -134,10 +145,7 @@ impl JavaExtractor {
             }
             "enum_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     let modifiers = self.extract_class_modifiers(&node, source);
@@ -157,10 +165,7 @@ impl JavaExtractor {
             }
             "method_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     let signature = self.extract_method_signature(&node, source);
@@ -181,10 +186,7 @@ impl JavaExtractor {
             }
             "constructor_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     let signature = self.extract_method_signature(&node, source);
@@ -259,7 +261,7 @@ impl JavaExtractor {
         // Look for modifiers node
         if let Some(modifiers_node) = node.child_by_field_name("modifiers") {
             // For Java, the modifiers node often contains the actual modifiers as its text content
-            if let Ok(modifier_text) = modifiers_node.utf8_text(source.as_bytes()) {
+            if let Some(modifier_text) = modifiers_node.utf8_text(source.as_bytes()).ok() {
                 // Split by whitespace to handle multiple modifiers
                 for modifier in modifier_text.split_whitespace() {
                     if matches!(
@@ -280,7 +282,7 @@ impl JavaExtractor {
             // Also check if modifiers node has children
             let mut cursor = modifiers_node.walk();
             for child in modifiers_node.children(&mut cursor) {
-                if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
+                if let Some(modifier) = child.utf8_text(source.as_bytes()).ok() {
                     let modifier = modifier.trim();
                     if matches!(
                         modifier,
@@ -308,7 +310,7 @@ impl JavaExtractor {
         // Look for modifiers node - in Java tree-sitter, modifiers is a single node containing modifier keywords
         if let Some(modifiers_node) = node.child_by_field_name("modifiers") {
             // For Java, the modifiers node often contains the actual modifiers as its text content
-            if let Ok(modifier_text) = modifiers_node.utf8_text(source.as_bytes()) {
+            if let Some(modifier_text) = modifiers_node.utf8_text(source.as_bytes()).ok() {
                 // Split by whitespace to handle multiple modifiers
                 for modifier in modifier_text.split_whitespace() {
                     if matches!(
@@ -323,7 +325,7 @@ impl JavaExtractor {
             // Also check if modifiers node has children (some versions might structure it differently)
             let mut cursor = modifiers_node.walk();
             for child in modifiers_node.children(&mut cursor) {
-                if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
+                if let Some(modifier) = child.utf8_text(source.as_bytes()).ok() {
                     let modifier = modifier.trim();
                     if matches!(
                         modifier,
@@ -338,7 +340,7 @@ impl JavaExtractor {
         // Also check for modifier keywords directly as children (fallback)
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Ok(text) = child.utf8_text(source.as_bytes()) {
+            if let Some(text) = child.utf8_text(source.as_bytes()).ok() {
                 let text = text.trim();
                 if matches!(
                     text,
@@ -378,10 +380,7 @@ impl JavaExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&child, file_path);
 
                     // Determine if it's a constant (final fields)
@@ -414,7 +413,7 @@ impl JavaExtractor {
         // Look for modifiers node
         if let Some(modifiers_node) = node.child_by_field_name("modifiers") {
             // For Java, the modifiers node often contains the actual modifiers as its text content
-            if let Ok(modifier_text) = modifiers_node.utf8_text(source.as_bytes()) {
+            if let Some(modifier_text) = modifiers_node.utf8_text(source.as_bytes()).ok() {
                 // Split by whitespace to handle multiple modifiers
                 for modifier in modifier_text.split_whitespace() {
                     if matches!(
@@ -435,7 +434,7 @@ impl JavaExtractor {
             // Also check if modifiers node has children
             let mut cursor = modifiers_node.walk();
             for child in modifiers_node.children(&mut cursor) {
-                if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
+                if let Some(modifier) = child.utf8_text(source.as_bytes()).ok() {
                     let modifier = modifier.trim();
                     if matches!(
                         modifier,
@@ -526,14 +525,14 @@ impl JavaExtractor {
                     node.child_by_field_name("name"),
                 ) {
                     let scope_str = self.extract_scoped_identifier(&scope, source);
-                    let name_str = name.utf8_text(source.as_bytes()).unwrap_or("");
+                    let name_str = safe_node_text(&name, source);
                     format!("{scope_str}.{name_str}")
                 } else {
-                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+                    safe_node_text(&node, source)
                 }
             }
-            "identifier" => node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-            _ => node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+            "identifier" => safe_node_text(&node, source),
+            _ => safe_node_text(&node, source),
         }
     }
 
@@ -543,7 +542,7 @@ impl JavaExtractor {
         while let Some(prev) = current.prev_sibling() {
             match prev.kind() {
                 "block_comment" => {
-                    let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
+                    let comment_text = safe_node_text(&prev, source);
                     if comment_text.starts_with("/**") {
                         // Clean up Javadoc comment
                         let cleaned = comment_text

@@ -554,7 +554,19 @@ pub trait DependencyExtractor {
 
     /// Get text content of a node
     fn get_node_text(&self, node: &Node, source: &str) -> String {
-        node.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+        let start = node.start_byte();
+        let end = node.end_byte();
+        
+        // Ensure byte range is within source bounds
+        if start <= end && end <= source.len() {
+            // Use direct slice access with bounds checking
+            if let Some(slice) = source.get(start..end) {
+                return slice.to_string();
+            }
+        }
+        
+        // Return empty string if bounds are invalid
+        String::new()
     }
 
     /// Create a dependency with proper context
@@ -568,7 +580,7 @@ pub trait DependencyExtractor {
     ) -> Dependency {
         let location = Location::from_node(node, &context.file_path);
 
-        let mut dependency = if context.in_conditional {
+        let dependency = if context.in_conditional {
             Dependency::conditional(
                 from_symbol,
                 to_symbol,
@@ -586,11 +598,11 @@ pub trait DependencyExtractor {
             )
         };
 
-        // Add context information
-        let node_text = self.get_node_text(node, ""); // Would need source parameter
-        if !node_text.trim().is_empty() && node_text.len() < 200 {
-            dependency = dependency.with_context(node_text);
-        }
+        // TODO: Add context information when source parameter is available
+        // let node_text = self.get_node_text(node, source); // Would need source parameter
+        // if !node_text.trim().is_empty() && node_text.len() < 200 {
+        //     dependency = dependency.with_context(node_text);
+        // }
 
         dependency
     }
@@ -738,19 +750,26 @@ impl BaseDependencyExtractor {
     fn extract_name_from_declaration(node: &Node, source: &str) -> Option<String> {
         // Look for name field or identifier child
         if let Some(name_node) = node.child_by_field_name("name") {
-            return Some(
-                name_node
-                    .utf8_text(source.as_bytes())
-                    .unwrap_or("")
-                    .to_string(),
-            );
+            let start = name_node.start_byte();
+            let end = name_node.end_byte();
+            if start <= end && end <= source.len() {
+                if let Some(slice) = source.get(start..end) {
+                    return Some(slice.to_string());
+                }
+            }
         }
 
         // Fallback: look for first identifier child
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                return Some(child.utf8_text(source.as_bytes()).unwrap_or("").to_string());
+                let start = child.start_byte();
+                let end = child.end_byte();
+                if start <= end && end <= source.len() {
+                    if let Some(slice) = source.get(start..end) {
+                        return Some(slice.to_string());
+                    }
+                }
             }
         }
 

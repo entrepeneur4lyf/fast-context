@@ -1,0 +1,78 @@
+# Include essential documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include pyproject.toml
+include Cargo.toml
+include Cargo.lock
+include build.rs
+
+# Include Python package files
+recursive-include python *.py
+recursive-include python *.pyi
+recursive-include python *.typed
+include python/README.md
+include python/pyproject.toml
+
+# Include Rust source code
+recursive-include src *.rs
+recursive-include benches *.rs
+recursive-include tests *.rs
+
+# Include configuration files
+include .fast-context.toml
+recursive-include python/fast_context *.json
+recursive-include python/fast_context *.toml
+
+# Include examples
+recursive-include examples *.py
+recursive-include python/examples *.py
+
+# Include type definitions
+recursive-include bindings *.ts
+recursive-include types *.d.ts
+
+# Exclude development and build artifacts
+exclude .gitignore
+exclude .github
+exclude node_modules
+exclude target
+exclude dist
+exclude htmlcov
+exclude test_env
+recursive-exclude * __pycache__
+recursive-exclude * *.pyc
+recursive-exclude * *.pyo
+recursive-exclude * *.so
+recursive-exclude * .DS_Store
+recursive-exclude * *.swp
+recursive-exclude * *.swo
+recursive-exclude * *~
+
+# Exclude test files from distribution
+exclude test_*.py
+exclude *_test.py
+recursive-exclude tests *
+recursive-exclude python/tests *
+
+# Exclude development tools
+exclude scripts
+exclude docs
+exclude packages
+exclude reference
+exclude *.md
+exclude *.js
+exclude *.ts
+exclude tsconfig.json
+exclude package.json
+exclude package-lock.json
+exclude uv.lock
+
+# Include only essential files for Python package
+prune .git
+prune .github
+prune node_modules
+prune target/debug
+prune target/tmp
+prune htmlcov
+prune test_env

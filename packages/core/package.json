@@ -4,23 +4,47 @@
   "description": "Enhanced TypeScript SDK for Fast-Context with streaming analysis and advanced query capabilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "module": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "clean": "rimraf dist",
+    "prepublishOnly": "npm run clean && npm run build",
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix"
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "codebase-analysis",
     "streaming",
     "typescript",
     "code-intelligence",
-    "fast-context"
+    "fast-context",
+    "ast",
+    "tree-sitter",
+    "static-analysis",
+    "developer-tools",
+    "sdk"
   ],
-  "author": "Fast-Context Team",
+  "author": {
+    "name": "Shawn McAllister",
+    "email": "shawn.payments@gmail.com",
+    "url": "https://x.com/entrepeneur4lyf"
+  },
   "license": "Apache-2.0",
+  "homepage": "https://github.com/entrepeneur4lyf/rustworkx-nodejs#readme",
+  "bugs": {
+    "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs/issues"
+  },
   "dependencies": {
     "zod": "^3.22.0",
     "events": "^3.3.0"
@@ -34,11 +58,17 @@
     "ts-jest": "^29.0.0",
     "eslint": "^8.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0"
+    "@typescript-eslint/parser": "^6.0.0",
+    "rimraf": "^5.0.0"
   },
-  "peerDependencies": {
-    "fast-context": "^0.1.0"
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   },
+  "publishConfig": {
+    "access": "public"
+  },
+
   "files": [
     "dist/**/*",
     "README.md"

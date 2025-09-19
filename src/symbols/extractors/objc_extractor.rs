@@ -10,6 +10,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// Objective-C Symbol Extractor
 /// Extracts classes, methods, properties, imports from Objective-C code
 pub struct ObjectiveCExtractor;
@@ -102,7 +119,7 @@ impl ObjectiveCExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "string_literal" || child.kind() == "system_lib_string" {
-                let import_text = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let import_text = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 // Extract the actual import name from quotes or angle brackets
@@ -141,7 +158,7 @@ impl ObjectiveCExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let name = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 let modifiers = self.extract_class_modifiers(node, source);
@@ -183,7 +200,7 @@ impl ObjectiveCExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let name = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 let modifiers = vec!["implementation".to_string()];
@@ -225,7 +242,7 @@ impl ObjectiveCExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let name = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 // Push protocol as scope for nested items
@@ -321,7 +338,7 @@ impl ObjectiveCExtractor {
                     if struct_child.kind() == "struct_declarator" {
                         // Extract the property name from the struct_declarator
                         let declarator_text =
-                            struct_child.utf8_text(source.as_bytes()).unwrap_or("");
+                            safe_node_text(&struct_child, source);
                         // Remove pointer asterisk and get just the name
                         let name = declarator_text.trim_start_matches('*').trim();
 
@@ -362,7 +379,7 @@ impl ObjectiveCExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let name = safe_node_text(&child, source);
                 let location = Location::from_node(&child, file_path);
 
                 symbols.push(Symbol {
@@ -556,12 +573,12 @@ impl ObjectiveCExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" && class_name.is_empty() {
-                class_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                class_name = safe_node_text(&child, source);
             } else if child.kind() == "identifier"
                 && !class_name.is_empty()
                 && category_name.is_empty()
             {
-                category_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                category_name = safe_node_text(&child, source);
             }
         }
 

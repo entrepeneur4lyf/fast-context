@@ -3,7 +3,7 @@
 
 // Import the runtime exports
 import {
-    FastContextAnalyzer,
+    FastContextAnalyzer as FastContextAnalyzer,
     getSupportedLanguages,
     detectLanguage,
     checkConfiguration,
@@ -151,10 +151,11 @@ function setupFileWatching(analyzer: FastContextAnalyzer): void {
 function configureExport(): ExportOptionsJs {
     return {
         format: 'json',
-        outputPath: './analysis-output.json',
-        includeSource: true,
-        includeDocs: true,
-        minify: false
+        prettyPrint: true,
+        includeDetails: true,
+        includeRelationships: true,
+        maxSymbols: 1000,
+        streaming: false
     };
 }
 

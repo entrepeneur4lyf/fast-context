@@ -3,16 +3,18 @@
 //! Provides multi-level caching with predictive capabilities,
 //! adaptive strategies, and comprehensive cache management
 
-use crate::python_bindings::{AnalysisResult, PySymbol, PyDependency, PyLocation};
+#![allow(non_local_definitions)]
+
+use crate::python_bindings::{AnalysisResult, PySymbol};
 use crate::python_bindings_config::{PyCachePolicy, PyAdvancedAnalyzerConfig};
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, LinkedList, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
-use chrono::{DateTime, Utc};
+// Removed unused chrono imports
 
 /// Cache entry metadata
 #[cfg(feature = "python")]

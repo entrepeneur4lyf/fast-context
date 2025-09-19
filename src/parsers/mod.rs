@@ -38,6 +38,38 @@ pub enum LanguageId {
     Regex,
 }
 
+impl std::fmt::Display for LanguageId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Rust => write!(f, "Rust"),
+            Self::Python => write!(f, "Python"),
+            Self::JavaScript => write!(f, "JavaScript"),
+            Self::TypeScript => write!(f, "TypeScript"),
+            Self::Java => write!(f, "Java"),
+            Self::Go => write!(f, "Go"),
+            Self::CSharp => write!(f, "CSharp"),
+            Self::Cpp => write!(f, "Cpp"),
+            Self::Swift => write!(f, "Swift"),
+            Self::ObjectiveC => write!(f, "ObjectiveC"),
+            Self::PHP => write!(f, "PHP"),
+            Self::Ruby => write!(f, "Ruby"),
+            Self::Scala => write!(f, "Scala"),
+            Self::Zig => write!(f, "Zig"),
+            Self::Dart => write!(f, "Dart"),
+            Self::Lua => write!(f, "Lua"),
+            Self::Bash => write!(f, "Bash"),
+            Self::CSS => write!(f, "CSS"),
+            Self::HTML => write!(f, "HTML"),
+            Self::XML => write!(f, "XML"),
+            Self::JSON => write!(f, "JSON"),
+            Self::YAML => write!(f, "YAML"),
+            Self::Markdown => write!(f, "Markdown"),
+            Self::JSDoc => write!(f, "JSDoc"),
+            Self::Regex => write!(f, "Regex"),
+        }
+    }
+}
+
 impl LanguageId {
     /// Convert language string to LanguageId
     pub fn from_string(lang: &str) -> Option<Self> {

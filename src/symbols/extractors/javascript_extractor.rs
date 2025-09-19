@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// JavaScript/TypeScript Symbol Extractor
 /// Extracts functions, classes, variables, imports, exports, interfaces, and types
 pub struct JavaScriptExtractor;
@@ -115,8 +132,7 @@ impl JavaScriptExtractor {
                         "assignment_expression" => {
                             if let Some(left) = parent.child_by_field_name("left") {
                                 if left.kind() == "identifier" {
-                                    let name =
-                                        left.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                                    let name = format!("{}{}", safe_node_text(&left, source), safe_node_text(&node, source));
                                     let location = Location::from_node(&node, file_path);
 
                                     symbols.push(Symbol {
@@ -712,7 +728,7 @@ impl JavaScriptExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "string" {
-                module_path = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                module_path = safe_node_text(&child, source);
                 // Remove quotes
                 module_path = module_path.trim_matches('"').trim_matches('\'').to_string();
                 break;
@@ -736,7 +752,7 @@ impl JavaScriptExtractor {
                 }
                 "identifier" => {
                     // Simple import like: import './module';
-                    let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = safe_node_text(&child, source);
                     let location = Location::from_node(&child, file_path);
 
                     symbols.push(Symbol {
@@ -863,8 +879,8 @@ impl JavaScriptExtractor {
                     // These will be processed by their respective handlers with export modifier
                 }
                 "export_specifier" => {
-                    let name = if let Some(alias) = child.child_by_field_name("alias") {
-                        alias.utf8_text(source.as_bytes()).unwrap_or("").to_string()
+                    let name = if let Some(_alias) = child.child_by_field_name("alias") {
+                        safe_node_text(&child, source).to_string()
                     } else if let Some(name_node) = child.child_by_field_name("name") {
                         name_node
                             .utf8_text(source.as_bytes())
@@ -902,17 +918,20 @@ impl JavaScriptExtractor {
         language: LanguageId,
     ) {
         // Find the declaration type (const, let, var)
-        let mut decl_type = "var";
-        let mut cursor = node.walk();
-        for child in node.children(&mut cursor) {
-            if matches!(child.kind(), "const" | "let" | "var") {
-                decl_type = child.utf8_text(source.as_bytes()).unwrap_or("var");
-                break;
+        let decl_type = {
+            let mut cursor = node.walk();
+            let mut found_type = "var".to_string();
+            for child in node.children(&mut cursor) {
+                if matches!(child.kind(), "const" | "let" | "var") {
+                    found_type = safe_node_text(&child, source);
+                    break;
+                }
             }
-        }
+            found_type
+        };
 
         // Process variable declarators
-        cursor = node.walk();
+        let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
                 if let Some(name_node) = child.child_by_field_name("name") {
@@ -922,7 +941,7 @@ impl JavaScriptExtractor {
                         .to_string();
                     let location = Location::from_node(&child, file_path);
 
-                    let kind = match decl_type {
+                    let kind = match decl_type.as_str() {
                         "const" => SymbolKind::Constant,
                         _ => SymbolKind::Variable,
                     };

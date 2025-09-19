@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// Go Symbol Extractor
 /// Extracts functions, types, variables, imports, and packages from Go code
 pub struct GoExtractor;
@@ -50,8 +67,7 @@ impl GoExtractor {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "package_identifier" {
-                        let package_name =
-                            child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                        let package_name = safe_node_text(&child, source);
                         let location = Location::from_node(&node, file_path);
 
                         symbols.push(Symbol {
@@ -73,10 +89,7 @@ impl GoExtractor {
             }
             "function_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     let signature = self.extract_function_signature(&node, source);
@@ -96,10 +109,7 @@ impl GoExtractor {
             }
             "method_declaration" => {
                 if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&node, file_path);
 
                     let signature = self.extract_method_signature(&node, source);
@@ -200,10 +210,7 @@ impl GoExtractor {
                 "dot" => is_dot_import = true,
                 "blank_identifier" => is_blank_import = true,
                 "interpreted_string_literal" | "raw_string_literal" => {
-                    import_path = spec_child
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    import_path = safe_node_text(&spec_child, source);
                     // Remove quotes
                     if import_path.starts_with('"') && import_path.ends_with('"') {
                         import_path = import_path[1..import_path.len() - 1].to_string();
@@ -308,10 +315,7 @@ impl GoExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "type_spec" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&child, file_path);
 
                     // Determine the type kind based on the type definition
@@ -449,7 +453,7 @@ impl GoExtractor {
         while let Some(prev) = current.prev_sibling() {
             match prev.kind() {
                 "comment" => {
-                    let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
+                    let comment_text = safe_node_text(&prev, source);
                     if comment_text.starts_with("//") {
                         // Single-line comment
                         let content = comment_text.strip_prefix("//").unwrap_or("").trim();

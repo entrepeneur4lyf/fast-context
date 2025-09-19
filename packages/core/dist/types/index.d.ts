@@ -14,16 +14,10 @@ export declare const Ok: <T>(data: T) => Result<T, never>;
 export declare const Err: <E>(error: E) => Result<never, E>;
 export declare const AnalysisConfigSchema: z.ZodObject<{
     projectRoot: z.ZodString;
-    languages: z.ZodOptional<z.ZodArray<z.ZodString>>;
-    ignorePatterns: z.ZodOptional<z.ZodArray<z.ZodString>>;
+    languages: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    ignorePatterns: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     enableCaching: z.ZodDefault<z.ZodBoolean>;
-    cachePolicy: z.ZodDefault<z.ZodEnum<{
-        auto: "auto";
-        minimal: "minimal";
-        balanced: "balanced";
-        adaptive: "adaptive";
-        persistent: "persistent";
-    }>>;
+    cachePolicy: z.ZodDefault<z.ZodEnum<["auto", "minimal", "balanced", "adaptive", "persistent"]>>;
     enableWatching: z.ZodDefault<z.ZodBoolean>;
     maxFiles: z.ZodOptional<z.ZodNumber>;
     parallelProcessing: z.ZodDefault<z.ZodBoolean>;
@@ -32,25 +26,67 @@ export declare const AnalysisConfigSchema: z.ZodObject<{
         timeoutMs: z.ZodDefault<z.ZodNumber>;
         workerThreads: z.ZodDefault<z.ZodNumber>;
         chunkSize: z.ZodDefault<z.ZodNumber>;
-    }, z.core.$strip>>;
-}, z.core.$strip>;
+    }, "strip", z.ZodTypeAny, {
+        maxMemoryMb: number;
+        timeoutMs: number;
+        workerThreads: number;
+        chunkSize: number;
+    }, {
+        maxMemoryMb?: number | undefined;
+        timeoutMs?: number | undefined;
+        workerThreads?: number | undefined;
+        chunkSize?: number | undefined;
+    }>>;
+}, "strip", z.ZodTypeAny, {
+    projectRoot: string;
+    enableCaching: boolean;
+    cachePolicy: "auto" | "minimal" | "balanced" | "adaptive" | "persistent";
+    enableWatching: boolean;
+    parallelProcessing: boolean;
+    languages?: string[] | undefined;
+    ignorePatterns?: string[] | undefined;
+    maxFiles?: number | undefined;
+    performance?: {
+        maxMemoryMb: number;
+        timeoutMs: number;
+        workerThreads: number;
+        chunkSize: number;
+    } | undefined;
+}, {
+    projectRoot: string;
+    languages?: string[] | undefined;
+    ignorePatterns?: string[] | undefined;
+    enableCaching?: boolean | undefined;
+    cachePolicy?: "auto" | "minimal" | "balanced" | "adaptive" | "persistent" | undefined;
+    enableWatching?: boolean | undefined;
+    maxFiles?: number | undefined;
+    parallelProcessing?: boolean | undefined;
+    performance?: {
+        maxMemoryMb?: number | undefined;
+        timeoutMs?: number | undefined;
+        workerThreads?: number | undefined;
+        chunkSize?: number | undefined;
+    } | undefined;
+}>;
 export type AnalysisConfig = z.infer<typeof AnalysisConfigSchema>;
 export declare const StreamingOptionsSchema: z.ZodObject<{
-    signal: z.ZodOptional<z.ZodCustom<AbortSignal, AbortSignal>>;
+    signal: z.ZodOptional<z.ZodType<AbortSignal, z.ZodTypeDef, AbortSignal>>;
     progressInterval: z.ZodDefault<z.ZodNumber>;
     enableDetailedProgress: z.ZodDefault<z.ZodBoolean>;
     batchSize: z.ZodDefault<z.ZodNumber>;
-}, z.core.$strip>;
-export type StreamingOptions = z.infer<typeof StreamingOptionsSchema>;
-export declare const AnalysisPhaseSchema: z.ZodEnum<{
-    error: "error";
-    initializing: "initializing";
-    parsing: "parsing";
-    extracting: "extracting";
-    analyzing: "analyzing";
-    indexing: "indexing";
-    complete: "complete";
+}, "strip", z.ZodTypeAny, {
+    progressInterval: number;
+    enableDetailedProgress: boolean;
+    batchSize: number;
+    signal?: AbortSignal | undefined;
+}, {
+    signal?: AbortSignal | undefined;
+    progressInterval?: number | undefined;
+    enableDetailedProgress?: boolean | undefined;
+    batchSize?: number | undefined;
 }>;
+export type StreamingOptions = z.infer<typeof StreamingOptionsSchema>;
+export declare const AnalysisPhaseSchema: z.ZodEnum<["initializing", "parsing", "extracting", "analyzing", "indexing", "complete", "error"]>;
 export type AnalysisPhase = z.infer<typeof AnalysisPhaseSchema>;
 export interface AnalysisProgress {
     readonly phase: AnalysisPhase;
@@ -82,24 +118,7 @@ export interface AnalysisResult {
     readonly insights?: readonly string[];
     readonly recommendations?: readonly string[];
 }
-export declare const SymbolKindSchema: z.ZodEnum<{
-    function: "function";
-    type: "type";
-    enum: "enum";
-    class: "class";
-    interface: "interface";
-    variable: "variable";
-    constant: "constant";
-    module: "module";
-    namespace: "namespace";
-    property: "property";
-    method: "method";
-    constructor: "constructor";
-    field: "field";
-    parameter: "parameter";
-    import: "import";
-    export: "export";
-}>;
+export declare const SymbolKindSchema: z.ZodEnum<["function", "class", "interface", "type", "variable", "constant", "enum", "module", "namespace", "property", "method", "constructor", "field", "parameter", "import", "export"]>;
 export type SymbolKind = z.infer<typeof SymbolKindSchema>;
 export interface SymbolInfo {
     readonly name: string;

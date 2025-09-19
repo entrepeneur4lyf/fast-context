@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// Rust symbol extractor
 pub struct RustExtractor;
 
@@ -53,7 +70,7 @@ impl RustExtractor {
                     let location = Location::from_node(&node, file_path);
 
                     // Extract function signature
-                    let signature = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let signature = safe_node_text(&node, source);
 
                     symbols.push(Symbol {
                         name,
@@ -176,7 +193,7 @@ impl RustExtractor {
         let start_byte = node.start_byte();
 
         // Look backwards from the node to find doc comments
-        let preceding_text = &source[..start_byte];
+        let preceding_text = source.get(..start_byte).unwrap_or("");
         let lines: Vec<&str> = preceding_text.lines().collect();
 
         // Collect consecutive doc comment lines working backwards
@@ -221,7 +238,7 @@ impl RustExtractor {
 
         // Check for visibility modifier
         if let Some(visibility) = node.child_by_field_name("visibility") {
-            let vis_text = visibility.utf8_text(source.as_bytes()).unwrap_or("");
+            let vis_text = safe_node_text(&visibility, source);
             if !vis_text.is_empty() {
                 modifiers.push(vis_text.to_string());
             }
@@ -248,7 +265,7 @@ impl RustExtractor {
 
         // Check for visibility modifier
         if let Some(visibility) = node.child_by_field_name("visibility") {
-            let vis_text = visibility.utf8_text(source.as_bytes()).unwrap_or("");
+            let vis_text = safe_node_text(&visibility, source);
             if !vis_text.is_empty() {
                 modifiers.push(vis_text.to_string());
             }
@@ -266,7 +283,7 @@ impl RustExtractor {
             match child.kind() {
                 "type_parameter" => {
                     if let Some(name_node) = child.child_by_field_name("name") {
-                        let name = name_node.utf8_text(source.as_bytes()).unwrap_or("");
+                        let name = safe_node_text(&name_node, source);
                         if !name.is_empty() {
                             generics.push(format!("generic:{}", name));
                         }
@@ -274,7 +291,7 @@ impl RustExtractor {
                 }
                 "lifetime_parameter" => {
                     if let Some(name_node) = child.child_by_field_name("name") {
-                        let name = name_node.utf8_text(source.as_bytes()).unwrap_or("");
+                        let name = safe_node_text(&name_node, source);
                         if !name.is_empty() {
                             generics.push(format!("lifetime:{}", name));
                         }
@@ -282,7 +299,7 @@ impl RustExtractor {
                 }
                 "bounded_type" => {
                     if let Some(type_node) = child.child_by_field_name("type") {
-                        let type_name = type_node.utf8_text(source.as_bytes()).unwrap_or("");
+                        let type_name = safe_node_text(&type_node, source);
                         if !type_name.is_empty() {
                             // Extract trait bounds
                             let mut bounds = Vec::new();
@@ -290,7 +307,7 @@ impl RustExtractor {
                             for bound_child in child.children(&mut bound_cursor) {
                                 if bound_child.kind() == "type_bound" {
                                     if let Some(bound_node) = bound_child.child_by_field_name("type") {
-                                        let bound_name = bound_node.utf8_text(source.as_bytes()).unwrap_or("");
+                                        let bound_name = safe_node_text(&bound_node, source);
                                         if !bound_name.is_empty() {
                                             bounds.push(bound_name);
                                         }
@@ -321,7 +338,7 @@ impl RustExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "trait_bound" {
                 if let Some(trait_node) = child.child_by_field_name("type") {
-                    let trait_name = trait_node.utf8_text(source.as_bytes()).unwrap_or("");
+                    let trait_name = safe_node_text(&trait_node, source);
                     if !trait_name.is_empty() {
                         traits.push(format!("trait:{}", trait_name));
                     }
@@ -338,23 +355,23 @@ impl RustExtractor {
         
         // Get struct name
         if let Some(name_node) = node.child_by_field_name("name") {
-            signature.push_str(name_node.utf8_text(source.as_bytes()).unwrap_or(""));
+            signature.push_str(&safe_node_text(&name_node, source));
         }
         
         // Add generic parameters
         if let Some(type_params) = node.child_by_field_name("type_parameters") {
-            let generics_text = type_params.utf8_text(source.as_bytes()).unwrap_or("");
+            let generics_text = safe_node_text(&type_params, source);
             if !generics_text.is_empty() {
-                signature.push_str(generics_text);
+                signature.push_str(&generics_text);
             }
         }
         
         // Add where clause if present
         if let Some(where_clause) = node.child_by_field_name("where_clause") {
-            let where_text = where_clause.utf8_text(source.as_bytes()).unwrap_or("");
+            let where_text = safe_node_text(&where_clause, source);
             if !where_text.is_empty() {
                 signature.push(' ');
-                signature.push_str(where_text);
+                signature.push_str(&where_text);
             }
         }
         

@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// C# Symbol Extractor
 /// Extracts classes, methods, properties, namespaces, and using statements from C# code
 pub struct CSharpExtractor;
@@ -103,7 +120,7 @@ impl CSharpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" || child.kind() == "qualified_name" {
-                let using_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let using_name = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 symbols.push(Symbol {
@@ -133,7 +150,7 @@ impl CSharpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "qualified_name" || child.kind() == "identifier" {
-                let name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let name = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 // Push namespace as scope for nested items
@@ -168,10 +185,7 @@ impl CSharpExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             // Extract modifiers (public, private, static, etc.)
@@ -208,10 +222,7 @@ impl CSharpExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -247,10 +258,7 @@ impl CSharpExtractor {
         scope_stack: &[Scope],
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -278,10 +286,7 @@ impl CSharpExtractor {
         scope_stack: &[Scope],
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -310,10 +315,7 @@ impl CSharpExtractor {
         scope_stack: &[Scope],
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -341,10 +343,7 @@ impl CSharpExtractor {
         scope_stack: &[Scope],
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let mut modifiers = self.extract_modifiers(node, source);
@@ -377,10 +376,7 @@ impl CSharpExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&child, file_path);
 
                     let mut modifiers = self.extract_modifiers(node, source);
@@ -408,7 +404,7 @@ impl CSharpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
-                if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
+                if let Some(modifier_text) = child.utf8_text(source.as_bytes()).ok() {
                     modifiers.push(modifier_text.to_string());
                 }
             }
@@ -427,7 +423,7 @@ impl CSharpExtractor {
         while let Some(prev) = current.prev_sibling() {
             match prev.kind() {
                 "documentation_comment" => {
-                    let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
+                    let comment_text = safe_node_text(&prev, source);
                     if comment_text.starts_with("///") {
                         // XML documentation comment
                         let content = comment_text.strip_prefix("///").unwrap_or("").trim();
@@ -439,7 +435,7 @@ impl CSharpExtractor {
                 }
                 "comment" => {
                     // Regular comment - check if it's XML doc style
-                    let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
+                    let comment_text = safe_node_text(&prev, source);
                     if comment_text.starts_with("///") {
                         let content = comment_text.strip_prefix("///").unwrap_or("").trim();
                         if !content.is_empty() {

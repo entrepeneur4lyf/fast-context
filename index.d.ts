@@ -142,6 +142,40 @@ export interface AnalysisProgress {
 export declare function getVersion(): string
 /** Get list of supported programming languages */
 export declare function getSupportedLanguages(): Array<string>
+
+// ========================================
+// Auto-generated types from Rust structs
+// ========================================
+
+export type FastContextAnalyzerType = Record<string, never>;
+/** AnalyzerConfig type definition */
+export interface AnalyzerConfig { projectRoot: string, languages: Array<string> | null, ignorePatterns: Array<string> | null, enableCaching: boolean | null, cachePolicy: string | null, enableWatching: boolean | null, maxFiles: number | null, parallelProcessing: boolean | null, }
+/** AnalysisResultJs type definition */
+export interface AnalysisResultJs { fileCount: number, symbolCount: number, relationshipCount: number, languages: Array<string>, durationMs: number, memoryUsageMb: number | null, }
+/** QueryResultJs type definition */
+export interface QueryResultJs { symbols: Array<SymbolInfoJs>, context: ContextInfoJs, suggestions: Array<string>, totalResults: number, }
+/** SymbolInfoJs type definition */
+export interface SymbolInfoJs { name: string, qualifiedName: string, kind: string, filePath: string, language: string, startLine: number, endLine: number, complexity: number, dependencies: Array<string>, dependents: Array<string>, signature: string | null, documentation: string | null, modifiers: Array<string>, }
+/** ContextInfoJs type definition */
+export interface ContextInfoJs { totalSymbols: number, filesInvolved: number, complexityScore: number, architecturalPatterns: Array<string>, potentialIssues: Array<string>, }
+/** ExportOptionsJs type definition */
+export interface ExportOptionsJs { prettyPrint: boolean | null, includeDetails: boolean | null, includeRelationships: boolean | null, maxSymbols: number | null, format: string | null, streaming: boolean | null, }
+/** PaginationOptionsJs type definition */
+export interface PaginationOptionsJs { page: number, pageSize: number, sortField: string | null, sortDirection: string | null, }
+/** FilterOptionsJs type definition */
+export interface FilterOptionsJs { symbolKinds: Array<string> | null, languages: Array<string> | null, filePatterns: Array<string> | null, minComplexity: number | null, maxComplexity: number | null, documentedOnly: boolean | null, }
+/** FileChangeEventJs type definition */
+export interface FileChangeEventJs { changeType: string, filePath: string, oldPath: string | null, timestamp: number, language: string | null, affectsAnalysis: boolean, }
+/** FileChangeBatchJs type definition */
+export interface FileChangeBatchJs { changes: Array<FileChangeEventJs>, changeCount: number, batchTimestamp: number, requiresReanalysis: boolean, impactLevel: string, }
+/** StreamingOptionsJs type definition */
+export interface StreamingOptionsJs { enabled: boolean, chunkSize: number, includeProgress: boolean | null, chunkTimeoutMs: number | null, }
+/** QueryChunkJs type definition */
+export interface QueryChunkJs { symbols: Array<SymbolInfoJs>, chunkIndex: number, totalChunks: number, isLast: boolean, progress: number, processingTimeMs: number, }
+/** RustworkxGraph type definition */
+export interface RustworkxGraph {  }
+/** RustworkxDiGraph type definition */
+export interface RustworkxDiGraph {  }
 /** Detect the programming language of a file based on its extension */
 export declare function detectLanguage(filePath: string): string | null
 /** Check if the analyzer configuration is valid */

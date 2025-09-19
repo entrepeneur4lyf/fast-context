@@ -2,7 +2,9 @@
 //!
 //! Provides JSON, LSP, and embedding export capabilities for AI/ML workflows
 
-use crate::python_bindings::{AnalysisResult, PySymbol, PyDependency, PyLocation};
+#![allow(non_local_definitions)]
+
+use crate::python_bindings::AnalysisResult;
 use pyo3::prelude::*;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -280,6 +282,7 @@ impl PyLspPosition {
 #[cfg(feature = "python")]
 #[pyclass]
 pub struct PyLspExporter {
+    #[allow(dead_code)]
     options: PyExportOptions,
 }
 

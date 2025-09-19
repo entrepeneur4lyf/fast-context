@@ -20,31 +20,31 @@ pub fn get_version() -> String {
 pub fn get_supported_languages() -> Vec<String> {
     // Use the actual LanguageId enum to ensure consistency
     vec![
-        LanguageId::Rust.to_lowercase_string(),
-        LanguageId::JavaScript.to_lowercase_string(),
-        LanguageId::TypeScript.to_lowercase_string(),
-        LanguageId::Python.to_lowercase_string(),
-        LanguageId::Java.to_lowercase_string(),
-        LanguageId::Go.to_lowercase_string(),
-        LanguageId::Cpp.to_lowercase_string(),
-        LanguageId::CSharp.to_lowercase_string(),
-        LanguageId::Swift.to_lowercase_string(),
-        LanguageId::ObjectiveC.to_lowercase_string(),
-        LanguageId::PHP.to_lowercase_string(),
-        LanguageId::Ruby.to_lowercase_string(),
-        LanguageId::Scala.to_lowercase_string(),
-        LanguageId::Zig.to_lowercase_string(),
-        LanguageId::Dart.to_lowercase_string(),
-        LanguageId::Lua.to_lowercase_string(),
-        LanguageId::Bash.to_lowercase_string(),
-        LanguageId::CSS.to_lowercase_string(),
-        LanguageId::HTML.to_lowercase_string(),
-        LanguageId::XML.to_lowercase_string(),
-        LanguageId::JSON.to_lowercase_string(),
-        LanguageId::YAML.to_lowercase_string(),
-        LanguageId::Markdown.to_lowercase_string(),
-        LanguageId::JSDoc.to_lowercase_string(),
-        LanguageId::Regex.to_lowercase_string(),
+        LanguageId::Rust.to_string(),
+        LanguageId::JavaScript.to_string(),
+        LanguageId::TypeScript.to_string(),
+        LanguageId::Python.to_string(),
+        LanguageId::Java.to_string(),
+        LanguageId::Go.to_string(),
+        LanguageId::Cpp.to_string(),
+        LanguageId::CSharp.to_string(),
+        LanguageId::Swift.to_string(),
+        LanguageId::ObjectiveC.to_string(),
+        LanguageId::PHP.to_string(),
+        LanguageId::Ruby.to_string(),
+        LanguageId::Scala.to_string(),
+        LanguageId::Zig.to_string(),
+        LanguageId::Dart.to_string(),
+        LanguageId::Lua.to_string(),
+        LanguageId::Bash.to_string(),
+        LanguageId::CSS.to_string(),
+        LanguageId::HTML.to_string(),
+        LanguageId::XML.to_string(),
+        LanguageId::JSON.to_string(),
+        LanguageId::YAML.to_string(),
+        LanguageId::Markdown.to_string(),
+        LanguageId::JSDoc.to_string(),
+        LanguageId::Regex.to_string(),
     ]
 }
 use crate::parsers::LanguageId;
@@ -66,7 +66,7 @@ pub fn detect_language_id(file_path: &str) -> Option<LanguageId> {
 #[napi]
 pub fn detect_language(file_path: String) -> Option<String> {
     // Use the internal LanguageId detection and convert to string
-    detect_language_id(&file_path).map(|lang_id| lang_id.to_lowercase_string())
+    detect_language_id(&file_path).map(|lang_id| lang_id.to_string())
 }
 
 /// Check if the analyzer configuration is valid

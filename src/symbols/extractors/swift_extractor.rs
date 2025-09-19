@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// Swift Symbol Extractor
 /// Extracts functions, classes, structs, imports from Swift code
 pub struct SwiftExtractor;
@@ -103,7 +120,7 @@ impl SwiftExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "identifier" || child.kind() == "simple_identifier" {
-                let import_name = child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                let import_name = safe_node_text(&child, source);
                 let location = Location::from_node(node, file_path);
 
                 symbols.push(Symbol {
@@ -130,10 +147,7 @@ impl SwiftExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -187,10 +201,7 @@ impl SwiftExtractor {
         scope_stack: &mut Vec<Scope>,
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -236,10 +247,7 @@ impl SwiftExtractor {
         scope_stack: &[Scope],
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let modifiers = self.extract_modifiers(node, source);
@@ -304,10 +312,7 @@ impl SwiftExtractor {
         scope_stack: &[Scope],
     ) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node
-                .utf8_text(source.as_bytes())
-                .unwrap_or("")
-                .to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(node, file_path);
 
             let mut modifiers = self.extract_modifiers(node, source);
@@ -345,10 +350,7 @@ impl SwiftExtractor {
                     if binding_child.kind() == "simple_identifier"
                         || binding_child.kind() == "identifier"
                     {
-                        let name = binding_child
-                            .utf8_text(source.as_bytes())
-                            .unwrap_or("")
-                            .to_string();
+                        let name = safe_node_text(&binding_child, source);
                         let location = Location::from_node(&binding_child, file_path);
 
                         let mut modifiers = self.extract_modifiers(node, source);
@@ -381,14 +383,16 @@ impl SwiftExtractor {
                 "modifiers" => {
                     let mut mod_cursor = child.walk();
                     for mod_child in child.children(&mut mod_cursor) {
-                        if let Ok(modifier_text) = mod_child.utf8_text(source.as_bytes()) {
-                            modifiers.push(modifier_text.to_string());
+                        let modifier_text = safe_node_text(&mod_child, source);
+                        if !modifier_text.is_empty() {
+                            modifiers.push(modifier_text);
                         }
                     }
                 }
                 "visibility_modifier" | "mutation_modifier" | "inheritance_modifier" => {
-                    if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
-                        modifiers.push(modifier_text.to_string());
+                    let modifier_text = safe_node_text(&child, source);
+                    if !modifier_text.is_empty() {
+                        modifiers.push(modifier_text);
                     }
                 }
                 _ => {}
@@ -408,7 +412,7 @@ impl SwiftExtractor {
         while let Some(prev) = current.prev_sibling() {
             match prev.kind() {
                 "comment" => {
-                    let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
+                    let comment_text = safe_node_text(&prev, source);
                     if comment_text.starts_with("///") {
                         // Swift documentation comment
                         let content = comment_text.strip_prefix("///").unwrap_or("").trim();
@@ -435,7 +439,7 @@ impl SwiftExtractor {
                 }
                 "multiline_comment" => {
                     // Handle multiline comments that might be documentation
-                    let comment_text = prev.utf8_text(source.as_bytes()).ok()?;
+                    let comment_text = safe_node_text(&prev, source);
                     if comment_text.starts_with("/**") {
                         let content = comment_text
                             .strip_prefix("/**")
@@ -473,20 +477,18 @@ impl SwiftExtractor {
     }
 
     fn extract_function_signature(&self, node: &Node, source: &str) -> Option<String> {
-        let name = node
-            .child_by_field_name("name")?
-            .utf8_text(source.as_bytes())
-            .ok()?;
+        let name_node = node.child_by_field_name("name")?;
+        let name = safe_node_text(&name_node, source);
 
         let params = node
             .child_by_field_name("parameters")
-            .and_then(|p| p.utf8_text(source.as_bytes()).ok())
-            .unwrap_or("()");
+            .map(|p| safe_node_text(&p, source))
+            .unwrap_or_else(|| "()".to_string());
 
         let return_type = node
             .child_by_field_name("result")
-            .and_then(|r| r.utf8_text(source.as_bytes()).ok())
-            .unwrap_or("");
+            .map(|r| safe_node_text(&r, source))
+            .unwrap_or_else(|| "".to_string());
 
         let return_part = if return_type.is_empty() {
             String::new()
@@ -500,8 +502,8 @@ impl SwiftExtractor {
     fn extract_init_signature(&self, node: &Node, source: &str) -> Option<String> {
         let params = node
             .child_by_field_name("parameters")
-            .and_then(|p| p.utf8_text(source.as_bytes()).ok())
-            .unwrap_or("()");
+            .map(|p| safe_node_text(&p, source))
+            .unwrap_or_else(|| "()".to_string());
 
         Some(format!("init{params}"))
     }

@@ -51,7 +51,8 @@ pub mod errors;      // Standardized error types
 #[cfg(feature = "nodejs")]
 pub mod analyzer;    // FastContextAnalyzer implementation
 pub mod graph;       // Graph algorithms and data structures
-pub mod utils;       // Utility functions
+pub mod utils;
+mod test_display;       // Utility functions
 pub mod domains;     // Domain separation for architectural harmony
 
 // 📦 CORE MODULES - Well-organized functionality

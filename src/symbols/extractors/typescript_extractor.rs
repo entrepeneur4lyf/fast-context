@@ -12,6 +12,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// TypeScript Symbol Extractor
 /// Specialized for TypeScript-specific language features
 pub struct TypeScriptExtractor;
@@ -95,7 +112,7 @@ impl TypeScriptExtractor {
 
     fn extract_interface(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -113,7 +130,7 @@ impl TypeScriptExtractor {
 
     fn extract_type_alias(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -131,7 +148,7 @@ impl TypeScriptExtractor {
 
     fn extract_enum(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -149,7 +166,7 @@ impl TypeScriptExtractor {
 
     fn extract_namespace(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -174,7 +191,7 @@ impl TypeScriptExtractor {
 
     fn extract_abstract_class(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             let mut modifiers = self.extract_modifiers(&node, source);
@@ -202,7 +219,7 @@ impl TypeScriptExtractor {
 
     fn extract_class(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -227,7 +244,7 @@ impl TypeScriptExtractor {
 
     fn extract_function(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -245,7 +262,7 @@ impl TypeScriptExtractor {
 
     fn extract_method(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -267,7 +284,7 @@ impl TypeScriptExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_declarator" {
                 if let Some(name_node) = child.child_by_field_name("name") {
-                    let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                    let name = safe_node_text(&name_node, source);
                     let location = Location::from_node(&child, file_path);
 
                     symbols.push(Symbol {
@@ -287,7 +304,7 @@ impl TypeScriptExtractor {
 
     fn extract_property_signature(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
@@ -305,7 +322,7 @@ impl TypeScriptExtractor {
 
     fn extract_method_signature_node(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
         if let Some(name_node) = node.child_by_field_name("name") {
-            let name = name_node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+            let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {

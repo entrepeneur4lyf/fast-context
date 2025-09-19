@@ -7,6 +7,23 @@ use crate::parsers::LanguageId;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+pub fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 // Extractors module
 pub mod extractors;
 
@@ -1731,24 +1748,21 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "string" {
-                if let Ok(include_path) = child.utf8_text(source.as_bytes()) {
-                    let clean_path = include_path.trim_matches('"').trim_matches('\'');
+                let include_path = safe_node_text(&child, source);
+                let clean_path = include_path.trim_matches('"').trim_matches('\'');
 
-                    let symbol = Symbol {
-                        name: clean_path.to_string(),
-                        kind: SymbolKind::Import,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers: vec![node.kind().to_string()],
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
-                }
-                break;
+                let symbol = Symbol {
+                    name: clean_path.to_string(),
+                    kind: SymbolKind::Import,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers: vec![node.kind().to_string()],
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
+                break; // Only process the first string literal
             }
         }
     }
@@ -1765,42 +1779,37 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "name" {
-                if let Ok(function_name) = child.utf8_text(source.as_bytes()) {
-                    let mut modifiers = vec!["function".to_string()];
+                let function_name = safe_node_text(&child, source);
+                let mut modifiers = vec!["function".to_string()];
 
                     // Check for visibility modifiers (public, private, protected, static)
-                    let mut modifier_cursor = node.walk();
-                    for modifier_child in node.children(&mut modifier_cursor) {
-                        if modifier_child.kind() == "visibility_modifier"
-                            || modifier_child.kind() == "static_modifier"
-                        {
-                            if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
-                                modifiers.push(modifier_text.to_string());
-                            }
-                        }
+                let mut modifier_cursor = node.walk();
+                for modifier_child in node.children(&mut modifier_cursor) {
+                    if modifier_child.kind() == "visibility_modifier"
+                        || modifier_child.kind() == "static_modifier"
+                    {
+                        let modifier_text = safe_node_text(&modifier_child, source);
+                        modifiers.push(modifier_text.to_string());
                     }
-
-                    let symbol = Symbol {
-                        name: function_name.to_string(),
-                        kind: SymbolKind::Function,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers,
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
-
-                    // Push function scope for nested symbols
-                    scope_stack.push(Scope {
-                        name: function_name.to_string(),
-                        kind: SymbolKind::Function,
-                        location: self.node_to_location(node, file_path),
-                    });
                 }
+                let symbol = Symbol {
+                    name: function_name.to_string(),
+                    kind: SymbolKind::Function,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers,
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
+
+                // Push function scope for nested symbols
+                scope_stack.push(Scope {
+                    name: function_name.to_string(),
+                    kind: SymbolKind::Function,
+                    location: self.node_to_location(node, file_path),
+                });
                 break;
             }
         }
@@ -1818,42 +1827,38 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "name" {
-                if let Ok(class_name) = child.utf8_text(source.as_bytes()) {
-                    let mut modifiers = vec!["class".to_string()];
+                let class_name = safe_node_text(&child, source);
+                let mut modifiers = vec!["class".to_string()];
 
-                    // Check for class modifiers (abstract, final)
-                    let mut modifier_cursor = node.walk();
-                    for modifier_child in node.children(&mut modifier_cursor) {
-                        if modifier_child.kind() == "abstract_modifier"
-                            || modifier_child.kind() == "final_modifier"
-                        {
-                            if let Ok(modifier_text) = modifier_child.utf8_text(source.as_bytes()) {
-                                modifiers.push(modifier_text.to_string());
-                            }
-                        }
+                // Check for class modifiers (abstract, final)
+                let mut modifier_cursor = node.walk();
+                for modifier_child in node.children(&mut modifier_cursor) {
+                    if modifier_child.kind() == "abstract_modifier"
+                        || modifier_child.kind() == "final_modifier"
+                    {
+                        let modifier_text = safe_node_text(&modifier_child, source);
+                        modifiers.push(modifier_text.to_string());
                     }
-
-                    let symbol = Symbol {
-                        name: class_name.to_string(),
-                        kind: SymbolKind::Class,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers,
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
-
-                    // Push class scope for nested symbols
-                    scope_stack.push(Scope {
-                        name: class_name.to_string(),
-                        kind: SymbolKind::Class,
-                        location: self.node_to_location(node, file_path),
-                    });
                 }
+
+                let symbol = Symbol {
+                    name: class_name.to_string(),
+                    kind: SymbolKind::Class,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers,
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
+
+                // Push class scope for nested symbols
+                scope_stack.push(Scope {
+                    name: class_name.to_string(),
+                    kind: SymbolKind::Class,
+                    location: self.node_to_location(node, file_path),
+                });
                 break;
             }
         }
@@ -1871,28 +1876,25 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "name" {
-                if let Ok(interface_name) = child.utf8_text(source.as_bytes()) {
-                    let symbol = Symbol {
-                        name: interface_name.to_string(),
-                        kind: SymbolKind::Interface,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers: vec!["interface".to_string()],
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
+                let interface_name = safe_node_text(&child, source);
+                let symbol = Symbol {
+                    name: interface_name.to_string(),
+                    kind: SymbolKind::Interface,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers: vec!["interface".to_string()],
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
 
-                    // Push interface scope for nested symbols
-                    scope_stack.push(Scope {
-                        name: interface_name.to_string(),
-                        kind: SymbolKind::Interface,
-                        location: self.node_to_location(node, file_path),
-                    });
-                }
+                // Push interface scope for nested symbols
+                scope_stack.push(Scope {
+                    name: interface_name.to_string(),
+                    kind: SymbolKind::Interface,
+                    location: self.node_to_location(node, file_path),
+                });
                 break;
             }
         }
@@ -1910,28 +1912,25 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "name" {
-                if let Ok(trait_name) = child.utf8_text(source.as_bytes()) {
-                    let symbol = Symbol {
-                        name: trait_name.to_string(),
-                        kind: SymbolKind::Trait,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers: vec!["trait".to_string()],
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
+                let trait_name = safe_node_text(&child, source);
+                let symbol = Symbol {
+                    name: trait_name.to_string(),
+                    kind: SymbolKind::Trait,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers: vec!["trait".to_string()],
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
 
-                    // Push trait scope for nested symbols
-                    scope_stack.push(Scope {
-                        name: trait_name.to_string(),
-                        kind: SymbolKind::Trait,
-                        location: self.node_to_location(node, file_path),
-                    });
-                }
+                // Push trait scope for nested symbols
+                scope_stack.push(Scope {
+                    name: trait_name.to_string(),
+                    kind: SymbolKind::Trait,
+                    location: self.node_to_location(node, file_path),
+                });
                 break;
             }
         }
@@ -1949,42 +1948,38 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "name" {
-                if let Ok(method_name) = child.utf8_text(source.as_bytes()) {
-                    let mut modifiers = vec!["method".to_string()];
+                let method_name = safe_node_text(&child, source);
+                let mut modifiers = vec!["method".to_string()];
 
-                    // Check for visibility and other modifiers
-                    let mut modifier_cursor = node.walk();
-                    for modifier_child in node.children(&mut modifier_cursor) {
-                        match modifier_child.kind() {
-                            "visibility_modifier"
-                            | "static_modifier"
-                            | "abstract_modifier"
-                            | "final_modifier" => {
-                                if let Ok(modifier_text) =
-                                    modifier_child.utf8_text(source.as_bytes())
-                                {
-                                    modifiers.push(modifier_text.to_string());
-                                }
+                // Check for visibility and other modifiers
+                let mut modifier_cursor = node.walk();
+                for modifier_child in node.children(&mut modifier_cursor) {
+                    match modifier_child.kind() {
+                        "visibility_modifier"
+                        | "static_modifier"
+                        | "abstract_modifier"
+                        | "final_modifier" => {
+                            let modifier_text = safe_node_text(&modifier_child, source);
+                            if !modifier_text.is_empty() {
+                                modifiers.push(modifier_text.to_string());
                             }
-                            _ => {}
                         }
+                        _ => {}
                     }
-
-                    let symbol = Symbol {
-                        name: method_name.to_string(),
-                        kind: SymbolKind::Method,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers,
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
                 }
-                break;
+
+                let symbol = Symbol {
+                    name: method_name.to_string(),
+                    kind: SymbolKind::Method,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers,
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
+                break; // Only process the first name
             }
         }
     }
@@ -2004,39 +1999,37 @@ impl PhpExtractor {
                 let mut prop_cursor = child.walk();
                 for prop_child in child.children(&mut prop_cursor) {
                     if prop_child.kind() == "variable_name" {
-                        if let Ok(property_name) = prop_child.utf8_text(source.as_bytes()) {
-                            let clean_name = property_name.trim_start_matches('$');
+                        let property_name = safe_node_text(&prop_child, source);
+                        let clean_name = property_name.trim_start_matches('$');
 
-                            let mut modifiers = vec!["property".to_string()];
+                        let mut modifiers = vec!["property".to_string()];
 
-                            // Check for visibility modifiers
-                            let mut modifier_cursor = node.walk();
-                            for modifier_child in node.children(&mut modifier_cursor) {
-                                if modifier_child.kind() == "visibility_modifier"
-                                    || modifier_child.kind() == "static_modifier"
-                                {
-                                    if let Ok(modifier_text) =
-                                        modifier_child.utf8_text(source.as_bytes())
-                                    {
-                                        modifiers.push(modifier_text.to_string());
-                                    }
+                        // Check for visibility modifiers
+                        let mut modifier_cursor = node.walk();
+                        for modifier_child in node.children(&mut modifier_cursor) {
+                            if modifier_child.kind() == "visibility_modifier"
+                                || modifier_child.kind() == "static_modifier"
+                            {
+                                let modifier_text = safe_node_text(&modifier_child, source);
+                                if !modifier_text.is_empty() {
+                                    modifiers.push(modifier_text.to_string());
                                 }
                             }
-
-                            let symbol = Symbol {
-                                name: clean_name.to_string(),
-                                kind: SymbolKind::Field,
-                                location: self.node_to_location(&prop_child, file_path),
-                                scope_chain: scope_stack.to_vec(),
-                                language: LanguageId::PHP,
-                                documentation: None,
-                                modifiers,
-                                signature: Some(
-                                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                                ),
-                            };
-                            symbols.push(symbol);
                         }
+
+                        let symbol = Symbol {
+                            name: clean_name.to_string(),
+                            kind: SymbolKind::Field,
+                            location: self.node_to_location(&prop_child, file_path),
+                            scope_chain: scope_stack.to_vec(),
+                            language: LanguageId::PHP,
+                            documentation: None,
+                            modifiers,
+                            signature: Some(
+                                safe_node_text(node, source),
+                            ),
+                        };
+                        symbols.push(symbol);
                     }
                 }
             }
@@ -2058,21 +2051,20 @@ impl PhpExtractor {
                 let mut const_cursor = child.walk();
                 for const_child in child.children(&mut const_cursor) {
                     if const_child.kind() == "name" {
-                        if let Ok(const_name) = const_child.utf8_text(source.as_bytes()) {
-                            let symbol = Symbol {
-                                name: const_name.to_string(),
-                                kind: SymbolKind::Constant,
-                                location: self.node_to_location(&const_child, file_path),
-                                scope_chain: scope_stack.to_vec(),
-                                language: LanguageId::PHP,
-                                documentation: None,
-                                modifiers: vec!["const".to_string()],
-                                signature: Some(
-                                    child.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                                ),
-                            };
-                            symbols.push(symbol);
-                        }
+                        let const_name = safe_node_text(&const_child, source);
+                        let symbol = Symbol {
+                            name: const_name.to_string(),
+                            kind: SymbolKind::Constant,
+                            location: self.node_to_location(&const_child, file_path),
+                            scope_chain: scope_stack.to_vec(),
+                            language: LanguageId::PHP,
+                            documentation: None,
+                            modifiers: vec!["const".to_string()],
+                            signature: Some(
+                                safe_node_text(&child, source),
+                            ),
+                        };
+                        symbols.push(symbol);
                     }
                 }
             }
@@ -2091,24 +2083,21 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "variable_name" {
-                if let Ok(var_name) = child.utf8_text(source.as_bytes()) {
-                    let clean_name = var_name.trim_start_matches('$');
+                let var_name = safe_node_text(&child, source);
+                let clean_name = var_name.trim_start_matches('$');
 
-                    let symbol = Symbol {
-                        name: clean_name.to_string(),
-                        kind: SymbolKind::Variable,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers: vec!["variable".to_string()],
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
-                }
-                break;
+                let symbol = Symbol {
+                    name: clean_name.to_string(),
+                    kind: SymbolKind::Variable,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers: vec!["variable".to_string()],
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
+                break; // Only process the first variable name
             }
         }
     }
@@ -2125,29 +2114,26 @@ impl PhpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "namespace_name" {
-                if let Ok(namespace_name) = child.utf8_text(source.as_bytes()) {
-                    let symbol = Symbol {
-                        name: namespace_name.to_string(),
-                        kind: SymbolKind::Module,
-                        location: self.node_to_location(&child, file_path),
-                        scope_chain: scope_stack.to_vec(),
-                        language: LanguageId::PHP,
-                        documentation: None,
-                        modifiers: vec!["namespace".to_string()],
-                        signature: Some(
-                            node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                        ),
-                    };
-                    symbols.push(symbol);
+                let namespace_name = safe_node_text(&child, source);
+                let symbol = Symbol {
+                    name: namespace_name.to_string(),
+                    kind: SymbolKind::Module,
+                    location: self.node_to_location(&child, file_path),
+                    scope_chain: scope_stack.to_vec(),
+                    language: LanguageId::PHP,
+                    documentation: None,
+                    modifiers: vec!["namespace".to_string()],
+                    signature: Some(safe_node_text(node, source)),
+                };
+                symbols.push(symbol);
 
-                    // Push namespace scope
-                    scope_stack.push(Scope {
-                        name: namespace_name.to_string(),
-                        kind: SymbolKind::Namespace,
-                        location: self.node_to_location(node, file_path),
-                    });
-                }
-                break;
+                // Push namespace scope
+                scope_stack.push(Scope {
+                    name: namespace_name.to_string(),
+                    kind: SymbolKind::Namespace,
+                    location: self.node_to_location(node, file_path),
+                });
+                break; // Only process the first namespace name
             }
         }
     }
@@ -2168,22 +2154,21 @@ impl PhpExtractor {
                 let mut clause_cursor = child.walk();
                 for clause_child in child.children(&mut clause_cursor) {
                     if clause_child.kind() == "qualified_name" {
-                        if let Ok(use_name) = clause_child.utf8_text(source.as_bytes()) {
-                            let symbol = Symbol {
-                                name: use_name.to_string(),
-                                kind: SymbolKind::Import,
-                                location: self.node_to_location(&clause_child, file_path),
-                                scope_chain: scope_stack.to_vec(),
-                                language: LanguageId::PHP,
-                                documentation: None,
-                                modifiers: vec!["use".to_string()],
-                                signature: Some(
-                                    node.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
-                                ),
-                            };
-                            symbols.push(symbol);
-                        }
-                        break;
+                        let use_name = safe_node_text(&clause_child, source);
+                        let symbol = Symbol {
+                            name: use_name.to_string(),
+                            kind: SymbolKind::Import,
+                            location: self.node_to_location(&clause_child, file_path),
+                            scope_chain: scope_stack.to_vec(),
+                            language: LanguageId::PHP,
+                            documentation: None,
+                            modifiers: vec!["use".to_string()],
+                            signature: Some(
+                                safe_node_text(node, source),
+                            ),
+                        };
+                        symbols.push(symbol);
+                        break; // Only process the first qualified_name
                     }
                 }
             }

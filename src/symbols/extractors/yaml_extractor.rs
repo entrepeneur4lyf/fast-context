@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// YAML Symbol Extractor
 /// Extracts keys, values, anchors, aliases, and nested structures from YAML code
 pub struct YamlExtractor;
@@ -118,7 +135,8 @@ impl YamlExtractor {
                 let signature = if let Some(value_node) = value_node {
                     let value_text = self.extract_node_text(&value_node, source);
                     if value_text.len() > 100 {
-                        Some(format!("{}: {}...", key_text, &value_text[..97]))
+                        let truncated = value_text.get(..97).unwrap_or(&value_text);
+                        Some(format!("{}: {}...", key_text, truncated))
                     } else {
                         Some(format!("{key_text}: {value_text}"))
                     }
@@ -198,7 +216,7 @@ impl YamlExtractor {
         scope_stack: &[Scope],
     ) {
         // YAML anchor: &anchor_name
-        let anchor_text = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+        let anchor_text = safe_node_text(&node, source);
         if !anchor_text.is_empty() {
             let clean_name = anchor_text.trim_start_matches('&');
             let location = Location::from_node(node, file_path);
@@ -225,7 +243,7 @@ impl YamlExtractor {
         scope_stack: &[Scope],
     ) {
         // YAML alias: *anchor_name
-        let alias_text = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+        let alias_text = safe_node_text(&node, source);
         if !alias_text.is_empty() {
             let clean_name = alias_text.trim_start_matches('*');
             let location = Location::from_node(node, file_path);
@@ -323,7 +341,7 @@ impl YamlExtractor {
         scope_stack: &[Scope],
     ) {
         // YAML comment: # comment text
-        let comment_text = node.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+        let comment_text = safe_node_text(&node, source);
         if !comment_text.is_empty() && comment_text.len() > 5 {
             let clean_comment = comment_text.trim_start_matches('#').trim();
             if !clean_comment.is_empty() && clean_comment.len() > 10 {

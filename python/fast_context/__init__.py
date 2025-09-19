@@ -14,6 +14,38 @@ from .fast_context import (
     get_version,
 )
 
+# Import configuration system
+try:
+    from .config import (
+        load_config,
+        save_config,
+        create_default_config,
+        get_config_manager,
+        FastContextConfig,
+        AnalysisConfig,
+        GraphConfig,
+        MCPConfig,
+        LoggingConfig,
+        ConfigManager,
+    )
+    
+    __config_all__ = [
+        "load_config",
+        "save_config", 
+        "create_default_config",
+        "get_config_manager",
+        "FastContextConfig",
+        "AnalysisConfig",
+        "GraphConfig",
+        "MCPConfig",
+        "LoggingConfig",
+        "ConfigManager",
+    ]
+    
+except ImportError:
+    # Configuration system not available (missing dependencies)
+    __config_all__ = []
+
 # Import graph classes from main module
 try:
     from .fast_context import (
@@ -43,6 +75,17 @@ try:
         "PathResult",
         "CentralityResult",
         "ConnectedComponent",
+        # Configuration classes
+        "load_config",
+        "save_config", 
+        "create_default_config",
+        "get_config_manager",
+        "FastContextConfig",
+        "AnalysisConfig",
+        "GraphConfig",
+        "MCPConfig",
+        "LoggingConfig",
+        "ConfigManager",
     ]
     
 except ImportError:
@@ -54,6 +97,18 @@ except ImportError:
         "get_supported_languages",
         "detect_language",
         "get_version",
-    ]
+    ] + __config_all__
+
+# Import MCP server (optional dependencies)
+try:
+    from . import mcp_server
+    
+    __all__.extend([
+        "mcp_server"
+    ])
+    
+except ImportError:
+    # MCP server not available (mcp package not installed)
+    pass
 
 __version__ = get_version()

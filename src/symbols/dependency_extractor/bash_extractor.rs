@@ -639,7 +639,7 @@ impl BashDependencyExtractor {
 
             // Handle variable at end of string
             if let Some(start) = var_start {
-                let var_name = &text[start..];
+                let var_name = text.get(start..).unwrap_or("");
                 if !var_name.is_empty() && !self.is_bash_builtin_var(var_name) {
                     let dependency = self.create_dependency(
                         current_scope,

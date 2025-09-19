@@ -11,6 +11,23 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
+/// Safe text extraction from tree-sitter nodes with bounds checking
+fn safe_node_text(node: &Node, source: &str) -> String {
+    let start = node.start_byte();
+    let end = node.end_byte();
+    
+    // Ensure byte range is within source bounds
+    if start <= end && end <= source.len() {
+        // Use direct slice access with bounds checking
+        if let Some(slice) = source.get(start..end) {
+            return slice.to_string();
+        }
+    }
+    
+    // Return empty string if bounds are invalid
+    String::new()
+}
+
 /// Python Symbol Extractor
 /// Extracts functions, classes, variables, imports, constants, and decorators from Python code
 pub struct PythonExtractor;
@@ -108,7 +125,7 @@ impl PythonExtractor {
                 // Extract variable assignments at module level or class level
                 if let Some(left) = node.child_by_field_name("left") {
                     if left.kind() == "identifier" {
-                        let name = left.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                        let name = format!("{}{}", safe_node_text(&left, source), safe_node_text(&node, source));
                         let location = Location::from_node(&left, file_path);
 
                         // Determine if this is a constant (ALL_CAPS) or variable
@@ -428,7 +445,7 @@ impl PythonExtractor {
                 for child in node.children(&mut cursor) {
                     if child.kind() == "dotted_name" || child.kind() == "identifier" {
                         let module_name =
-                            child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                            safe_node_text(&child, source);
                         let location = Location::from_node(&child, file_path);
 
                         symbols.push(Symbol {
@@ -455,10 +472,10 @@ impl PythonExtractor {
                         "dotted_name" | "identifier" => {
                             if module_name.is_empty() {
                                 module_name =
-                                    child.utf8_text(source.as_bytes()).unwrap_or("").to_string();
+                                    safe_node_text(&child, source);
                             } else {
                                 imported_names.push((
-                                    child.utf8_text(source.as_bytes()).unwrap_or("").to_string(),
+                                    safe_node_text(&child, source),
                                     Location::from_node(&child, file_path),
                                 ));
                             }
