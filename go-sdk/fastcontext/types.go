@@ -90,6 +90,34 @@ const (
 	DepTypeDecorates
 )
 
+// String returns the string representation of DependencyType
+func (dt DependencyType) String() string {
+	switch dt {
+	case DepTypeUnknown:
+		return "unknown"
+	case DepTypeImports:
+		return "imports"
+	case DepTypeCalls:
+		return "calls"
+	case DepTypeInherits:
+		return "inherits"
+	case DepTypeImplements:
+		return "implements"
+	case DepTypeReferences:
+		return "references"
+	case DepTypeInstantiates:
+		return "instantiates"
+	case DepTypeContains:
+		return "contains"
+	case DepTypeOverrides:
+		return "overrides"
+	case DepTypeDecorates:
+		return "decorates"
+	default:
+		return "unknown"
+	}
+}
+
 // AnalysisPhase represents the current phase of analysis
 type AnalysisPhase int
 

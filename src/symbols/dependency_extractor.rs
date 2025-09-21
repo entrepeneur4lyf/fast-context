@@ -28,10 +28,16 @@ pub struct ExtractionContext {
     pub conditional_depth: usize,
     /// Reference to global symbol registry for cross-file resolution
     pub global_registry: Option<GlobalSymbolRegistry>,
+    /// Source code of the file being analyzed for context extraction
+    pub source: Option<String>,
 }
 
 impl ExtractionContext {
     pub fn new(file_path: String, language: LanguageId, symbols: Vec<Symbol>) -> Self {
+        Self::with_source(file_path, language, symbols, None)
+    }
+
+    pub fn with_source(file_path: String, language: LanguageId, symbols: Vec<Symbol>, source: Option<String>) -> Self {
         let mut symbol_map = HashMap::new();
 
         // Build symbol lookup map
@@ -60,6 +66,7 @@ impl ExtractionContext {
             in_conditional: false,
             conditional_depth: 0,
             global_registry: None,
+            source,
         }
     }
 
@@ -444,7 +451,7 @@ impl GlobalSymbolRegistry {
 }
 
 /// Trait for language-specific dependency extractors
-pub trait DependencyExtractor {
+pub trait DependencyExtractor: Send + Sync {
     /// Extract dependencies from a parsed tree
     fn extract_dependencies(
         &self,
@@ -580,7 +587,7 @@ pub trait DependencyExtractor {
     ) -> Dependency {
         let location = Location::from_node(node, &context.file_path);
 
-        let dependency = if context.in_conditional {
+        let mut dependency = if context.in_conditional {
             Dependency::conditional(
                 from_symbol,
                 to_symbol,
@@ -598,11 +605,13 @@ pub trait DependencyExtractor {
             )
         };
 
-        // TODO: Add context information when source parameter is available
-        // let node_text = self.get_node_text(node, source); // Would need source parameter
-        // if !node_text.trim().is_empty() && node_text.len() < 200 {
-        //     dependency = dependency.with_context(node_text);
-        // }
+        // Add context information when source parameter is available
+        if let Some(ref source) = context.source {
+            let node_text = self.get_node_text(node, source);
+            if !node_text.trim().is_empty() && node_text.len() < 200 {
+                dependency = dependency.with_context(node_text);
+            }
+        }
 
         dependency
     }

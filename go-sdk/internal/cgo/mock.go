@@ -243,11 +243,8 @@ const (
 )
 
 // UnmarshalJSON safely unmarshals JSON data from the result
-func (r *Result) UnmarshalJSON(v interface{}) error {
-	if len(r.JSONData) == 0 {
-		return fmt.Errorf("no JSON data to unmarshal")
-	}
-	return json.Unmarshal(r.JSONData, v)
+func (r *Result) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &r)
 }
 
 // Error returns the result as an error if it has one

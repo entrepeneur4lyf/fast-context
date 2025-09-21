@@ -24,14 +24,15 @@ use lru::LruCache;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, RwLock, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs as async_fs;
-use tokio::sync::RwLock;
+use tokio::sync::RwLock as TokioRwLock;
 
 /// Cache key for identifying cached items
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -118,78 +119,292 @@ impl<T> CacheEntry<T> {
 }
 
 /// L1 Cache: In-memory LRU cache for frequently accessed items
+/// Optimized for read-heavy workloads with RwLock for better concurrency
 pub struct L1Cache<T> {
-    cache: Arc<Mutex<LruCache<CacheKey, CacheEntry<T>>>>,
+    cache: Arc<RwLock<LruCache<CacheKey, CacheEntry<T>>>>,
     max_size: usize,
-    hit_count: Arc<Mutex<u64>>,
-    miss_count: Arc<Mutex<u64>>,
+    hit_count: Arc<AtomicU64>,
+    miss_count: Arc<AtomicU64>,
+    /// Access statistics for adaptive optimization
+    access_pattern: Arc<RwLock<AccessPattern>>,
+}
+
+/// Access pattern tracking for intelligent cache optimization
+#[derive(Debug, Clone, Default)]
+struct AccessPattern {
+    recent_accesses: VecDeque<(CacheKey, std::time::Instant)>,
+    hot_keys: HashMap<CacheKey, u64>,
+    total_accesses: u64,
+    pattern_type: AccessPatternType,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AccessPatternType {
+    Random,
+    Temporal,  // Time-based locality
+    Frequency,  // Frequency-based locality
+    Unknown,
+}
+
+impl Default for AccessPatternType {
+    fn default() -> Self {
+        AccessPatternType::Unknown
+    }
+}
+
+impl AccessPattern {
+    /// Analyze access patterns to optimize caching strategy
+    fn analyze_pattern(&mut self) {
+        if self.recent_accesses.len() < 100 {
+            return;
+        }
+
+        let mut time_gaps = Vec::new();
+        let mut key_frequencies = HashMap::new();
+        
+        // Calculate time gaps between consecutive accesses
+        let accesses: Vec<_> = self.recent_accesses.iter().collect();
+        for window in accesses.windows(2) {
+            if let (Some((_, time1)), Some((_, time2))) = (window.first(), window.get(1)) {
+                let gap = time2.duration_since(*time1).as_millis();
+                time_gaps.push(gap);
+            }
+        }
+        
+        // Count key frequencies
+        for (key, _) in &self.recent_accesses {
+            *key_frequencies.entry(key).or_insert(0) += 1;
+        }
+        
+        // Analyze patterns
+        if !time_gaps.is_empty() {
+            let avg_gap = time_gaps.iter().sum::<u128>() / time_gaps.len() as u128;
+            let variance = time_gaps.iter()
+                .map(|gap| (*gap as i64 - avg_gap as i64).pow(2))
+                .sum::<i64>() / time_gaps.len() as i64;
+            
+            // Determine pattern type
+            self.pattern_type = if variance < (avg_gap / 4).pow(2) as i64 {
+                AccessPatternType::Temporal // Regular time intervals
+            } else if key_frequencies.len() < self.recent_accesses.len() / 2 {
+                AccessPatternType::Frequency // High key reuse
+            } else {
+                AccessPatternType::Random
+            };
+        }
+    }
+    
+    /// Get predicted hot keys for prefetching
+    fn get_hot_keys(&self, limit: usize) -> Vec<CacheKey> {
+        let mut keys: Vec<_> = self.hot_keys.iter()
+            .map(|(key, count)| (key.clone(), *count))
+            .collect();
+        
+        keys.sort_by(|a, b| b.1.cmp(&a.1));
+        keys.into_iter().take(limit).map(|(key, _)| key).collect()
+    }
 }
 
 impl<T: Clone> L1Cache<T> {
     pub fn new(capacity: usize) -> Self {
         Self {
-            cache: Arc::new(Mutex::new(LruCache::new(
+            cache: Arc::new(RwLock::new(LruCache::new(
                 NonZeroUsize::new(capacity).unwrap(),
             ))),
             max_size: capacity,
-            hit_count: Arc::new(Mutex::new(0)),
-            miss_count: Arc::new(Mutex::new(0)),
+            hit_count: Arc::new(AtomicU64::new(0)),
+            miss_count: Arc::new(AtomicU64::new(0)),
+            access_pattern: Arc::new(RwLock::new(AccessPattern::default())),
         }
     }
 
+    /// Optimized get operation with read lock for better concurrency
     pub fn get(&self, key: &CacheKey) -> Option<T> {
-        let mut cache = self.cache.lock().unwrap();
-
-        if let Some(entry) = cache.get_mut(key) {
-            *self.hit_count.lock().unwrap() += 1;
-            Some(entry.access().clone())
+        // Try read lock first for better performance in read-heavy workloads
+        let cache = self.cache.read().unwrap();
+        
+        if let Some(entry) = cache.peek(key) {
+            // Update hit counter atomically
+            self.hit_count.fetch_add(1, Ordering::Relaxed);
+            
+            // Update access pattern (brief write lock)
+            self.update_access_pattern(key, true);
+            
+            // Clone the data while still holding read lock
+            let data = entry.data.clone();
+            
+            // Drop read lock before updating last_accessed to minimize lock contention
+            drop(cache);
+            
+            // Update access time with write lock (brief operation)
+            let mut cache = self.cache.write().unwrap();
+            if let Some(entry) = cache.get_mut(key) {
+                entry.last_accessed = get_current_timestamp();
+                entry.access_count += 1;
+            }
+            
+            Some(data)
         } else {
-            *self.miss_count.lock().unwrap() += 1;
+            // Update miss counter atomically
+            self.miss_count.fetch_add(1, Ordering::Relaxed);
+            self.update_access_pattern(key, false);
             None
         }
     }
 
+    /// Update access pattern analysis for intelligent optimization
+    fn update_access_pattern(&self, key: &CacheKey, _is_hit: bool) {
+        let mut pattern = self.access_pattern.write().unwrap();
+        pattern.total_accesses += 1;
+        
+        // Track recent accesses for pattern analysis
+        pattern.recent_accesses.push_back((key.clone(), std::time::Instant::now()));
+        
+        // Keep only recent accesses (last 1000)
+        while pattern.recent_accesses.len() > 1000 {
+            pattern.recent_accesses.pop_front();
+        }
+        
+        // Track hot keys
+        *pattern.hot_keys.entry(key.clone()).or_insert(0) += 1;
+        
+        // Analyze access pattern every 100 accesses
+        if pattern.total_accesses % 100 == 0 {
+            pattern.analyze_pattern();
+        }
+    }
+
+    /// Optimized put operation with intelligent eviction
     pub fn put(&self, key: CacheKey, data: T, file_size: u64, dependencies: Vec<String>) {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.write().unwrap();
         let entry = CacheEntry::new(data, file_size, dependencies);
+        
+        // Check if we're at capacity and need intelligent eviction
+        if cache.len() >= self.max_size {
+            self.intelligent_eviction(&mut cache);
+        }
+        
         cache.put(key, entry);
+    }
+    
+    /// Intelligent eviction based on access patterns rather than simple LRU
+    fn intelligent_eviction(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
+        let pattern = self.access_pattern.read().unwrap();
+        
+        match pattern.pattern_type {
+            AccessPatternType::Frequency => {
+                // For frequency-based access, evict least frequently used
+                self.evict_lfu(cache);
+            }
+            AccessPatternType::Temporal => {
+                // For temporal patterns, evict oldest but keep recently accessed
+                self.evict_temporal(cache);
+            }
+            _ => {
+                // Default to LRU for unknown or random patterns
+                // The LruCache already handles this efficiently
+            }
+        }
+    }
+    
+    /// Evict least frequently used items
+    fn evict_lfu(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
+        // For LFU, we need to find and remove the least frequently used
+        // Since LruCache doesn't directly support LFU, we'll use a simple heuristic
+        // Remove the oldest entry (LRU behavior as fallback)
+        if let Some((lru_key, _)) = cache.peek_lru() {
+            let key_to_remove = lru_key.clone();
+            cache.pop(&key_to_remove);
+        }
+    }
+    
+    /// Evict based on temporal patterns
+    fn evict_temporal(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
+        let now = get_current_timestamp();
+        
+        // Find entries that haven't been accessed recently
+        if let Some((lru_key, entry)) = cache.peek_lru() {
+            let age = now.saturating_sub(entry.last_accessed);
+            if age > 3600 { // 1 hour threshold
+                let key_to_remove = lru_key.clone();
+                cache.pop(&key_to_remove);
+            }
+        }
     }
 
     pub fn remove(&self, key: &CacheKey) -> Option<T> {
-        let mut cache = self.cache.lock().unwrap();
+        let mut cache = self.cache.write().unwrap();
         cache.pop(key).map(|entry| entry.data)
     }
 
-    pub fn clear(&self) {
-        let mut cache = self.cache.lock().unwrap();
-        cache.clear();
-    }
-
     pub fn stats(&self) -> CacheStats {
-        let hits = *self.hit_count.lock().unwrap();
-        let misses = *self.miss_count.lock().unwrap();
+        let hits = self.hit_count.load(Ordering::Relaxed);
+        let misses = self.miss_count.load(Ordering::Relaxed);
         let hit_rate = if hits + misses > 0 {
             hits as f64 / (hits + misses) as f64
         } else {
             0.0
         };
 
+        let cache = self.cache.read().unwrap();
         CacheStats {
             hits,
             misses,
             hit_rate,
-            entries: self.cache.lock().unwrap().len(),
+            entries: cache.len(),
             max_entries: self.max_size,
+        }
+    }
+
+    /// Get access pattern information for optimization
+    pub fn get_access_pattern(&self) -> AccessPatternType {
+        let pattern = self.access_pattern.read().unwrap();
+        pattern.pattern_type.clone()
+    }
+
+    /// Get predicted hot keys for prefetching
+    pub fn get_hot_keys(&self, limit: usize) -> Vec<CacheKey> {
+        let pattern = self.access_pattern.read().unwrap();
+        pattern.get_hot_keys(limit)
+    }
+
+    pub fn clear(&self) {
+        let mut cache = self.cache.write().unwrap();
+        cache.clear();
+        
+        // Reset access pattern tracking
+        let mut pattern = self.access_pattern.write().unwrap();
+        pattern.recent_accesses.clear();
+        pattern.hot_keys.clear();
+        pattern.total_accesses = 0;
+        pattern.pattern_type = AccessPatternType::Unknown;
+    }
+}
+
+/// Clone implementation for L1Cache
+impl<T> Clone for L1Cache<T> {
+    fn clone(&self) -> Self {
+        Self {
+            cache: self.cache.clone(),
+            max_size: self.max_size,
+            hit_count: self.hit_count.clone(),
+            miss_count: self.miss_count.clone(),
+            access_pattern: self.access_pattern.clone(),
         }
     }
 }
 
 /// L2 Cache: Persistent disk cache for larger datasets
+/// Optimized with efficient eviction and async operations
 pub struct L2Cache {
     cache_dir: PathBuf,
-    index: Arc<RwLock<HashMap<CacheKey, CacheMetadata>>>,
+    index: Arc<TokioRwLock<HashMap<CacheKey, CacheMetadata>>>,
     max_size_bytes: u64,
-    current_size_bytes: Arc<Mutex<u64>>,
+    current_size_bytes: Arc<AtomicU64>,
+    /// Eviction candidates cache to avoid repeated sorting
+    eviction_cache: Arc<RwLock<Vec<(CacheKey, CacheMetadata)>>>,
+    /// Background compaction task handle
+    compaction_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,13 +422,18 @@ impl L2Cache {
 
         let cache = Self {
             cache_dir,
-            index: Arc::new(RwLock::new(HashMap::new())),
+            index: Arc::new(TokioRwLock::new(HashMap::new())),
             max_size_bytes: max_size_mb * 1024 * 1024,
-            current_size_bytes: Arc::new(Mutex::new(0)),
+            current_size_bytes: Arc::new(AtomicU64::new(0)),
+            eviction_cache: Arc::new(RwLock::new(Vec::new())),
+            compaction_task: Arc::new(Mutex::new(None)),
         };
 
         // Load existing cache index
         cache.load_index()?;
+
+        // Start background compaction task
+        cache.start_background_compaction();
 
         Ok(cache)
     }
@@ -275,7 +495,7 @@ impl L2Cache {
 
         let mut index = self.index.write().await;
         index.insert(key, metadata);
-        *self.current_size_bytes.lock().unwrap() += file_size;
+        self.current_size_bytes.fetch_add(file_size, Ordering::Relaxed);
 
         Ok(())
     }
@@ -286,7 +506,7 @@ impl L2Cache {
         if let Some(metadata) = index.remove(key) {
             if metadata.file_path.exists() {
                 let _ = fs::remove_file(&metadata.file_path);
-                *self.current_size_bytes.lock().unwrap() -= metadata.file_size;
+                self.current_size_bytes.fetch_sub(metadata.file_size, Ordering::Relaxed);
                 return true;
             }
         }
@@ -304,7 +524,7 @@ impl L2Cache {
         }
 
         index.clear();
-        *self.current_size_bytes.lock().unwrap() = 0;
+        self.current_size_bytes.store(0, Ordering::Relaxed);
 
         Ok(())
     }
@@ -333,7 +553,7 @@ impl L2Cache {
     }
 
     async fn ensure_space(&self, needed_bytes: u64) -> Result<(), Box<dyn std::error::Error>> {
-        let current_size = *self.current_size_bytes.lock().unwrap();
+        let current_size = self.current_size_bytes.load(Ordering::Relaxed);
 
         if current_size + needed_bytes > self.max_size_bytes {
             // Evict least recently used entries
@@ -344,14 +564,32 @@ impl L2Cache {
     }
 
     async fn evict_lru_entries(&self, needed_bytes: u64) -> Result<(), Box<dyn std::error::Error>> {
-        let index = self.index.read().await;
-        let mut entries: Vec<(CacheKey, CacheMetadata)> =
-            index.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        // Use cached eviction candidates if available and fresh
+        let candidates = {
+            let cache = self.eviction_cache.read().unwrap();
+            if !cache.is_empty() {
+                Some(cache.clone())
+            } else {
+                None
+            }
+        };
 
-        // Sort by last access time (oldest first)
-        entries.sort_by_key(|(_, metadata)| metadata.last_accessed);
+        let entries = if let Some(cached) = candidates {
+            cached
+        } else {
+            // Build eviction candidates cache
+            let index = self.index.read().await;
+            let entries: Vec<(CacheKey, CacheMetadata)> =
+                index.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 
-        drop(index);
+            // Sort by last access time (oldest first)
+            let mut sorted_entries = entries;
+            sorted_entries.sort_by_key(|(_, metadata)| metadata.last_accessed);
+
+            // Cache for future evictions
+            *self.eviction_cache.write().unwrap() = sorted_entries.clone();
+            sorted_entries
+        };
 
         let mut freed_bytes = 0u64;
 
@@ -367,7 +605,67 @@ impl L2Cache {
 
             if self.remove(&key).await {
                 freed_bytes += removed_size;
+                
+                // Update eviction cache
+                let mut cache = self.eviction_cache.write().unwrap();
+                cache.retain(|(k, _)| k != &key);
             }
+        }
+
+        Ok(())
+    }
+
+    /// Start background compaction task for cache optimization
+    fn start_background_compaction(&self) {
+        let compaction_task = {
+            let index = self.index.clone();
+            let cache_dir = self.cache_dir.clone();
+            
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // Every 5 minutes
+                
+                loop {
+                    interval.tick().await;
+                    
+                    // Perform background cleanup
+                    if let Err(e) = Self::background_compaction(&index, &cache_dir).await {
+                        eprintln!("Background compaction error: {}", e);
+                    }
+                }
+            })
+        };
+        
+        *self.compaction_task.lock().unwrap() = Some(compaction_task);
+    }
+
+    /// Background compaction to clean up orphaned cache files
+    async fn background_compaction(
+        index: &Arc<TokioRwLock<HashMap<CacheKey, CacheMetadata>>>,
+        cache_dir: &PathBuf,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let index_guard = index.read().await;
+        let valid_files: std::collections::HashSet<PathBuf> = 
+            index_guard.values().map(|m| m.file_path.clone()).collect();
+        drop(index_guard);
+
+        // Scan cache directory for orphaned files
+        let mut entries = tokio::fs::read_dir(cache_dir).await?;
+        let mut removed_count = 0;
+
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("cache") {
+                if !valid_files.contains(&path) {
+                    // Orphaned file, remove it
+                    tokio::fs::remove_file(&path).await?;
+                    removed_count += 1;
+                }
+            }
+        }
+
+        if removed_count > 0 {
+            eprintln!("Background compaction removed {} orphaned cache files", removed_count);
         }
 
         Ok(())
@@ -414,6 +712,20 @@ impl L2Cache {
         }
 
         Ok(())
+    }
+}
+
+/// Clone implementation for L2Cache
+impl Clone for L2Cache {
+    fn clone(&self) -> Self {
+        Self {
+            cache_dir: self.cache_dir.clone(),
+            index: self.index.clone(),
+            max_size_bytes: self.max_size_bytes,
+            current_size_bytes: self.current_size_bytes.clone(),
+            eviction_cache: self.eviction_cache.clone(),
+            compaction_task: self.compaction_task.clone(),
+        }
     }
 }
 
@@ -486,7 +798,7 @@ where
         for file in &files_to_invalidate {
             // Get keys to remove (LRU cache doesn't have retain method)
             let keys_to_remove: Vec<CacheKey> = {
-                let cache = self.l1.cache.lock().unwrap();
+                let cache = self.l1.cache.read().unwrap();
                 cache
                     .iter()
                     .filter(|(key, _)| key.file_path.contains(file))
@@ -495,7 +807,7 @@ where
             };
 
             // Remove the keys
-            let mut cache = self.l1.cache.lock().unwrap();
+            let mut cache = self.l1.cache.write().unwrap();
             for key in keys_to_remove {
                 cache.pop(&key);
             }
@@ -689,6 +1001,19 @@ where
 
     pub fn l1_stats(&self) -> CacheStats {
         self.l1.stats()
+    }
+}
+
+/// Clone implementation for MultiLevelCache
+impl<T> Clone for MultiLevelCache<T>
+where
+    T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync,
+{
+    fn clone(&self) -> Self {
+        Self {
+            l1: self.l1.clone(),
+            l2: self.l2.clone(),
+        }
     }
 }
 

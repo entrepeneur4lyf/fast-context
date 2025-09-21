@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/fast-context/go-sdk/config"
 	"github.com/fast-context/go-sdk/fastcontext"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -179,10 +179,10 @@ func TestPrintSummary(t *testing.T) {
 
 	cli.printSummary(result)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	assert.Contains(t, output, "=== Analysis Summary ===")
@@ -225,10 +225,10 @@ func TestPrintSymbols(t *testing.T) {
 
 	cli.printSymbols(symbols)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	assert.Contains(t, output, "Found 2 symbols:")
@@ -263,10 +263,10 @@ func TestPrintDependencies(t *testing.T) {
 
 	cli.printDependencies(deps)
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	assert.Contains(t, output, "Found 2 dependencies:")
@@ -286,10 +286,10 @@ func TestPrintConfig(t *testing.T) {
 
 	cli.printConfig()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	assert.Contains(t, output, "projectRoot")
@@ -384,7 +384,7 @@ func TestCLIIntegration(t *testing.T) {
 
 	// Set up args for version command
 	oldArgs := os.Args
-	defer os.Args = oldArgs
+	defer func() { os.Args = oldArgs }()
 	os.Args = []string{"fast-context", "version"}
 
 	err := cli.Execute()
@@ -403,7 +403,7 @@ func TestCommandValidation(t *testing.T) {
 
 	// Set up args without symbol
 	oldArgs := os.Args
-	defer os.Args = oldArgs
+	defer func() { os.Args = oldArgs }()
 	os.Args = []string{"fast-context", "dependencies"}
 
 	// The command should require a symbol argument

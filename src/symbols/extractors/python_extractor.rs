@@ -125,7 +125,7 @@ impl PythonExtractor {
                 // Extract variable assignments at module level or class level
                 if let Some(left) = node.child_by_field_name("left") {
                     if left.kind() == "identifier" {
-                        let name = format!("{}{}", safe_node_text(&left, source), safe_node_text(&node, source));
+                        let name = safe_node_text(&left, source);
                         let location = Location::from_node(&left, file_path);
 
                         // Determine if this is a constant (ALL_CAPS) or variable

@@ -47,6 +47,7 @@ pub fn get_supported_languages() -> Vec<String> {
         LanguageId::Regex.to_string(),
     ]
 }
+use crate::errors::{FastContextError, FastContextResult};
 use crate::parsers::LanguageId;
 
 /// Internal: Detect language as enum for internal use
@@ -83,7 +84,9 @@ pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<Strin
     };
     // Validate project root
     if config.project_root.trim().is_empty() {
-        return Err(napi::Error::from_reason("Project root cannot be empty"));
+        return Err(napi::Error::from_reason(
+            "Configuration validation failed: project root cannot be empty"
+        ));
     }
 
     // Check if project root exists
@@ -151,25 +154,40 @@ Rust Version: {}
 }
 
 /// Validate file path for analysis
-pub fn validate_file_path(path: &str) -> Result<(), String> {
+pub fn validate_file_path(path: &str) -> FastContextResult<()> {
     if path.is_empty() {
-        return Err("File path cannot be empty".to_string());
+        return Err(FastContextError::Validation {
+            field: "file_path".to_string(),
+            message: "File path cannot be empty".to_string(),
+            value: None,
+        });
     }
 
     let path_obj = std::path::Path::new(path);
 
     if !path_obj.exists() {
-        return Err(format!("File does not exist: {path}"));
+        return Err(FastContextError::FileNotFound {
+            path: path_obj.to_path_buf(),
+        });
     }
 
     if !path_obj.is_file() {
-        return Err(format!("Path is not a file: {path}"));
+        return Err(FastContextError::Validation {
+            field: "file_path".to_string(),
+            message: "Path is not a file".to_string(),
+            value: Some(path.to_string()),
+        });
     }
 
     // Check file size (limit to 10MB for performance)
     if let Ok(metadata) = path_obj.metadata() {
         if metadata.len() > 10 * 1024 * 1024 {
-            return Err(format!("File too large (>10MB): {path}"));
+            return Err(FastContextError::ResourceLimit {
+                resource: "file_size".to_string(),
+                message: "File too large (>10MB)".to_string(),
+                current: Some(metadata.len() as usize),
+                limit: Some(10 * 1024 * 1024),
+            });
         }
     }
 
@@ -177,19 +195,29 @@ pub fn validate_file_path(path: &str) -> Result<(), String> {
 }
 
 /// Validate directory path for analysis
-pub fn validate_directory_path(path: &str) -> Result<(), String> {
+pub fn validate_directory_path(path: &str) -> FastContextResult<()> {
     if path.is_empty() {
-        return Err("Directory path cannot be empty".to_string());
+        return Err(FastContextError::Validation {
+            field: "directory_path".to_string(),
+            message: "Directory path cannot be empty".to_string(),
+            value: None,
+        });
     }
 
     let path_obj = std::path::Path::new(path);
 
     if !path_obj.exists() {
-        return Err(format!("Directory does not exist: {path}"));
+        return Err(FastContextError::FileNotFound {
+            path: path_obj.to_path_buf(),
+        });
     }
 
     if !path_obj.is_dir() {
-        return Err(format!("Path is not a directory: {path}"));
+        return Err(FastContextError::Validation {
+            field: "directory_path".to_string(),
+            message: "Path is not a directory".to_string(),
+            value: Some(path.to_string()),
+        });
     }
 
     Ok(())

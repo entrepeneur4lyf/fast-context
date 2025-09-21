@@ -79,7 +79,7 @@ func (a *Analyzer) AnalyzeWithContext(ctx context.Context) (*AnalysisResult, err
 
 	// Parse the result
 	var analysisResult AnalysisResult
-	if err := result.UnmarshalJSON(&analysisResult); err != nil {
+	if err := json.Unmarshal(result.JSONData, &analysisResult); err != nil {
 		return nil, NewFastContextErrorWithCause(ErrInternal, "failed to parse analysis result", err)
 	}
 
@@ -106,7 +106,7 @@ func (a *Analyzer) FindSymbolsByKind(kind SymbolKind) ([]*Symbol, error) {
 	}
 
 	var symbols []*Symbol
-	if err := result.UnmarshalJSON(&symbols); err != nil {
+	if err := json.Unmarshal(result.JSONData, &symbols); err != nil {
 		return nil, NewFastContextErrorWithCause(ErrInternal, "failed to parse symbols", err)
 	}
 
@@ -148,7 +148,7 @@ func (a *Analyzer) FindDependencies(symbolName string) ([]*Dependency, error) {
 	}
 
 	var dependencies []*Dependency
-	if err := result.UnmarshalJSON(&dependencies); err != nil {
+	if err := json.Unmarshal(result.JSONData, &dependencies); err != nil {
 		return nil, NewFastContextErrorWithCause(ErrInternal, "failed to parse dependencies", err)
 	}
 

@@ -1,6 +1,7 @@
 // Shared Send + Sync core analyzer used by both Python and Node bindings
 
 use crate::errors::FastContextResult;
+use std::path::PathBuf;
 
 pub struct CoreAnalyzer {
     project_root: String,
@@ -18,178 +19,230 @@ pub struct CoreAnalysisSummary {
     pub relationships: Vec<crate::symbols::Dependency>,
 }
 
+/// Internal analysis result for unified processing
+#[derive(Debug, Clone)]
+struct InternalAnalysisResult {
+    file_count: u32,
+    symbol_count: u32,
+    languages: Vec<String>,
+    relationships: Vec<crate::symbols::Dependency>,
+}
+
+/// Result from analyzing a single file
+#[derive(Debug, Clone)]
+struct FileAnalysisResult {
+    file_count: u32,
+    symbol_count: u32,
+    language: String,
+    relationships: Vec<crate::symbols::Dependency>,
+}
+
 impl CoreAnalyzer {
     pub fn new(project_root: String, languages: Option<Vec<String>>, ignore_patterns: Option<Vec<String>>) -> Self {
-        Self {
-            project_root,
-            languages: languages.unwrap_or_else(|| vec![
+        // Validate project root path
+        let validated_root = crate::validation::validate_directory_path(&project_root)
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: Invalid project root path '{}': {}", project_root, e);
+                PathBuf::from(".") // Fallback to current directory
+            });
+        
+        // Validate languages
+        let validated_languages = languages
+            .map(|langs| crate::validation::validate_languages(&langs)
+                .unwrap_or_else(|e| {
+                    eprintln!("Warning: Invalid languages configuration: {}", e);
+                    vec!["rust".to_string(), "javascript".to_string(), "typescript".to_string(), "python".to_string()]
+                }))
+            .unwrap_or_else(|| vec![
                 "rust".to_string(), "javascript".to_string(), "typescript".to_string(), "python".to_string()
-            ]),
-            ignore_patterns: ignore_patterns.unwrap_or_else(|| vec![
+            ]);
+        
+        // Validate ignore patterns
+        let validated_ignore_patterns = ignore_patterns
+            .map(|patterns| crate::validation::validate_ignore_patterns(&patterns)
+                .unwrap_or_else(|e| {
+                    eprintln!("Warning: Invalid ignore patterns: {}", e);
+                    vec!["node_modules/**".to_string(), "target/**".to_string(), ".git/**".to_string()]
+                }))
+            .unwrap_or_else(|| vec![
                 "node_modules/**".to_string(), "target/**".to_string(), ".git/**".to_string()
-            ]),
+            ]);
+        
+        Self {
+            project_root: validated_root.to_string_lossy().to_string(),
+            languages: validated_languages,
+            ignore_patterns: validated_ignore_patterns,
         }
     }
 
-    #[cfg(feature = "python")]
-    pub fn analyze(&self) -> FastContextResult<crate::python_bindings::AnalysisResult> {
+    /// Common analysis logic shared between Python and non-Python implementations
+    fn analyze_internal(&self) -> FastContextResult<InternalAnalysisResult> {
         use crate::parsers::ParserFactory;
         use crate::symbols::{SymbolExtractorFactory, Symbol};
         use crate::symbols::dependency_extractor::DependencyExtractorFactory;
-        use walkdir::WalkDir;
+        use rayon::prelude::*;
         use std::fs;
+        use std::time::Instant;
+        
+        let _start_time = Instant::now();
+        
+        // Collect file paths first for parallel processing
+        let file_paths: Vec<std::path::PathBuf> = self.walk_project_files()
+            .map(|entry| entry.path().to_path_buf())
+            .collect();
 
-        let mut parser_factory = ParserFactory::new();
-        let extractor_factory = SymbolExtractorFactory::new();
-        let dep_factory = DependencyExtractorFactory::new();
+        // Process files in parallel - each thread gets its own factories
+        let results: Vec<_> = file_paths.par_iter()
+            .filter_map(|file_path| {
+                let path_str = file_path.to_string_lossy();
+                match fs::read_to_string(file_path) {
+                    Ok(content) => Some((file_path.clone(), content, path_str.to_string())),
+                    Err(_) => None,
+                }
+            })
+            .filter_map(|(_file_path, content, path_str)| {
+                // Create fresh factories for each thread to avoid mutable state sharing
+                let mut parser_factory = ParserFactory::new();
+                let extractor_factory = SymbolExtractorFactory::new();
+                let dep_factory = DependencyExtractorFactory::new();
+
+                if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
+                    let syms: Vec<Symbol> = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
+                    let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, syms.clone(), &path_str, parse.language);
+                    Some(FileAnalysisResult {
+                        file_count: 1,
+                        symbol_count: syms.len() as u32,
+                        language: parse.language.to_string(),
+                        relationships: deps,
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        // Aggregate results
         let mut file_count: u32 = 0;
         let mut symbol_count: u32 = 0;
         let mut languages: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut relationships: Vec<crate::symbols::Dependency> = Vec::new();
 
-        'outer: for entry in WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() {
-                let path_str = entry.path().to_string_lossy().to_string();
-                if crate::utils::should_ignore_file(&path_str, &self.ignore_patterns) {
-                    continue;
-                }
-                if !self.languages.is_empty() {
-                    if let Some(ext) = std::path::Path::new(&path_str).extension().and_then(|s| s.to_str()) {
-                        if let Some(lang) = crate::parsers::LanguageId::from_extension(ext) {
-                            let allow = self.languages.iter().any(|s| crate::parsers::LanguageId::from_string(s).map(|l| l == lang).unwrap_or(false));
-                            if !allow { continue 'outer; }
-                        }
-                    }
-                }
-                if let Ok(content) = fs::read_to_string(&path_str) {
-                    if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
-                        let syms: Vec<Symbol> = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
-                        let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, syms.clone(), &path_str, parse.language);
-                        symbol_count += syms.len() as u32;
-                        relationships.extend(deps);
-                        languages.insert(format!("{:?}", parse.language));
-                        file_count += 1;
-                    }
-                }
-            }
+        for result in results {
+            file_count += result.file_count;
+            symbol_count += result.symbol_count;
+            languages.insert(result.language);
+            relationships.extend(result.relationships);
         }
 
-        Ok(crate::python_bindings::AnalysisResult {
+        Ok(InternalAnalysisResult {
             file_count,
             symbol_count,
             languages: languages.into_iter().collect(),
+            relationships,
+        })
+    }
+
+    /// Helper method to walk project files with filtering
+    fn walk_project_files(&self) -> Box<dyn Iterator<Item = walkdir::DirEntry> + '_> {
+        use walkdir::WalkDir;
+        
+        Box::new(
+            WalkDir::new(&self.project_root)
+                .into_iter()
+                .filter_map(|e| e.ok())
+                .filter(|entry| entry.file_type().is_file())
+                .filter(|entry| {
+                    let path_str = entry.path().to_string_lossy();
+                    !crate::utils::should_ignore_file(path_str.as_ref(), &self.ignore_patterns)
+                })
+                .filter(|entry| {
+                    if self.languages.is_empty() {
+                        return true;
+                    }
+                    
+                    let path = entry.path();
+                    if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                        if let Some(lang) = crate::parsers::LanguageId::from_extension(ext) {
+                            return self.languages.iter().any(|s| {
+                                crate::parsers::LanguageId::from_string(s)
+                                    .map(|l| l == lang)
+                                    .unwrap_or(false)
+                            });
+                        }
+                    }
+                    false
+                })
+        )
+    }
+
+    #[cfg(feature = "python")]
+    pub fn analyze(&self) -> FastContextResult<crate::python_bindings::AnalysisResult> {
+        let internal_result = self.analyze_internal()?;
+        
+        Ok(crate::python_bindings::AnalysisResult {
+            file_count: internal_result.file_count,
+            symbol_count: internal_result.symbol_count,
+            languages: internal_result.languages,
             duration_ms: 0,
-            relationships: relationships.into_iter().map(crate::python_bindings::PyDependency::from).collect(),
+            relationships: internal_result.relationships
+                .into_iter()
+                .map(crate::python_bindings::PyDependency::from)
+                .collect(),
         })
     }
 
     #[cfg(not(feature = "python"))]
     pub fn analyze(&self) -> FastContextResult<CoreAnalysisSummary> {
-        use crate::parsers::ParserFactory;
-        use crate::symbols::{SymbolExtractorFactory, Symbol};
-        use crate::symbols::dependency_extractor::DependencyExtractorFactory;
-        use walkdir::WalkDir;
-        use std::fs;
-
-        let mut parser_factory = ParserFactory::new();
-        let extractor_factory = SymbolExtractorFactory::new();
-        let dep_factory = DependencyExtractorFactory::new();
-        let mut file_count: u32 = 0;
-        let mut symbol_count: u32 = 0;
-        let mut languages: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut relationships: Vec<crate::symbols::Dependency> = Vec::new();
-
-        'outer: for entry in WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() {
-                let path_str = entry.path().to_string_lossy().to_string();
-                if crate::utils::should_ignore_file(&path_str, &self.ignore_patterns) {
-                    continue;
-                }
-                // Filter by selected languages if provided
-                if !self.languages.is_empty() {
-                    if let Some(ext) = std::path::Path::new(&path_str).extension().and_then(|s| s.to_str()) {
-                        if let Some(lang) = crate::parsers::LanguageId::from_extension(ext) {
-                            let allow = self.languages.iter().any(|s| crate::parsers::LanguageId::from_string(s).map(|l| l == lang).unwrap_or(false));
-                            if !allow { continue 'outer; }
-                        }
-                    }
-                }
-                if let Ok(content) = fs::read_to_string(&path_str) {
-                    if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
-                        let syms: Vec<Symbol> = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
-                        let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, syms.clone(), &path_str, parse.language);
-                        symbol_count += syms.len() as u32;
-                        relationships.extend(deps);
-                        languages.insert(format!("{:?}", parse.language));
-                        file_count += 1;
-                    }
-                }
-            }
-        }
-
+        let internal_result = self.analyze_internal()?;
+        
         Ok(CoreAnalysisSummary {
-            file_count,
-            symbol_count,
-            languages: languages.into_iter().collect(),
+            file_count: internal_result.file_count,
+            symbol_count: internal_result.symbol_count,
+            languages: internal_result.languages,
             duration_ms: 0,
-            relationships,
+            relationships: internal_result.relationships,
         })
     }
 
     pub fn find_symbols_by_kind(&self, symbol_kind: String) -> FastContextResult<Vec<String>> {
         use crate::parsers::ParserFactory;
         use crate::symbols::SymbolExtractorFactory;
-        use walkdir::WalkDir;
+        use crate::symbols::SymbolKind;
         use std::fs;
 
         let mut parser_factory = ParserFactory::new();
         let extractor_factory = SymbolExtractorFactory::new();
         let mut results = Vec::new();
 
-'outer2: for entry in WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() {
-                let path_str = entry.path().to_string_lossy().to_string();
-                if crate::utils::should_ignore_file(&path_str, &self.ignore_patterns) {
-                    continue;
-                }
-                // Filter by selected languages
-                if !self.languages.is_empty() {
-                    if let Some(ext) = std::path::Path::new(&path_str).extension().and_then(|s| s.to_str()) {
-                        if let Some(lang) = crate::parsers::LanguageId::from_extension(ext) {
-                            let allow = self.languages.iter().any(|s| crate::parsers::LanguageId::from_string(s).map(|l| l == lang).unwrap_or(false));
-                            if !allow { continue 'outer2; }
-                        }
-                    }
-                }
-                if let Ok(content) = fs::read_to_string(&path_str) {
-                    if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
-                        use crate::symbols::SymbolKind;
-                        let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
-                        let filtered = syms.into_iter().filter(|s| {
-                            let k = match s.kind {
-                                SymbolKind::Function => "function",
-                                SymbolKind::Method => "method",
-                                SymbolKind::Class => "class",
-                                SymbolKind::Struct => "struct",
-                                SymbolKind::Union => "union",
-                                SymbolKind::Interface => "interface",
-                                SymbolKind::Enum => "enum",
-                                SymbolKind::Trait => "trait",
-                                SymbolKind::Variable => "variable",
-                                SymbolKind::Constant => "constant",
-                                SymbolKind::Field => "field",
-                                SymbolKind::Parameter => "parameter",
-                                SymbolKind::Module => "module",
-                                SymbolKind::Namespace => "namespace",
-                                SymbolKind::Import => "import",
-                                SymbolKind::Export => "export",
-                                SymbolKind::Type => "type",
-                                SymbolKind::Macro => "macro",
-                            };
-                            k.eq_ignore_ascii_case(&symbol_kind)
-                        }).map(|s| s.name).collect::<Vec<_>>();
-                        results.extend(filtered);
-                    }
+        for entry in self.walk_project_files() {
+            let path_str = entry.path().to_string_lossy();
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Some(parse) = parser_factory.parse_file(&content, path_str.as_ref()) {
+                    let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
+                    let filtered = syms.into_iter().filter(|s| {
+                        let k = match s.kind {
+                            SymbolKind::Function => "function",
+                            SymbolKind::Method => "method",
+                            SymbolKind::Class => "class",
+                            SymbolKind::Struct => "struct",
+                            SymbolKind::Union => "union",
+                            SymbolKind::Interface => "interface",
+                            SymbolKind::Enum => "enum",
+                            SymbolKind::Trait => "trait",
+                            SymbolKind::Variable => "variable",
+                            SymbolKind::Constant => "constant",
+                            SymbolKind::Field => "field",
+                            SymbolKind::Parameter => "parameter",
+                            SymbolKind::Module => "module",
+                            SymbolKind::Namespace => "namespace",
+                            SymbolKind::Import => "import",
+                            SymbolKind::Export => "export",
+                            SymbolKind::Type => "type",
+                            SymbolKind::Macro => "macro",
+                        };
+                        k.eq_ignore_ascii_case(&symbol_kind)
+                    }).map(|s| s.name).collect::<Vec<_>>();
+                    results.extend(filtered);
                 }
             }
         }
@@ -235,7 +288,6 @@ impl CoreAnalyzer {
         use crate::parsers::ParserFactory;
         use crate::symbols::{SymbolExtractorFactory};
         use crate::symbols::dependency_extractor::DependencyExtractorFactory;
-        use walkdir::WalkDir;
         use std::fs;
 
         let mut parser_factory = ParserFactory::new();
@@ -243,29 +295,15 @@ impl CoreAnalyzer {
         let dep_factory = DependencyExtractorFactory::new();
         let mut results: Vec<String> = Vec::new();
 
-'outer3: for entry in WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() {
-                let path_str = entry.path().to_string_lossy().to_string();
-                if crate::utils::should_ignore_file(&path_str, &self.ignore_patterns) {
-                    continue;
-                }
-                // Filter by selected languages
-                if !self.languages.is_empty() {
-                    if let Some(ext) = std::path::Path::new(&path_str).extension().and_then(|s| s.to_str()) {
-                        if let Some(lang) = crate::parsers::LanguageId::from_extension(ext) {
-                            let allow = self.languages.iter().any(|s| crate::parsers::LanguageId::from_string(s).map(|l| l == lang).unwrap_or(false));
-                            if !allow { continue 'outer3; }
-                        }
-                    }
-                }
-                if let Ok(content) = fs::read_to_string(&path_str) {
-                    if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
-                        let symbols = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
-                        let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, symbols, &path_str, parse.language);
-                        for d in deps {
-                            if d.to_symbol.contains(&symbol_name) || d.from_symbol.contains(&symbol_name) {
-                                results.push(format!("{} -> {} ({:?}) @ {}:{}", d.from_symbol, d.to_symbol, d.relationship_type, d.file_path, d.location.start_line));
-                            }
+        for entry in self.walk_project_files() {
+            let path_str = entry.path().to_string_lossy();
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Some(parse) = parser_factory.parse_file(&content, path_str.as_ref()) {
+                    let symbols = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
+                    let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, symbols, path_str.as_ref(), parse.language);
+                    for d in deps {
+                        if d.to_symbol.contains(&symbol_name) || d.from_symbol.contains(&symbol_name) {
+                            results.push(format!("{} -> {} ({:?}) @ {}:{}", d.from_symbol, d.to_symbol, d.relationship_type, d.file_path, d.location.start_line));
                         }
                     }
                 }
@@ -278,37 +316,25 @@ impl CoreAnalyzer {
     pub fn find_complex_symbols(&self, threshold: u32) -> FastContextResult<Vec<String>> {
         use crate::parsers::ParserFactory;
         use crate::symbols::SymbolExtractorFactory;
-        use walkdir::WalkDir;
+        use crate::symbols::SymbolKind;
         use std::fs;
 
         let mut parser_factory = ParserFactory::new();
         let extractor_factory = SymbolExtractorFactory::new();
         let mut complex: Vec<String> = Vec::new();
 
-'outer4: for entry in WalkDir::new(&self.project_root).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() {
-                let path_str = entry.path().to_string_lossy().to_string();
-                if crate::utils::should_ignore_file(&path_str, &self.ignore_patterns) { continue; }
-                // Filter by selected languages
-                if !self.languages.is_empty() {
-                    if let Some(ext) = std::path::Path::new(&path_str).extension().and_then(|s| s.to_str()) {
-                        if let Some(lang) = crate::parsers::LanguageId::from_extension(ext) {
-                            let allow = self.languages.iter().any(|s| crate::parsers::LanguageId::from_string(s).map(|l| l == lang).unwrap_or(false));
-                            if !allow { continue 'outer4; }
-                        }
-                    }
-                }
-                if let Ok(content) = fs::read_to_string(&path_str) {
-                    if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
-                        // naive complexity: number of control-flow tokens in file + function count
-                        let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
-                        let func_count = syms.iter().filter(|s| matches!(s.kind, crate::symbols::SymbolKind::Function | crate::symbols::SymbolKind::Method)).count() as u32;
-                        let cf_tokens = ["if ", "else if ", "for ", "while ", "match ", "switch ", "catch ", "except "];
-                        let mut score = func_count;
-                        for tok in cf_tokens.iter() { score += content.matches(tok).count() as u32; }
-                        if score >= threshold {
-                            complex.push(format!("{path_str} (complexity: {score})"));
-                        }
+        for entry in self.walk_project_files() {
+            let path_str = entry.path().to_string_lossy();
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Some(parse) = parser_factory.parse_file(&content, path_str.as_ref()) {
+                    // naive complexity: number of control-flow tokens in file + function count
+                    let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
+                    let func_count = syms.iter().filter(|s| matches!(s.kind, SymbolKind::Function | SymbolKind::Method)).count() as u32;
+                    let cf_tokens = ["if ", "else if ", "for ", "while ", "match ", "switch ", "catch ", "except "];
+                    let mut score = func_count;
+                    for tok in cf_tokens.iter() { score += content.matches(tok).count() as u32; }
+                    if score >= threshold {
+                        complex.push(format!("{path_str} (complexity: {score})"));
                     }
                 }
             }

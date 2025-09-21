@@ -1,11 +1,10 @@
 package logging
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
-	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -34,6 +33,21 @@ func (l LogLevel) String() string {
 	default:
 		return "UNKNOWN"
 	}
+}
+
+// MarshalJSON custom marshaling for LogLevel to ensure it outputs as string
+func (l LogLevel) MarshalJSON() ([]byte, error) {
+	return json.Marshal(l.String())
+}
+
+// UnmarshalJSON custom unmarshaling for LogLevel to support string input
+func (l *LogLevel) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	*l = ParseLogLevel(s)
+	return nil
 }
 
 // ParseLogLevel converts string to LogLevel
@@ -73,7 +87,7 @@ type Logger interface {
 
 // StructuredLogger implements structured logging
 type StructuredLogger struct {
-	logger   *slog.Logger
+	// logger   *slog.Logger // Commented out as unused
 	level    LogLevel
 	fields   map[string]interface{}
 	handlers []logHandler

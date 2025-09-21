@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
-	"gopkg.in/toml.v2"
+	"github.com/pelletier/go-toml/v2"
 )
 
 // ConfigLoader handles loading configuration from various sources
@@ -92,19 +92,19 @@ func (cl *ConfigLoader) applyEnvironmentOverrides(cfg *Config) {
 
 	// Performance settings
 	if mem := os.Getenv("FAST_CONTEXT_MAX_MEMORY_MB"); mem != "" {
-		if val, err := parseInt(mem); err == nil {
+		if val := parseInt(mem); val > 0 {
 			cfg.Performance.MaxMemoryMB = val
 		}
 	}
 
 	if timeout := os.Getenv("FAST_CONTEXT_TIMEOUT_SECONDS"); timeout != "" {
-		if val, err := parseInt(timeout); err == nil {
+		if val := parseInt(timeout); val > 0 {
 			cfg.Performance.TimeoutSeconds = val
 		}
 	}
 
 	if concurrent := os.Getenv("FAST_CONTEXT_MAX_CONCURRENT_FILES"); concurrent != "" {
-		if val, err := parseInt(concurrent); err == nil {
+		if val := parseInt(concurrent); val > 0 {
 			cfg.Performance.MaxConcurrentFiles = val
 		}
 	}
@@ -148,20 +148,20 @@ func (cl *ConfigLoader) applyEnvironmentOverrides(cfg *Config) {
 
 	// File size and count limits
 	if maxSize := os.Getenv("FAST_CONTEXT_MAX_FILE_SIZE_KB"); maxSize != "" {
-		if val, err := parseInt(maxSize); err == nil {
+		if val := parseInt(maxSize); val > 0 {
 			cfg.MaxFileSizeKB = val
 		}
 	}
 
 	if maxFiles := os.Getenv("FAST_CONTEXT_MAX_FILES"); maxFiles != "" {
-		if val, err := parseInt(maxFiles); err == nil {
+		if val := parseInt(maxFiles); val > 0 {
 			cfg.MaxFiles = val
 		}
 	}
 
 	// Analysis depth
 	if depth := os.Getenv("FAST_CONTEXT_ANALYSIS_DEPTH"); depth != "" {
-		if val, err := parseInt(depth); err == nil {
+		if val := parseInt(depth); val > 0 {
 			cfg.Performance.AnalysisDepth = val
 		}
 	}

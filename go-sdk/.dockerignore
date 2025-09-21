@@ -1,0 +1,68 @@
+# Git files
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Tests
+*_test.go
+tests/
+testdata/
+
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+fast-context*
+coverage.out
+coverage.html
+
+# Rust build artifacts
+target/
+Cargo.lock
+
+# Go mod cache
+go.sum
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Node.js related (since this is in a monorepo)
+node_modules/
+package-lock.json
+package.json
+
+# Python related (since this is in a monorepo)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+ENV/
+
+# Other language artifacts
+*.class
+*.jar
+*.war
+*.ear

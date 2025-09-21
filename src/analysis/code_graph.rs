@@ -4,6 +4,7 @@
 //! to create comprehensive code graphs that capture all relationships between symbols.
 
 use super::{CodeMetrics, CodeNode, CodeRelationship, RelationshipKind};
+use crate::errors::FastContextResult;
 use crate::parsers::LanguageId;
 use crate::symbols::{Dependency, DependencyExtractorFactory, DependencyType, Symbol, SymbolKind};
 use petgraph::graph::NodeIndex;
@@ -234,7 +235,7 @@ impl CodeGraphBuilder {
         symbols: Vec<Symbol>,
         file_path: &str,
         language: LanguageId,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // First, add all symbols as nodes
         self.add_file_symbols(symbols.clone(), file_path);
 
@@ -288,7 +289,7 @@ impl CodeGraphBuilder {
     }
 
     /// Add a dependency relationship to the graph
-    pub fn add_dependency_relationship(&mut self, dependency: Dependency) -> Result<(), String> {
+    pub fn add_dependency_relationship(&mut self, dependency: Dependency) -> FastContextResult<()> {
         let from_node =
             self.find_or_create_external_node(&dependency.from_symbol, &dependency.file_path);
         let to_node =
@@ -1294,12 +1295,35 @@ impl CodeGraphBuilder {
     /// Merge another CodeGraphBuilder into this one for multi-file projects
     pub fn merge(&mut self, other: CodeGraphBuilder) -> Result<MergeResult, MergeError> {
         let mut merge_result = MergeResult::new();
-
-        // Track conflicts and resolutions
         let mut symbol_conflicts = Vec::new();
         let mut resolved_symbols = HashMap::new();
 
         // Phase 1: Merge symbols with conflict resolution
+        self.merge_symbols(&other, &mut merge_result, &mut symbol_conflicts, &mut resolved_symbols)?;
+
+        // Phase 2: Merge file symbol mappings
+        self.merge_file_mappings(&other, &mut merge_result, &resolved_symbols);
+
+        // Phase 3: Merge edges and relationships
+        self.merge_edges(&other, &mut merge_result, &resolved_symbols);
+
+        // Phase 4: Merge specialized graph views
+        self.merge_specialized_edge_sets(&other, &resolved_symbols);
+
+        // Phase 5: Update metrics and validate merged graph
+        self.finalize_merge(&mut merge_result, symbol_conflicts);
+
+        Ok(merge_result)
+    }
+
+    /// Phase 1: Merge symbols with conflict resolution
+    fn merge_symbols(
+        &mut self,
+        other: &CodeGraphBuilder,
+        merge_result: &mut MergeResult,
+        symbol_conflicts: &mut Vec<SymbolConflict>,
+        resolved_symbols: &mut HashMap<NodeIndex, NodeIndex>,
+    ) -> Result<(), MergeError> {
         for (symbol_name, &other_node_idx) in &other.symbol_to_node {
             let other_symbol = &other.graph[other_node_idx].symbol;
 
@@ -1308,7 +1332,7 @@ impl CodeGraphBuilder {
                 let conflict = self.resolve_symbol_conflict(
                     existing_node_idx,
                     other_node_idx,
-                    &other,
+                    other,
                     symbol_name,
                 )?;
 
@@ -1335,8 +1359,16 @@ impl CodeGraphBuilder {
                 merge_result.symbols_added += 1;
             }
         }
+        Ok(())
+    }
 
-        // Phase 2: Merge file symbol mappings
+    /// Phase 2: Merge file symbol mappings
+    fn merge_file_mappings(
+        &mut self,
+        other: &CodeGraphBuilder,
+        merge_result: &mut MergeResult,
+        resolved_symbols: &HashMap<NodeIndex, NodeIndex>,
+    ) {
         for (file_path, other_file_nodes) in &other.file_symbols {
             let mapped_nodes: Vec<NodeIndex> = other_file_nodes
                 .iter()
@@ -1356,8 +1388,15 @@ impl CodeGraphBuilder {
                 merge_result.files_added += 1;
             }
         }
+    }
 
-        // Phase 3: Merge edges and relationships
+    /// Phase 3: Merge edges and relationships
+    fn merge_edges(
+        &mut self,
+        other: &CodeGraphBuilder,
+        merge_result: &mut MergeResult,
+        resolved_symbols: &HashMap<NodeIndex, NodeIndex>,
+    ) {
         for edge_ref in other.graph.edge_references() {
             let old_source = edge_ref.source();
             let old_target = edge_ref.target();
@@ -1378,11 +1417,14 @@ impl CodeGraphBuilder {
                 }
             }
         }
+    }
 
-        // Phase 4: Merge specialized graph views
-        self.merge_specialized_edge_sets(&other, &resolved_symbols);
-
-        // Phase 5: Update metrics and validate merged graph
+    /// Phase 5: Update metrics and validate merged graph
+    fn finalize_merge(
+        &mut self,
+        merge_result: &mut MergeResult,
+        symbol_conflicts: Vec<SymbolConflict>,
+    ) {
         self.update_fan_metrics();
         let validation_result = self.validate_graph();
 
@@ -1393,8 +1435,6 @@ impl CodeGraphBuilder {
 
         merge_result.conflicts = symbol_conflicts;
         merge_result.success = validation_result.errors.is_empty();
-
-        Ok(merge_result)
     }
 
     /// Resolve conflicts when the same symbol exists in multiple graphs
@@ -2503,7 +2543,7 @@ mod tests {
 
 impl CodeGraphBuilder {
     /// Build a data flow graph showing how data flows through variable assignments and usage
-    pub fn build_data_flow_graph(&mut self) -> Result<(), String> {
+    pub fn build_data_flow_graph(&mut self) -> FastContextResult<()> {
         // Clear existing data flow edges
         self.data_flow_edges.clear();
 
@@ -2524,7 +2564,7 @@ impl CodeGraphBuilder {
     }
 
     /// Analyze data flow within a specific file
-    fn analyze_data_flow_in_file(&mut self, file_path: &str) -> Result<(), String> {
+    fn analyze_data_flow_in_file(&mut self, file_path: &str) -> FastContextResult<()> {
         // Get symbols from this file
         let file_symbols: Vec<_> = self
             .graph
@@ -2563,7 +2603,7 @@ impl CodeGraphBuilder {
         symbol_idx: NodeIndex,
         symbol: &crate::symbols::Symbol,
         _context: &mut crate::symbols::dependency_extractor::ExtractionContext,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // Use Phase 4 dependency extractor to find data flow relationships
         let extractor_factory =
             crate::symbols::dependency_extractor::DependencyExtractorFactory::new();
@@ -2609,7 +2649,7 @@ impl CodeGraphBuilder {
         from_idx: NodeIndex,
         to_idx: NodeIndex,
         dependency: &crate::symbols::Dependency,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // Avoid duplicate edges
         if self.data_flow_edges.contains(&(from_idx, to_idx)) {
             return Ok(());
@@ -3266,7 +3306,7 @@ mod data_flow_tests {
 
 impl CodeGraphBuilder {
     /// Build a control flow graph showing execution paths through code constructs
-    pub fn build_control_flow_graph(&mut self) -> Result<(), String> {
+    pub fn build_control_flow_graph(&mut self) -> FastContextResult<()> {
         // Clear existing control flow edges
         self.control_flow_edges.clear();
 
@@ -3287,7 +3327,7 @@ impl CodeGraphBuilder {
     }
 
     /// Analyze control flow within a specific file
-    fn analyze_control_flow_in_file(&mut self, file_path: &str) -> Result<(), String> {
+    fn analyze_control_flow_in_file(&mut self, file_path: &str) -> FastContextResult<()> {
         // Get symbols from this file
         let file_symbols: Vec<_> = self
             .graph
@@ -3331,7 +3371,7 @@ impl CodeGraphBuilder {
         function_idx: NodeIndex,
         function: &crate::symbols::Symbol,
         _context: &mut crate::symbols::dependency_extractor::ExtractionContext,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // Simulate control flow extraction by parsing function signature/body
         let function_body = function.signature.as_deref().unwrap_or("");
 
@@ -3354,7 +3394,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // Identify control flow constructs based on node type
         match node.kind() {
             "if_expression" | "if_statement" => {
@@ -3393,7 +3433,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // Create control flow nodes for if condition and branches
         let condition_text = self.get_node_text(&node, source);
         let if_node_name = format!("if_{}", self.control_flow_edges.len());
@@ -3442,7 +3482,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         let loop_text = self.get_node_text(&node, source);
         let loop_node_name = format!("loop_{}", self.control_flow_edges.len());
 
@@ -3478,7 +3518,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         let match_text = self.get_node_text(&node, source);
         let match_node_name = format!("match_{}", self.control_flow_edges.len());
 
@@ -3531,7 +3571,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         let try_text = self.get_node_text(&node, source);
         let try_node_name = format!("try_{}", self.control_flow_edges.len());
 
@@ -3581,7 +3621,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         let return_text = self.get_node_text(&node, source);
         let return_node_name = format!("return_{}", self.control_flow_edges.len());
 
@@ -3609,7 +3649,7 @@ impl CodeGraphBuilder {
         node: tree_sitter::Node,
         function_idx: NodeIndex,
         source: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         let stmt_text = self.get_node_text(&node, source);
         let stmt_kind = if node.kind().contains("break") {
             ControlFlowKind::Break
@@ -3639,7 +3679,7 @@ impl CodeGraphBuilder {
         kind: ControlFlowKind,
         content: String,
         parent_function: NodeIndex,
-    ) -> Result<NodeIndex, String> {
+    ) -> FastContextResult<NodeIndex> {
         // Get parent function info
         let parent_symbol = &self.graph[parent_function].symbol;
 
@@ -3695,7 +3735,7 @@ impl CodeGraphBuilder {
         to_idx: NodeIndex,
         flow_type: ControlFlowType,
         description: &str,
-    ) -> Result<(), String> {
+    ) -> FastContextResult<()> {
         // Avoid duplicate edges
         if self.control_flow_edges.contains(&(from_idx, to_idx)) {
             return Ok(());
@@ -4165,7 +4205,7 @@ mod complexity_tests {
             let complexity5 = builder.calculate_mccabe_complexity(func_idx, 2, 1, 1);
             assert_eq!(complexity5, 5, "Should combine all decision points");
         } else {
-            panic!("Function should be found in symbol table");
+            panic!("Test setup failed: 'test_function' should be found in symbol table but was not found");
         }
     }
 
@@ -4200,7 +4240,7 @@ mod complexity_tests {
                 "Nesting depth should be reasonable"
             );
         } else {
-            panic!("Function should be found in symbol table");
+            panic!("Test setup failed: 'test_function' should be found in symbol table but was not found");
         }
     }
 
@@ -4266,7 +4306,7 @@ mod complexity_tests {
                 "Zero inputs should give base complexity of 1"
             );
         } else {
-            panic!("Function should be found in symbol table");
+            panic!("Test setup failed: 'test_function' should be found in symbol table but was not found");
         }
     }
 
@@ -4341,7 +4381,7 @@ mod complexity_tests {
             let complexity_multi = builder.calculate_mccabe_complexity(func_idx, 3, 2, 1);
             assert_eq!(complexity_multi, 7, "Multiple decisions: 1 + 3 + 2 + 1 = 7");
         } else {
-            panic!("Function should be found in symbol table");
+            panic!("Test setup failed: 'test_function' should be found in symbol table but was not found");
         }
     }
 
@@ -4382,7 +4422,7 @@ mod complexity_tests {
                 "Should follow McCabe formula with capping: min(1 + decisions, 100)"
             );
         } else {
-            panic!("Function should be found in symbol table");
+            panic!("Test setup failed: 'test_function' should be found in symbol table but was not found");
         }
     }
 

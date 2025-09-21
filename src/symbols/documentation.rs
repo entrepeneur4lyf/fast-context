@@ -84,7 +84,8 @@ impl DocumentationAnalyzer {
         // JSDoc patterns
         param_patterns.insert(
             "jsdoc".to_string(),
-            Regex::new(r"@param\s+\{([^}]+)\}\s+(\w+)\s+(.+)").unwrap(),
+            Regex::new(r"@param\s+\{([^}]+)\}\s+(\w+)\s+(.+)")
+                .expect("Failed to compile JSDoc param regex"),
         );
         return_patterns.insert(
             "jsdoc".to_string(),

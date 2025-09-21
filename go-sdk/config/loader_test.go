@@ -39,8 +39,8 @@ performance:
 
 	// Change to temp directory
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tempDir)
 
 	// Test discovery
 	configPath = loader.DiscoverConfig()
@@ -230,21 +230,21 @@ languages = ["Go"]`
 // TestEnvironmentOverrides tests environment variable overrides
 func TestEnvironmentOverrides(t *testing.T) {
 	// Set environment variables
-	os.Setenv("FAST_CONTEXT_PROJECT_ROOT", "/env/test")
-	os.Setenv("FAST_CONTEXT_LOG_LEVEL", "debug")
-	os.Setenv("FAST_CONTEXT_MAX_MEMORY_MB", "2048")
-	os.Setenv("FAST_CONTEXT_TIMEOUT_SECONDS", "600")
-	os.Setenv("FAST_CONTEXT_CACHE_POLICY", "aggressive")
-	os.Setenv("FAST_CONTEXT_ENABLE_PARALLEL", "false")
-	os.Setenv("FAST_CONTEXT_ENABLE_PROGRESS", "false")
+	_ = os.Setenv("FAST_CONTEXT_PROJECT_ROOT", "/env/test")
+	_ = os.Setenv("FAST_CONTEXT_LOG_LEVEL", "debug")
+	_ = os.Setenv("FAST_CONTEXT_MAX_MEMORY_MB", "2048")
+	_ = os.Setenv("FAST_CONTEXT_TIMEOUT_SECONDS", "600")
+	_ = os.Setenv("FAST_CONTEXT_CACHE_POLICY", "aggressive")
+	_ = os.Setenv("FAST_CONTEXT_ENABLE_PARALLEL", "false")
+	_ = os.Setenv("FAST_CONTEXT_ENABLE_PROGRESS", "false")
 	defer func() {
-		os.Unsetenv("FAST_CONTEXT_PROJECT_ROOT")
-		os.Unsetenv("FAST_CONTEXT_LOG_LEVEL")
-		os.Unsetenv("FAST_CONTEXT_MAX_MEMORY_MB")
-		os.Unsetenv("FAST_CONTEXT_TIMEOUT_SECONDS")
-		os.Unsetenv("FAST_CONTEXT_CACHE_POLICY")
-		os.Unsetenv("FAST_CONTEXT_ENABLE_PARALLEL")
-		os.Unsetenv("FAST_CONTEXT_ENABLE_PROGRESS")
+		_ = os.Unsetenv("FAST_CONTEXT_PROJECT_ROOT")
+		_ = os.Unsetenv("FAST_CONTEXT_LOG_LEVEL")
+		_ = os.Unsetenv("FAST_CONTEXT_MAX_MEMORY_MB")
+		_ = os.Unsetenv("FAST_CONTEXT_TIMEOUT_SECONDS")
+		_ = os.Unsetenv("FAST_CONTEXT_CACHE_POLICY")
+		_ = os.Unsetenv("FAST_CONTEXT_ENABLE_PARALLEL")
+		_ = os.Unsetenv("FAST_CONTEXT_ENABLE_PROGRESS")
 	}()
 
 	loader := NewConfigLoader()
@@ -419,18 +419,16 @@ performance:
 
 	// Change to temp directory and load config
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tempDir)
 
 	loader := NewConfigLoader()
-	cfg, err := loader.Load("")
-	require.NoError(t, err)
 
 	// Apply environment override
-	os.Setenv("FAST_CONTEXT_MAX_MEMORY_MB", "1024")
-	defer os.Unsetenv("FAST_CONTEXT_MAX_MEMORY_MB")
+	_ = os.Setenv("FAST_CONTEXT_MAX_MEMORY_MB", "1024")
+	defer func() { _ = os.Unsetenv("FAST_CONTEXT_MAX_MEMORY_MB") }()
 
-	cfg, err = loader.Load("")
+	cfg, err := loader.Load("")
 	require.NoError(t, err)
 	assert.Equal(t, 1024, cfg.Performance.MaxMemoryMB) // Overridden by env
 	assert.Equal(t, "/base", cfg.ProjectRoot)             // From file
@@ -453,8 +451,8 @@ performance:
 
 	// Change to temp directory and load config
 	oldDir, _ := os.Getwd()
-	defer os.Chdir(oldDir)
-	os.Chdir(tempDir)
+	defer func() { _ = os.Chdir(oldDir) }()
+	_ = os.Chdir(tempDir)
 
 	loader := NewConfigLoader()
 	cfg, err := loader.Load("")

@@ -119,6 +119,24 @@ pub enum ProjectType {
     Unknown,
 }
 
+/// Project characteristics detected during analysis
+#[derive(Debug, Clone)]
+struct ProjectCharacteristics {
+    pub has_build_system: bool,
+    pub has_tests: bool,
+    pub has_documentation: bool,
+    pub project_type: ProjectType,
+    pub dependency_depth: usize,
+}
+
+/// Performance estimates for the project
+#[derive(Debug, Clone)]
+struct PerformanceEstimates {
+    pub estimated_parse_time_ms: u64,
+    pub estimated_memory_usage_mb: usize,
+    pub estimated_analysis_time_ms: u64,
+}
+
 /// Codebase analyzer that detects project characteristics
 pub struct CodebaseAnalyzer {
     /// Files to ignore during analysis
@@ -351,20 +369,60 @@ impl CodebaseAnalyzer {
         let start_time = Instant::now();
         let root_path = root_path.as_ref().to_path_buf();
 
-        // Scan for all relevant files
+        // Phase 1: Scan for all relevant files
         let files = self.scan_files(&root_path)?;
 
         if files.is_empty() {
             return Err(AnalysisError::NoFilesFound);
         }
 
-        // Analyze each file
+        // Phase 2: Analyze language distribution and statistics
+        let (languages, total_lines, total_size_bytes, complexity_score) = 
+            self.analyze_language_distribution(&files);
+
+        // Phase 3: Determine project characteristics
+        let (primary_language, project_characteristics) = 
+            self.determine_project_characteristics(&root_path, &files, &languages);
+
+        // Phase 4: Calculate performance estimates
+        let performance_estimates = self.calculate_performance_estimates(
+            &files, 
+            &languages, 
+            complexity_score
+        );
+
+        // Phase 5: Build final profile
+        let analysis_duration = start_time.elapsed();
+        self.build_project_profile(
+            files,
+            languages,
+            primary_language,
+            total_lines,
+            total_size_bytes,
+            complexity_score,
+            project_characteristics,
+            performance_estimates,
+            root_path,
+            analysis_duration,
+        )
+    }
+
+    /// Analyze language distribution and calculate statistics
+    fn analyze_language_distribution(
+        &self,
+        files: &[FileInfo],
+    ) -> (
+        HashMap<LanguageId, LanguageStats>,
+        usize,
+        u64,
+        f64,
+    ) {
         let mut languages: HashMap<LanguageId, LanguageStats> = HashMap::new();
         let mut total_lines = 0;
         let mut total_size_bytes = 0;
         let mut complexity_scores = Vec::new();
 
-        for file_info in &files {
+        for file_info in files {
             if let Some(language) = self.detect_language(&file_info.path) {
                 let stats = languages.entry(language).or_insert_with(|| LanguageStats {
                     file_count: 0,
@@ -394,12 +452,6 @@ impl CodebaseAnalyzer {
                 (stats.total_size_bytes as f64 / total_size_bytes as f64) * 100.0;
         }
 
-        // Determine primary language
-        let primary_language = languages
-            .iter()
-            .max_by_key(|(_, stats)| stats.total_size_bytes)
-            .map(|(lang, _)| *lang);
-
         // Calculate complexity score
         let complexity_score = if complexity_scores.is_empty() {
             1.0
@@ -407,19 +459,61 @@ impl CodebaseAnalyzer {
             complexity_scores.iter().sum::<f64>() / complexity_scores.len() as f64
         };
 
-        // Detect project characteristics
-        let has_build_system = self.detect_build_system(&root_path);
-        let has_tests = self.detect_tests(&files);
-        let has_documentation = self.detect_documentation(&files);
-        let project_type = self.classify_project_type(&languages, &files);
+        (languages, total_lines, total_size_bytes, complexity_score)
+    }
 
-        // Calculate estimates
-        let estimated_parse_time_ms = self.estimate_parse_time(&files, &languages);
-        let estimated_memory_usage_mb = self.estimate_memory_usage(&files, complexity_score);
-        let estimated_analysis_time_ms = self.estimate_analysis_time(&files, complexity_score);
+    /// Determine project characteristics
+    fn determine_project_characteristics(
+        &self,
+        root_path: &Path,
+        files: &[FileInfo],
+        languages: &HashMap<LanguageId, LanguageStats>,
+    ) -> (Option<LanguageId>, ProjectCharacteristics) {
+        // Determine primary language
+        let primary_language = languages
+            .iter()
+            .max_by_key(|(_, stats)| stats.total_size_bytes)
+            .map(|(lang, _)| *lang);
 
-        let analysis_duration = start_time.elapsed();
+        let characteristics = ProjectCharacteristics {
+            has_build_system: self.detect_build_system(root_path),
+            has_tests: self.detect_tests(files),
+            has_documentation: self.detect_documentation(files),
+            project_type: self.classify_project_type(languages, files),
+            dependency_depth: self.estimate_dependency_depth(files),
+        };
 
+        (primary_language, characteristics)
+    }
+
+    /// Calculate performance estimates
+    fn calculate_performance_estimates(
+        &self,
+        files: &[FileInfo],
+        languages: &HashMap<LanguageId, LanguageStats>,
+        complexity_score: f64,
+    ) -> PerformanceEstimates {
+        PerformanceEstimates {
+            estimated_parse_time_ms: self.estimate_parse_time(files, languages),
+            estimated_memory_usage_mb: self.estimate_memory_usage(files, complexity_score),
+            estimated_analysis_time_ms: self.estimate_analysis_time(files, complexity_score),
+        }
+    }
+
+    /// Build final project profile
+    fn build_project_profile(
+        &self,
+        files: Vec<FileInfo>,
+        languages: HashMap<LanguageId, LanguageStats>,
+        primary_language: Option<LanguageId>,
+        total_lines: usize,
+        total_size_bytes: u64,
+        complexity_score: f64,
+        characteristics: ProjectCharacteristics,
+        estimates: PerformanceEstimates,
+        scan_root: PathBuf,
+        analysis_duration: std::time::Duration,
+    ) -> Result<ProjectProfile, AnalysisError> {
         Ok(ProjectProfile {
             size: ProjectSize::from_file_count(files.len()),
             total_files: files.len(),
@@ -429,17 +523,17 @@ impl CodebaseAnalyzer {
             primary_language,
             average_file_size: total_size_bytes as f64 / files.len() as f64,
             complexity_score,
-            dependency_depth: self.estimate_dependency_depth(&files),
-            estimated_parse_time_ms,
-            estimated_memory_usage_mb,
-            estimated_analysis_time_ms,
-            has_build_system,
-            has_tests,
-            has_documentation,
-            project_type,
+            dependency_depth: characteristics.dependency_depth,
+            estimated_parse_time_ms: estimates.estimated_parse_time_ms,
+            estimated_memory_usage_mb: estimates.estimated_memory_usage_mb,
+            estimated_analysis_time_ms: estimates.estimated_analysis_time_ms,
+            has_build_system: characteristics.has_build_system,
+            has_tests: characteristics.has_tests,
+            has_documentation: characteristics.has_documentation,
+            project_type: characteristics.project_type,
             analyzed_at: std::time::SystemTime::now(),
             analysis_duration_ms: analysis_duration.as_millis() as u64,
-            scan_root: root_path,
+            scan_root,
         })
     }
 

@@ -3,6 +3,11 @@
 //! This module contains all graph-related functionality
 //! extracted from the monolithic lib.rs for better organization.
 
+pub mod operations;
+pub mod petgraph_impl;
+#[cfg(feature = "nodejs")]
+pub mod bindings;
+
 #[cfg(feature = "nodejs")]
 use napi_derive::napi;
 #[cfg(feature = "nodejs")]

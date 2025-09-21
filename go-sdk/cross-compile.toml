@@ -1,0 +1,296 @@
+# Fast-Context Go SDK Cross-Compilation Configuration
+
+[general]
+# Project information
+name = "fast-context-go-sdk"
+version = "1.0.0"
+description = "Intelligent codebase analysis engine"
+
+# Build configuration
+build_dir = "build"
+dist_dir = "dist"
+output_binary = "fast-context"
+
+# Cross-compilation targets
+[[targets]]
+os = "linux"
+arch = "amd64"
+compiler = "x86_64-linux-gnu-gcc"
+linker = "x86_64-linux-gnu-gcc"
+flags = ["-static"]
+go_tags = ["netgo", "osusergo"]
+ldflags = ["-s", "-w", "-extldflags=-static"]
+package_format = "tar.gz"
+
+[[targets]]
+os = "linux"
+arch = "arm64"
+compiler = "aarch64-linux-gnu-gcc"
+linker = "aarch64-linux-gnu-gcc"
+flags = ["-static"]
+go_tags = ["netgo", "osusergo"]
+ldflags = ["-s", "-w", "-extldflags=-static"]
+package_format = "tar.gz"
+
+[[targets]]
+os = "darwin"
+arch = "amd64"
+compiler = ""  # Use native compiler
+linker = ""    # Use native linker
+flags = []
+go_tags = []
+ldflags = ["-s", "-w"]
+package_format = "tar.gz"
+
+[[targets]]
+os = "darwin"
+arch = "arm64"
+compiler = ""  # Use native compiler
+linker = ""    # Use native linker
+flags = []
+go_tags = []
+ldflags = ["-s", "-w"]
+package_format = "tar.gz"
+
+[[targets]]
+os = "windows"
+arch = "amd64"
+compiler = "x86_64-w64-mingw32-gcc"
+linker = "x86_64-w64-mingw32-gcc"
+flags = []
+go_tags = []
+ldflags = ["-s", "-w"]
+package_format = "zip"
+
+# Build configuration
+[build]
+# CGO configuration
+cgo_enabled = true
+rust_enabled = true
+
+# Build tags
+default_tags = ["cgo"]
+optional_tags = ["netgo", "osusergo"]
+
+# Build flags
+build_flags = ["-v", "-trimpath"]
+race_flags = ["-race"]
+coverage_flags = ["-cover", "-covermode=count"]
+
+# Output configuration
+strip_debug = true
+compress_symbols = true
+generate_map_file = false
+
+# Package configuration
+[package]
+# Include these files in packages
+include_files = [
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "VERSION",
+    "examples/",
+    "docs/"
+]
+
+# Exclude these files from packages
+exclude_files = [
+    ".*",
+    "*.go",
+    "go.mod",
+    "go.sum",
+    "Makefile",
+    "Dockerfile*",
+    "scripts/",
+    "testdata/",
+    "*.test",
+    "*.prof"
+]
+
+# Package metadata
+[package.metadata]
+author = "Fast-Context Team"
+maintainer = "Fast-Context Team <team@fast-context.dev>"
+homepage = "https://fast-context.dev"
+repository = "https://github.com/fast-context/go-sdk"
+license = "MIT"
+license_file = "LICENSE"
+description = "Fast-Context Go SDK - Intelligent codebase analysis engine"
+
+# Development configuration
+[development]
+# Watch patterns for development
+watch_patterns = [
+    "**/*.go",
+    "**/*.rs",
+    "go.mod",
+    "go.sum",
+    "Makefile",
+    "Dockerfile*"
+]
+
+# Ignore patterns for development
+ignore_patterns = [
+    ".*",
+    "build/",
+    "dist/",
+    "testdata/",
+    "*.test",
+    "*.prof"
+]
+
+# Development commands
+[development.commands]
+# Default build command
+build = "go build -v ./cmd/fast-context"
+
+# Test command
+test = "go test -v ./..."
+
+# Run command
+run = "go run ./cmd/fast-context"
+
+# Watch command
+watch = "air -c .air.toml"
+
+# Docker configuration
+[docker]
+# Docker image configuration
+image_name = "fast-context/go-sdk"
+registry = "docker.io"
+base_image = "golang:1.21-alpine"
+
+# Build arguments
+build_args = [
+    "GO_VERSION=1.21",
+    "CGO_ENABLED=1",
+    "RUST_VERSION=stable"
+]
+
+# Dockerfile paths
+dockerfile = "Dockerfile"
+dockerfile_cross = "Dockerfile.cross"
+
+# Container configuration
+[docker.container]
+# Default container configuration
+workdir = "/app"
+user = "appuser"
+group = "appuser"
+uid = 1001
+gid = 1001
+
+# Environment variables
+env_vars = [
+    "CGO_ENABLED=1",
+    "GO111MODULE=on",
+    "GOPROXY=https://proxy.golang.org,direct",
+    "GONOPROXY=",
+    "GONOSUMDB=",
+    "GOPRIVATE="
+]
+
+# Volumes
+volumes = [
+    "/app/build",
+    "/app/dist",
+    "/go/pkg/mod"
+]
+
+# Ports
+ports = ["8080:8080"]
+
+# CI/CD configuration
+[ci_cd]
+# CI/CD pipeline configuration
+enable_tests = true
+enable_coverage = true
+enable_benchmarks = true
+enable_lint = true
+enable_security_scan = true
+
+# Test configuration
+[ci_cd.tests]
+# Test command
+test_command = "go test -v ./..."
+
+# Test patterns
+test_patterns = ["*_test.go"]
+
+# Test timeout
+test_timeout = "30m"
+
+# Test coverage
+[ci_cd.coverage]
+# Coverage command
+coverage_command = "go test -coverprofile=coverage.out ./..."
+
+# Coverage profile
+coverage_profile = "coverage.out"
+
+# Coverage threshold
+coverage_threshold = 80.0
+
+# Coverage report
+coverage_report = "coverage.html"
+
+# Benchmark configuration
+[ci_cd.benchmarks]
+# Benchmark command
+benchmark_command = "go test -bench=. -benchmem ./..."
+
+# Benchmark timeout
+benchmark_timeout = "15m"
+
+# Benchmark patterns
+benchmark_patterns = ["*"]
+
+# Linting configuration
+[ci_cd.lint]
+# Lint command
+lint_command = "golangci-lint run"
+
+# Lint timeout
+lint_timeout = "10m"
+
+# Security scan configuration
+[ci_cd.security]
+# Security scan command
+security_command = "gosec ./..."
+
+# Security scan timeout
+security_timeout = "10m"
+
+# Release configuration
+[release]
+# Release configuration
+create_github_release = true
+create_docker_release = true
+sign_releases = true
+
+# Release artifacts
+release_artifacts = [
+    "dist/*.tar.gz",
+    "dist/*.zip",
+    "dist/*-checksums.txt"
+]
+
+# Release notes template
+release_notes_template = "## Release {version}\n\n### Changes\n\n### Installation\n\n### Contributors\n\n"
+
+# Pre-release commands
+pre_release_commands = [
+    "make test",
+    "make build-all",
+    "make dist",
+    "make checksums"
+]
+
+# Post-release commands
+post_release_commands = [
+    "git tag v{version}",
+    "git push origin v{version}",
+    "docker push {image_name}:{version}",
+    "docker push {image_name}:latest"
+]

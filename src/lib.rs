@@ -45,11 +45,14 @@
 // All imports moved to respective modules for better organization
 
 pub mod types;
-pub mod errors;      // Standardized error types
+pub mod errors;      // Comprehensive error management system
+pub mod validation;  // Input validation and security
 
 // 🏗️ NEW MODULAR ARCHITECTURE - Proper separation of concerns
 #[cfg(feature = "nodejs")]
 pub mod analyzer;    // FastContextAnalyzer implementation
+#[cfg(feature = "nodejs")]
+pub mod api;         // Unified API layer (Node.js only)
 pub mod graph;       // Graph algorithms and data structures
 pub mod utils;
 mod test_display;       // Utility functions
@@ -58,7 +61,7 @@ pub mod domains;     // Domain separation for architectural harmony
 // 📦 CORE MODULES - Well-organized functionality
 pub mod analysis;    // Code analysis and graph construction
 pub mod cache;       // Intelligent caching system
-pub mod error_tracking; // Error tracking and reporting system
+// error_tracking is now part of the errors module
 pub mod export;      // Export & serialization system
 pub mod parsers;     // Tree-sitter language parsers
 pub mod query;       // Query interface for AI assistants

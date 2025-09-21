@@ -212,13 +212,13 @@ impl PyMultiLevelCache {
         
         // Try L1 cache first
         {
-            let mut l1 = self.l1_cache.lock().unwrap();
+            let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
             if let Some(entry) = l1.get_mut(&key) {
                 if !entry.is_expired() {
                     entry.update_access();
                     self.record_access(key.clone(), true);
                     
-                    let mut stats = self.statistics.lock().unwrap();
+                    let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
                     stats.hits += 1;
                     stats.update_hit_rate();
                     
@@ -243,12 +243,12 @@ impl PyMultiLevelCache {
                 
                 // Promote to L1 cache
                 {
-                    let mut l1 = self.l1_cache.lock().unwrap();
+                    let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
                     l1.insert(key.clone(), entry.clone());
                     self.enforce_memory_limits();
                 }
                 
-                let mut stats = self.statistics.lock().unwrap();
+                let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
                 stats.hits += 1;
                 stats.update_hit_rate();
                 
@@ -260,7 +260,7 @@ impl PyMultiLevelCache {
         }
         
         self.record_access(key, false);
-        let mut stats = self.statistics.lock().unwrap();
+        let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
         stats.misses += 1;
         stats.update_hit_rate();
         
@@ -271,7 +271,7 @@ impl PyMultiLevelCache {
     pub fn put(&self, key: String, entry: PyCacheEntry) -> PyResult<()> {
         // Update L1 cache
         {
-            let mut l1 = self.l1_cache.lock().unwrap();
+            let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
             l1.insert(key.clone(), entry.clone());
             self.enforce_memory_limits();
         }
@@ -281,7 +281,7 @@ impl PyMultiLevelCache {
         
         // Update statistics
         {
-            let mut stats = self.statistics.lock().unwrap();
+            let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
             stats.total_entries += 1;
             stats.total_memory_bytes += entry.size_bytes;
             stats.total_disk_bytes += entry.size_bytes;
@@ -297,7 +297,7 @@ impl PyMultiLevelCache {
         
         // Remove from L1
         {
-            let mut l1 = self.l1_cache.lock().unwrap();
+            let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
             if l1.remove(&key).is_some() {
                 removed = true;
             }
@@ -309,7 +309,7 @@ impl PyMultiLevelCache {
         }
         
         if removed {
-            let mut stats = self.statistics.lock().unwrap();
+            let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
             stats.total_entries = stats.total_entries.saturating_sub(1);
         }
         
@@ -320,7 +320,7 @@ impl PyMultiLevelCache {
     pub fn clear(&self) -> PyResult<()> {
         // Clear L1 cache
         {
-            let mut l1 = self.l1_cache.lock().unwrap();
+            let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
             l1.clear();
         }
         
@@ -334,7 +334,7 @@ impl PyMultiLevelCache {
         
         // Reset statistics
         {
-            let mut stats = self.statistics.lock().unwrap();
+            let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
             *stats = PyCacheStatistics::new();
         }
         
@@ -343,7 +343,7 @@ impl PyMultiLevelCache {
     
     /// Get cache statistics
     pub fn get_statistics(&self) -> PyResult<PyCacheStatistics> {
-        let stats = self.statistics.lock().unwrap();
+        let stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
         Ok(stats.clone())
     }
     
@@ -387,7 +387,7 @@ impl PyMultiLevelCache {
         
         // Check L1 cache
         {
-            let l1 = self.l1_cache.lock().unwrap();
+            let l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
             for key in l1.keys() {
                 if regex.is_match(key) {
                     keys.push(key.clone());
@@ -416,7 +416,7 @@ impl PyMultiLevelCache {
         
         // Check L1 cache
         {
-            let l1 = self.l1_cache.lock().unwrap();
+            let l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
             for entry in l1.values() {
                 if entry.tags.contains(&tag) {
                     entries.push(entry.clone());
@@ -491,7 +491,7 @@ impl PyMultiLevelCache {
     }
     
     fn enforce_memory_limits(&self) {
-        let mut l1 = self.l1_cache.lock().unwrap();
+        let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
         let mut total_size: u64 = l1.values().map(|e| e.size_bytes).sum();
         
         while total_size > self.policy.max_memory_mb as u64 * 1024 * 1024 {
@@ -500,7 +500,7 @@ impl PyMultiLevelCache {
                 let key = key_to_remove.clone();
                 if let Some(removed) = l1.remove(&key) {
                     total_size -= removed.size_bytes;
-                    let mut stats = self.statistics.lock().unwrap();
+                    let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
                     stats.evictions += 1;
                 }
             } else {
@@ -531,7 +531,7 @@ impl PyMultiLevelCache {
             if let Some((path, size, _)) = entries.first() {
                 if fs::remove_file(path).is_ok() {
                     total_size -= *size;
-                    let mut stats = self.statistics.lock().unwrap();
+                    let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
                     stats.evictions += 1;
                 }
                 entries.remove(0);
@@ -542,7 +542,7 @@ impl PyMultiLevelCache {
     }
     
     fn cleanup_expired_entries(&self) {
-        let mut l1 = self.l1_cache.lock().unwrap();
+        let mut l1 = self.l1_cache.lock().expect("Failed to acquire cache mutex - possible poisoning");
         let expired_keys: Vec<String> = l1.iter()
             .filter(|(_, entry)| entry.is_expired())
             .map(|(key, _)| key.clone())
@@ -565,7 +565,7 @@ impl PyMultiLevelCache {
     }
     
     fn record_access(&self, key: String, hit: bool) {
-        let mut log = self.access_log.lock().unwrap();
+        let mut log = self.access_log.lock().expect("Failed to acquire cache mutex - possible poisoning");
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -580,8 +580,8 @@ impl PyMultiLevelCache {
     }
     
     fn update_prediction_model(&self) {
-        let log = self.access_log.lock().unwrap();
-        let mut model = self.prediction_model.lock().unwrap();
+        let log = self.access_log.lock().expect("Failed to acquire cache mutex - possible poisoning");
+        let mut model = self.prediction_model.lock().expect("Failed to acquire cache mutex - possible poisoning");
         
         // Simple frequency-based prediction
         let mut key_counts = HashMap::new();
@@ -600,10 +600,39 @@ impl PyMultiLevelCache {
             model.insert(key, score);
         }
         
-        // Update prediction accuracy in statistics
+        // Calculate actual prediction accuracy based on recent performance
         {
-            let mut stats = self.statistics.lock().unwrap();
-            stats.prediction_accuracy = 0.85; // Placeholder calculation
+            let mut stats = self.statistics.lock().expect("Failed to acquire cache mutex - possible poisoning");
+            
+            // Calculate prediction accuracy by comparing predicted vs actual hits
+            let log = self.access_log.lock().expect("Failed to acquire cache mutex - possible poisoning");
+            let model = self.prediction_model.lock().expect("Failed to acquire cache mutex - possible poisoning");
+            
+            if log.len() > 10 {
+                let mut correct_predictions = 0;
+                let mut total_predictions = 0;
+                
+                // Use recent log entries to evaluate prediction accuracy
+                for (key, _, hit) in log.iter().rev().take(50) {
+                    if let Some(predicted_score) = model.get(key) {
+                        // Consider prediction correct if score > 0.5 and it was a hit, 
+                        // or score <= 0.5 and it was a miss
+                        if (*predicted_score > 0.5 && *hit) || (*predicted_score <= 0.5 && !*hit) {
+                            correct_predictions += 1;
+                        }
+                        total_predictions += 1;
+                    }
+                }
+                
+                stats.prediction_accuracy = if total_predictions > 0 {
+                    correct_predictions as f64 / total_predictions as f64
+                } else {
+                    0.0
+                };
+            } else {
+                // Not enough data yet, use default value
+                stats.prediction_accuracy = 0.5;
+            }
         }
     }
 }

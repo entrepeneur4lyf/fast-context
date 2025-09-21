@@ -20,6 +20,7 @@ type Optimizer struct {
 	memoryManager  *MemoryManager
 	enabled        bool
 	config         *OptimizationConfig
+	cancel         context.CancelFunc
 }
 
 // OptimizationConfig configures optimization behavior
@@ -68,7 +69,7 @@ type WorkerPool struct {
 	taskQueue  chan task
 	wg         sync.WaitGroup
 	ctx        context.Context
-	cancel     context.CancelFunc
+	// cancel     context.CancelFunc // Commented out as unused
 	maxWorkers int
 }
 
@@ -455,7 +456,8 @@ func (o *Optimizer) getCacheHits(operation string) int64 {
 	if o.cache == nil {
 		return 0
 	}
-	return o.metrics.GetCounter("cache_hits", "operation", operation)
+	value, _ := o.metrics.GetCounter("cache_hits", "operation", operation)
+	return value
 }
 
 func (o *Optimizer) calculateParallelSpeedup(operation string, duration time.Duration) float64 {
@@ -487,12 +489,23 @@ func (o *Optimizer) Cleanup() error {
 	o.enabled = false
 
 	if o.parallelPool != nil {
-		o.cancel()
+		if o.cancel != nil {
+			o.cancel()
+		}
 		o.parallelPool.wg.Wait()
 	}
 
 	if o.memoryManager != nil {
 		o.memoryManager.Stop()
+		o.memoryManager = nil
+	}
+
+	if o.cache != nil {
+		o.cache = nil
+	}
+
+	if o.parallelPool != nil {
+		o.parallelPool = nil
 	}
 
 	o.logger.Info("Optimizer cleaned up")

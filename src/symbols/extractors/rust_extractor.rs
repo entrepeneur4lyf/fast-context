@@ -9,24 +9,8 @@
 
 use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
+use crate::symbols::extractors::common::ExtractorUtils;
 use tree_sitter::{Node, Tree};
-
-/// Safe text extraction from tree-sitter nodes with bounds checking
-fn safe_node_text(node: &Node, source: &str) -> String {
-    let start = node.start_byte();
-    let end = node.end_byte();
-    
-    // Ensure byte range is within source bounds
-    if start <= end && end <= source.len() {
-        // Use direct slice access with bounds checking
-        if let Some(slice) = source.get(start..end) {
-            return slice.to_string();
-        }
-    }
-    
-    // Return empty string if bounds are invalid
-    String::new()
-}
 
 /// Rust symbol extractor
 pub struct RustExtractor;
@@ -60,125 +44,196 @@ impl RustExtractor {
         symbols: &mut Vec<Symbol>,
         scope_stack: &mut Vec<Scope>,
     ) {
+        // Handle current node based on its kind
+        self.handle_rust_node_by_kind(&node, source, file_path, symbols, scope_stack);
+
+        // Recursively process child nodes
+        self.process_rust_child_nodes(node, source, file_path, symbols, scope_stack);
+
+        // Clean up scope if needed
+        self.cleanup_rust_scope_if_needed(&node, scope_stack);
+    }
+
+    fn handle_rust_node_by_kind(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         match node.kind() {
             "function_item" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
-                    let location = Location::from_node(&node, file_path);
-
-                    // Extract function signature
-                    let signature = safe_node_text(&node, source);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Function,
-                        location,
-                        scope_chain: scope_stack.clone(),
-                        language: LanguageId::Rust,
-                        documentation: self.extract_doc_comments(&node, source),
-                        modifiers: self.extract_function_modifiers(&node, source),
-                        signature: Some(signature),
-                    });
-                }
+                self.handle_function_item(node, source, file_path, symbols, scope_stack);
             }
             "struct_item" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
-                    let location = Location::from_node(&node, file_path);
-
-                    // Enhanced struct analysis with generics and traits
-                    let mut modifiers = self.extract_item_modifiers(&node, source);
-                    
-                    // Extract generic parameters and lifetimes
-                    if let Some(type_params) = node.child_by_field_name("type_parameters") {
-                        let generics = self.extract_generic_parameters(&type_params, source);
-                        modifiers.extend(generics);
-                    }
-                    
-                    // Extract trait implementations
-                    let traits = self.extract_trait_bounds(&node, source);
-                    modifiers.extend(traits);
-                    
-                    // Enhanced signature with generics and traits
-                    let signature = self.extract_struct_signature(&node, source);
-
-                    // Push struct as scope for nested items
-                    let scope = Scope {
-                        name: name.clone(),
-                        kind: SymbolKind::Struct,
-                        location: location.clone(),
-                    };
-                    scope_stack.push(scope);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Struct,
-                        location,
-                        scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
-                        language: LanguageId::Rust,
-                        documentation: self.extract_doc_comments(&node, source),
-                        modifiers,
-                        signature: Some(signature),
-                    });
-                }
+                self.handle_struct_item(node, source, file_path, symbols, scope_stack);
             }
             "enum_item" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = name_node
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
-                    let location = Location::from_node(&node, file_path);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Enum,
-                        location,
-                        scope_chain: scope_stack.clone(),
-                        language: LanguageId::Rust,
-                        documentation: self.extract_doc_comments(&node, source),
-                        modifiers: self.extract_item_modifiers(&node, source),
-                        signature: None,
-                    });
-                }
+                self.handle_enum_item(node, source, file_path, symbols, scope_stack);
             }
             "use_declaration" => {
-                // Extract use statements as imports
-                if let Some(use_clause) = node.child_by_field_name("argument") {
-                    let import_text = use_clause
-                        .utf8_text(source.as_bytes())
-                        .unwrap_or("")
-                        .to_string();
-                    let location = Location::from_node(&node, file_path);
-
-                    symbols.push(Symbol {
-                        name: import_text,
-                        kind: SymbolKind::Import,
-                        location,
-                        scope_chain: scope_stack.clone(),
-                        language: LanguageId::Rust,
-                        documentation: None,
-                        modifiers: vec![],
-                        signature: None,
-                    });
-                }
+                self.handle_use_declaration(node, source, file_path, symbols, scope_stack);
             }
             _ => {}
         }
+    }
 
-        // Recursively process child nodes
+    fn handle_function_item(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
+            let location = Location::from_node(node, file_path);
+
+            // Extract function signature
+            let signature = self.get_node_text(node, source);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Function,
+                location,
+                scope_chain: scope_stack.to_vec(),
+                language: LanguageId::Rust,
+                documentation: self.extract_doc_comments(node, source),
+                modifiers: self.extract_function_modifiers(node, source),
+                signature: Some(signature),
+            });
+        }
+    }
+
+    fn handle_struct_item(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
+            let location = Location::from_node(node, file_path);
+
+            // Enhanced struct analysis with generics and traits
+            let mut modifiers = self.extract_item_modifiers(node, source);
+            
+            // Extract generic parameters and lifetimes
+            if let Some(type_params) = node.child_by_field_name("type_parameters") {
+                let generics = self.extract_generic_parameters(&type_params, source);
+                modifiers.extend(generics);
+            }
+            
+            // Extract trait implementations
+            let traits = self.extract_trait_bounds(node, source);
+            modifiers.extend(traits);
+            
+            // Enhanced signature with generics and traits
+            let signature = self.extract_struct_signature(node, source);
+
+            // Push struct as scope for nested items
+            let scope = Scope {
+                name: name.clone(),
+                kind: SymbolKind::Struct,
+                location: location.clone(),
+            };
+            scope_stack.push(scope);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Struct,
+                location,
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
+                language: LanguageId::Rust,
+                documentation: self.extract_doc_comments(node, source),
+                modifiers,
+                signature: Some(signature),
+            });
+        }
+    }
+
+    fn handle_enum_item(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = name_node
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
+            let location = Location::from_node(node, file_path);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Enum,
+                location,
+                scope_chain: scope_stack.to_vec(),
+                language: LanguageId::Rust,
+                documentation: self.extract_doc_comments(node, source),
+                modifiers: self.extract_item_modifiers(node, source),
+                signature: None,
+            });
+        }
+    }
+
+    fn handle_use_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
+        // Extract use statements as imports
+        if let Some(use_clause) = node.child_by_field_name("argument") {
+            let import_text = use_clause
+                .utf8_text(source.as_bytes())
+                .unwrap_or("")
+                .to_string();
+            let location = Location::from_node(node, file_path);
+
+            symbols.push(Symbol {
+                name: import_text,
+                kind: SymbolKind::Import,
+                location,
+                scope_chain: scope_stack.to_vec(),
+                language: LanguageId::Rust,
+                documentation: None,
+                modifiers: vec![],
+                signature: None,
+            });
+        }
+    }
+
+    fn process_rust_child_nodes(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             self.extract_from_node(child, source, file_path, symbols, scope_stack);
         }
+    }
 
-        // Pop scope if we added one for this node
+    fn cleanup_rust_scope_if_needed(&self, node: &Node, scope_stack: &mut Vec<Scope>) {
         if matches!(
             node.kind(),
             "struct_item" | "enum_item" | "impl_item" | "mod_item"
@@ -238,7 +293,7 @@ impl RustExtractor {
 
         // Check for visibility modifier
         if let Some(visibility) = node.child_by_field_name("visibility") {
-            let vis_text = safe_node_text(&visibility, source);
+            let vis_text = self.get_node_text(&visibility, source);
             if !vis_text.is_empty() {
                 modifiers.push(vis_text.to_string());
             }
@@ -265,7 +320,7 @@ impl RustExtractor {
 
         // Check for visibility modifier
         if let Some(visibility) = node.child_by_field_name("visibility") {
-            let vis_text = safe_node_text(&visibility, source);
+            let vis_text = self.get_node_text(&visibility, source);
             if !vis_text.is_empty() {
                 modifiers.push(vis_text.to_string());
             }
@@ -283,7 +338,7 @@ impl RustExtractor {
             match child.kind() {
                 "type_parameter" => {
                     if let Some(name_node) = child.child_by_field_name("name") {
-                        let name = safe_node_text(&name_node, source);
+                        let name = self.get_node_text(&name_node, source);
                         if !name.is_empty() {
                             generics.push(format!("generic:{}", name));
                         }
@@ -291,7 +346,7 @@ impl RustExtractor {
                 }
                 "lifetime_parameter" => {
                     if let Some(name_node) = child.child_by_field_name("name") {
-                        let name = safe_node_text(&name_node, source);
+                        let name = self.get_node_text(&name_node, source);
                         if !name.is_empty() {
                             generics.push(format!("lifetime:{}", name));
                         }
@@ -299,7 +354,7 @@ impl RustExtractor {
                 }
                 "bounded_type" => {
                     if let Some(type_node) = child.child_by_field_name("type") {
-                        let type_name = safe_node_text(&type_node, source);
+                        let type_name = self.get_node_text(&type_node, source);
                         if !type_name.is_empty() {
                             // Extract trait bounds
                             let mut bounds = Vec::new();
@@ -307,7 +362,7 @@ impl RustExtractor {
                             for bound_child in child.children(&mut bound_cursor) {
                                 if bound_child.kind() == "type_bound" {
                                     if let Some(bound_node) = bound_child.child_by_field_name("type") {
-                                        let bound_name = safe_node_text(&bound_node, source);
+                                        let bound_name = self.get_node_text(&bound_node, source);
                                         if !bound_name.is_empty() {
                                             bounds.push(bound_name);
                                         }
@@ -338,7 +393,7 @@ impl RustExtractor {
         for child in node.children(&mut cursor) {
             if child.kind() == "trait_bound" {
                 if let Some(trait_node) = child.child_by_field_name("type") {
-                    let trait_name = safe_node_text(&trait_node, source);
+                    let trait_name = self.get_node_text(&trait_node, source);
                     if !trait_name.is_empty() {
                         traits.push(format!("trait:{}", trait_name));
                     }
@@ -355,12 +410,12 @@ impl RustExtractor {
         
         // Get struct name
         if let Some(name_node) = node.child_by_field_name("name") {
-            signature.push_str(&safe_node_text(&name_node, source));
+            signature.push_str(&self.get_node_text(&name_node, source));
         }
         
         // Add generic parameters
         if let Some(type_params) = node.child_by_field_name("type_parameters") {
-            let generics_text = safe_node_text(&type_params, source);
+            let generics_text = self.get_node_text(&type_params, source);
             if !generics_text.is_empty() {
                 signature.push_str(&generics_text);
             }
@@ -368,7 +423,7 @@ impl RustExtractor {
         
         // Add where clause if present
         if let Some(where_clause) = node.child_by_field_name("where_clause") {
-            let where_text = safe_node_text(&where_clause, source);
+            let where_text = self.get_node_text(&where_clause, source);
             if !where_text.is_empty() {
                 signature.push(' ');
                 signature.push_str(&where_text);

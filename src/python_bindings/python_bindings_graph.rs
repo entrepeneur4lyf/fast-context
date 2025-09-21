@@ -16,7 +16,7 @@ use petgraph::{
     graph::{UnGraph, DiGraph, NodeIndex},
     visit::{EdgeRef, Walker},
     algo::{
-        dijkstra, floyd_warshall, 
+        dijkstra,
         kosaraju_scc,
         is_cyclic_directed, toposort,
     },
@@ -267,25 +267,45 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
 
     pub fn floyd_warshall_all_pairs(&self) -> Vec<Vec<Option<f64>>> {
         let graph = self.graph.lock().unwrap();
-        let _distances = floyd_warshall(&*graph, |e| *e.weight());
-        
-        // Convert the distance matrix to the expected format
         let node_count = graph.node_count();
-        let mut result = vec![vec![None; node_count]; node_count];
         
-        // TODO: Fix floyd_warshall iteration - temporarily using basic implementation
-        // The API appears to have changed in newer petgraph versions
+        if node_count == 0 {
+            return Vec::new();
+        }
+        
+        // Initialize distance matrix with optimal Floyd-Warshall algorithm
+        let mut distances = vec![vec![f64::INFINITY; node_count]; node_count];
+        
+        // Set diagonal to 0 and direct edges to their weights
+        for i in 0..node_count {
+            distances[i][i] = 0.0;
+            let source_idx = NodeIndex::new(i);
+            
+            // Set direct edge weights
+            for edge in graph.edges_directed(source_idx, petgraph::Direction::Outgoing) {
+                let target_idx = edge.target().index();
+                let weight = *edge.weight();
+                distances[i][target_idx] = weight.min(distances[i][target_idx]);
+            }
+        }
+        
+        // Floyd-Warshall algorithm: O(n³) optimal implementation
+        for k in 0..node_count {
+            for i in 0..node_count {
+                for j in 0..node_count {
+                    if distances[i][k] + distances[k][j] < distances[i][j] {
+                        distances[i][j] = distances[i][k] + distances[k][j];
+                    }
+                }
+            }
+        }
+        
+        // Convert to the expected format with Option<f64>
+        let mut result = vec![vec![None; node_count]; node_count];
         for i in 0..node_count {
             for j in 0..node_count {
-                if i == j {
-                    result[i][j] = Some(0.0);
-                } else {
-                    // Try to find direct edge as fallback
-                    let source_idx = NodeIndex::new(i);
-                    let target_idx = NodeIndex::new(j);
-                    if let Some(edge) = graph.find_edge(source_idx, target_idx) {
-                        result[i][j] = Some(*graph.edge_weight(edge).unwrap_or(&1.0));
-                    }
+                if distances[i][j].is_finite() {
+                    result[i][j] = Some(distances[i][j]);
                 }
             }
         }

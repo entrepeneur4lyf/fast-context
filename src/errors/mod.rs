@@ -1,8 +1,14 @@
-//! # Standardized Error Types
+//! # Comprehensive Error Management System
 //!
-//! This module provides a unified error handling system across all components
-//! of the Fast-Context analyzer, replacing inconsistent Result<T, String> patterns
-//! with structured, actionable error types.
+//! This module provides unified error handling across all components of the Fast-Context analyzer,
+//! including both error type definitions and advanced error tracking capabilities.
+//!
+//! ## Modules
+//!
+//! - `types`: Core error type definitions and standardized error handling
+//! - `tracking`: Advanced error tracking, monitoring, and diagnostic capabilities
+
+pub mod tracking;
 
 use thiserror::Error;
 use std::path::PathBuf;
@@ -78,6 +84,12 @@ pub enum FastContextError {
         message: String,
         node_count: Option<usize>,
         edge_count: Option<usize>,
+    },
+
+    #[error("Graph operation failed: {operation}: {message}")]
+    Graph {
+        operation: String,
+        message: String,
     },
 
     #[error("Query execution failed: {message}")]

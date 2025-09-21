@@ -3,7 +3,6 @@ package export
 import (
 	"testing"
 
-	"github.com/fast-context/go-sdk/config"
 	"github.com/fast-context/go-sdk/fastcontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

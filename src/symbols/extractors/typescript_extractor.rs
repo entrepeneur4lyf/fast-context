@@ -385,6 +385,16 @@ impl TypeScriptExtractor {
     fn extract_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
         
+        // Check if this node is within an export statement
+        let mut parent = node.parent();
+        while let Some(p) = parent {
+            if p.kind() == "export_statement" {
+                modifiers.push("export".to_string());
+                break;
+            }
+            parent = p.parent();
+        }
+        
         // Look for TypeScript modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {

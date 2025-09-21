@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/fast-context/go-sdk/config"
@@ -217,7 +218,7 @@ func (cli *CLI) createComplexityCommand() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				threshold, _ = args[0], 10.0 // Default threshold
+				threshold, _ = strconv.ParseFloat(args[0], 64)
 			}
 
 			if threshold <= 0 {
@@ -389,7 +390,7 @@ func (cli *CLI) createWatchCommand() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				fmt.Sscanf(args[0], "%d", &duration)
+				_, _ = fmt.Sscanf(args[0], "%d", &duration)
 			}
 
 			if duration <= 0 {
@@ -400,7 +401,9 @@ func (cli *CLI) createWatchCommand() *cobra.Command {
 			fmt.Printf("Press Ctrl+C to stop watching\n")
 
 			// Create file watcher
-			watcher := filewatch.NewWatcher(cli.config.ProjectRoot, cli.config.IgnorePatterns)
+			watcher, _ := filewatch.NewWatcher(cli.config.ProjectRoot, &filewatch.WatchOptions{
+			IgnorePatterns: cli.config.IgnorePatterns,
+		})
 
 			// Set up progress callback
 			progressCallback := func(p *fastcontext.Progress) {
@@ -411,14 +414,14 @@ func (cli *CLI) createWatchCommand() *cobra.Command {
 			if err := cli.analyzer.StartWatching(progressCallback); err != nil {
 				return fmt.Errorf("failed to start watching: %w", err)
 			}
-			defer cli.analyzer.StopWatching()
+			defer func() { _ = cli.analyzer.StopWatching() }()
 
 			// Start file system watcher
 			eventChan := make(chan *filewatch.FileEvent, 100)
-			if err := watcher.Start(eventChan); err != nil {
+			if err := watcher.StartWatching(); err != nil {
 				return fmt.Errorf("failed to start file watcher: %w", err)
 			}
-			defer watcher.Stop()
+			defer func() { _ = watcher.StopWatching() }()
 
 			// Watch for events
 			timeout := time.After(time.Duration(duration) * time.Second)
@@ -452,7 +455,7 @@ func (cli *CLI) createServeCommand() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
-				fmt.Sscanf(args[0], "%d", &port)
+				_, _ = fmt.Sscanf(args[0], "%d", &port)
 			}
 
 			if port <= 0 {

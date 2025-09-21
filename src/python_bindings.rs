@@ -343,13 +343,7 @@ impl FastContextAnalyzer {
         }
     }
 
-    // TODO: Fix private field access issues in analyze_enhanced_async
-    // /// Enhanced analysis with full symbol extraction (async)
-    // pub fn analyze_enhanced_async(&self, py: Python) -> PyResult<PyObject> {
-    //     // Implementation commented out due to private field access issues
-    //     // This will be fixed in a future update
-    // }
-
+  
     /// Analyze the codebase asynchronously (releases GIL) and update cache/state
     pub fn analyze_async(&self, py: Python) -> PyResult<PyObject> {
         let core = self.core.clone();
@@ -359,7 +353,9 @@ impl FastContextAnalyzer {
             // Use a blocking section for CPU/IO heavy work to avoid starving Tokio
             let res = tokio::task::spawn_blocking(move || core.analyze())
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Join error: {e}")))?;
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Failed to join background analysis task: {e}")
+            ))?;
             match res {
                 Ok(val) => {
                     // Update cache/state
@@ -436,7 +432,9 @@ impl FastContextAnalyzer {
                 return Ok(false);
             }
             let res = tokio::task::spawn_blocking(move || core.analyze()).await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Join error: {e}")))?;
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Failed to join background analysis task: {e}")
+            ))?;
             match res {
                 Ok(val) => {
                     if let Ok(mut guard) = last_analysis.lock() { *guard = Some(val); }
@@ -465,7 +463,9 @@ impl FastContextAnalyzer {
             }
             let res = tokio::task::spawn_blocking(move || core.find_symbols_by_kind(symbol_kind))
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Join error: {e}")))?;
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Failed to join background analysis task: {e}")
+            ))?;
             match res {
                 Ok(val) => {
                     if let Ok(mut sc) = symbol_cache.lock() {
@@ -500,7 +500,9 @@ impl FastContextAnalyzer {
             }
             let res = tokio::task::spawn_blocking(move || core.find_symbols_in_file(full_path))
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Join error: {e}")))?;
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Failed to join background analysis task: {e}")
+            ))?;
             match res {
                 Ok(val) => {
                     if let Ok(mut sc) = symbol_cache.lock() { sc.insert(key, val.clone()); }
@@ -531,7 +533,9 @@ impl FastContextAnalyzer {
                 core.find_dependencies(symbol_name)
             })
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Join error: {e}")))?;
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Failed to join background analysis task: {e}")
+            ))?;
             match res {
                 Ok(val) => {
                     if let Ok(mut sc) = symbol_cache.lock() { sc.insert(key, val.clone()); }
@@ -562,7 +566,9 @@ impl FastContextAnalyzer {
                 core.find_complex_symbols(threshold)
             })
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("Join error: {e}")))?;
+                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
+                format!("Failed to join background analysis task: {e}")
+            ))?;
             match res {
                 Ok(val) => {
                     if let Ok(mut sc) = symbol_cache.lock() { sc.insert(key, val.clone()); }
@@ -663,12 +669,31 @@ impl FastContextAnalyzer {
             Some(self.ignore_patterns.clone()),
         );
         
-        // Use existing methods to find symbols (simplified implementation)
+        // Use existing methods to find symbols
         match analyzer.analyze() {
-            Ok(_result) => {
-                // In a real implementation, this would search through all symbols
-                // For now, return empty vector with placeholder
-                Ok(Vec::new())
+            Ok(result) => {
+                // Filter symbols by pattern and language
+                let pattern_lower = _pattern.to_lowercase();
+                let filtered_symbols: Vec<PySymbol> = result.symbols
+                    .into_iter()
+                    .filter(|symbol| {
+                        // Check language filter
+                        if let Some(ref lang_filter) = _language {
+                            if !symbol.language.to_lowercase_string().contains(&lang_filter.to_lowercase()) {
+                                return false;
+                            }
+                        }
+                        
+                        // Check pattern match in name or qualified name
+                        let symbol_name_lower = symbol.name.to_lowercase();
+                        let qualified_name = symbol.qualified_name().to_lowercase();
+                        
+                        symbol_name_lower.contains(&pattern_lower) || qualified_name.contains(&pattern_lower)
+                    })
+                    .map(|symbol| symbol.into())
+                    .collect();
+                
+                Ok(filtered_symbols)
             }
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to search symbols: {}", e))),
         }
@@ -676,8 +701,40 @@ impl FastContextAnalyzer {
 
     /// Get symbol documentation and metadata
     pub fn get_symbol_documentation(&self, _symbol_name: &str, _file_path: &str) -> PyResult<Option<String>> {
-        // Placeholder implementation - in real version this would extract documentation
-        Ok(None)
+        let analyzer = CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        );
+        
+        // Find the symbol by name in the specified file
+        match analyzer.analyze() {
+            Ok(result) => {
+                for symbol in result.symbols {
+                    if symbol.name == _symbol_name && symbol.location.file_path == _file_path {
+                        // Return documentation if available
+                        if let Some(doc) = symbol.documentation {
+                            return Ok(Some(doc));
+                        } else if let Some(signature) = symbol.signature {
+                            // If no explicit documentation, use signature as fallback
+                            return Ok(Some(format!("```{}\n{}```", 
+                                symbol.language.to_lowercase_string(), 
+                                signature)));
+                        } else {
+                            // If neither documentation nor signature, generate basic info
+                            return Ok(Some(format!("**{}** ({})\n\nLocation: {}:{}-{}", 
+                                symbol.name, 
+                                format!("{:?}", symbol.kind),
+                                symbol.location.file_path,
+                                symbol.location.start_line,
+                                symbol.location.end_line)));
+                        }
+                    }
+                }
+                Ok(None)
+            }
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to get symbol documentation: {}", e))),
+        }
     }
 
     /// Analyze cross-language dependencies
@@ -690,10 +747,29 @@ impl FastContextAnalyzer {
         
         // Use existing analyze method and extract dependencies
         match analyzer.analyze() {
-            Ok(_result) => {
-                // In real implementation, this would extract cross-language dependencies
-                // For now, return empty vector
-                Ok(Vec::new())
+            Ok(result) => {
+                // Extract cross-language dependencies by analyzing relationships between different languages
+                let mut cross_lang_deps: Vec<PyDependency> = Vec::new();
+                
+                for dep in result.dependencies {
+                    // Check if this dependency spans different languages
+                    let from_language = dep.language.clone();
+                    
+                    // Try to find the target symbol's language
+                    let to_language = result.symbols
+                        .iter()
+                        .find(|sym| sym.name == dep.to_symbol)
+                        .map(|sym| format!("{:?}", sym.language));
+                    
+                    if let Some(to_lang) = to_language {
+                        if from_language != to_lang {
+                            // This is a cross-language dependency
+                            cross_lang_deps.push(dep.into());
+                        }
+                    }
+                }
+                
+                Ok(cross_lang_deps)
             }
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to analyze cross-language dependencies: {}", e))),
         }
@@ -701,14 +777,93 @@ impl FastContextAnalyzer {
 
     /// Export symbol relationships as a graph
     pub fn export_relationship_graph(&self, format: &str) -> PyResult<String> {
-        match format {
-            "dot" | "graphviz" => Ok(r#"digraph G {
-  node [shape=box];
-  // Placeholder graph - real implementation would export actual relationships
-}"#.to_string()),
-            "json" => Ok(r#"{"nodes": [], "edges": []}"#.to_string()),
-            "mermaid" => Ok("graph TD\n  %% Placeholder graph".to_string()),
-            _ => Err(pyo3::exceptions::PyValueError::new_err(format!("Unsupported export format: {}", format))),
+        let analyzer = CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        );
+        
+        match analyzer.analyze() {
+            Ok(result) => {
+                match format {
+                    "dot" | "graphviz" => {
+                        let mut dot_output = String::from("digraph G {\n  node [shape=box];\n");
+                        
+                        // Add nodes for symbols
+                        for symbol in &result.symbols {
+                            let escaped_name = symbol.name.replace("\"", "\\\"");
+                            dot_output.push_str(&format!("  \"{}\" [label=\"{}\\n({})\"];\n", 
+                                escaped_name, escaped_name, format!("{:?}", symbol.kind)));
+                        }
+                        
+                        // Add edges for dependencies
+                        for dep in &result.dependencies {
+                            let from_escaped = dep.from_symbol.replace("\"", "\\\"");
+                            let to_escaped = dep.to_symbol.replace("\"", "\\\"");
+                            dot_output.push_str(&format!("  \"{}\" -> \"{}\" [label=\"{}\"];\n", 
+                                from_escaped, to_escaped, format!("{:?}", dep.relationship_type)));
+                        }
+                        
+                        dot_output.push_str("}\n");
+                        Ok(dot_output)
+                    },
+                    "json" => {
+                        let mut nodes = Vec::new();
+                        let mut edges = Vec::new();
+                        
+                        // Create nodes
+                        for (i, symbol) in result.symbols.iter().enumerate() {
+                            nodes.push(serde_json::json!({
+                                "id": i,
+                                "name": symbol.name,
+                                "type": format!("{:?}", symbol.kind),
+                                "language": format!("{:?}", symbol.language),
+                                "file": symbol.location.file_path
+                            }));
+                        }
+                        
+                        // Create edges
+                        for dep in &result.dependencies {
+                            // Find source and target node IDs
+                            let source_id = result.symbols.iter().position(|s| s.name == dep.from_symbol);
+                            let target_id = result.symbols.iter().position(|s| s.name == dep.to_symbol);
+                            
+                            if let (Some(src), Some(tgt)) = (source_id, target_id) {
+                                edges.push(serde_json::json!({
+                                    "source": src,
+                                    "target": tgt,
+                                    "type": format!("{:?}", dep.relationship_type),
+                                    "strength": dep.strength
+                                }));
+                            }
+                        }
+                        
+                        let graph = serde_json::json!({"nodes": nodes, "edges": edges});
+                        Ok(serde_json::to_string(&graph).unwrap_or_else(|_| "{\"nodes\": [], \"edges\": []}".to_string()))
+                    },
+                    "mermaid" => {
+                        let mut mermaid_output = String::from("graph TD\n");
+                        
+                        // Add nodes
+                        for symbol in &result.symbols {
+                            let safe_name = symbol.name.replace(" ", "_").replace("-", "_");
+                            mermaid_output.push_str(&format!("  {}[\"{}\"]\n", safe_name, symbol.name));
+                        }
+                        
+                        // Add edges
+                        for dep in &result.dependencies {
+                            let from_safe = dep.from_symbol.replace(" ", "_").replace("-", "_");
+                            let to_safe = dep.to_symbol.replace(" ", "_").replace("-", "_");
+                            mermaid_output.push_str(&format!("  {} -->|{}| {}\n", 
+                                from_safe, format!("{:?}", dep.relationship_type), to_safe));
+                        }
+                        
+                        Ok(mermaid_output)
+                    },
+                    _ => Err(pyo3::exceptions::PyValueError::new_err(format!("Unsupported export format: {}", format))),
+                }
+            }
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to export relationship graph: {}", e))),
         }
     }
 
@@ -885,12 +1040,25 @@ pub fn analyze_project(
 
     let duration = start_time.elapsed();
 
+    // Extract actual relationships using the CoreAnalyzer
+    let core = CoreAnalyzer::new(project_root.clone(), Some(supported_languages.clone()), Some(ignore_patterns.clone()));
+    let relationships = match core.analyze() {
+        Ok(analysis_result) => {
+            // Convert the analysis result dependencies to PyDependency objects
+            analysis_result.dependencies.into_iter().map(|dep| dep.into()).collect()
+        }
+        Err(_) => {
+            // If analysis fails, return empty relationships vector
+            Vec::new()
+        }
+    };
+
     Ok(AnalysisResult {
         file_count,
         symbol_count,
         languages: detected_languages.into_iter().map(|lang| lang.to_lowercase_string()).collect(),
         duration_ms: duration.as_millis() as u32,
-        relationships: Vec::new(), // TODO: Extract actual relationships
+        relationships,
     })
 }
 
@@ -919,7 +1087,7 @@ pub fn find_symbols_in_file(file_path: String) -> PyResult<Vec<String>> {
     }
     let project_root = std::path::Path::new(&file_path)
         .parent()
-        .map(|p| p.to_string_lossy().to_string())
+        .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| ".".to_string());
     let core = CoreAnalyzer::new(project_root, None, None);
     core.find_symbols_in_file(file_path)

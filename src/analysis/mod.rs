@@ -166,7 +166,8 @@ impl CodeGraphBuilder {
     /// Analyze function calls within a function signature/body
     fn analyze_function_calls(&mut self, from_node: NodeIndex, content: &str, _file_path: &str) {
         // Simple regex-based analysis - in practice, you'd use proper AST analysis
-        let call_pattern = regex::Regex::new(r"(\w+)\s*\(").unwrap();
+        let call_pattern = regex::Regex::new(r"(\w+)\s*\(")
+            .expect("Failed to compile function call regex pattern");
 
         for captures in call_pattern.captures_iter(content) {
             if let Some(function_name) = captures.get(1) {
@@ -441,7 +442,7 @@ mod tests {
 
         builder
             .add_relationship("main", "helper", relationship)
-            .unwrap();
+            .expect("Failed to add test relationship between main and helper functions");
 
         let graph = builder.build();
         assert_eq!(graph.node_count(), 2);

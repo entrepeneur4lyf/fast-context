@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/fast-context/go-sdk/config"
 	"github.com/fast-context/go-sdk/fastcontext"
 	"gopkg.in/yaml.v3"
 )
@@ -209,7 +207,7 @@ func (e *Exporter) applyFilters(result *fastcontext.AnalysisResult) *fastcontext
 
 // filterSymbols filters symbols based on the filter options
 func (e *Exporter) filterSymbols(symbols []*fastcontext.Symbol) []*fastcontext.Symbol {
-	var filtered []*fastcontext
+	var filtered []*fastcontext.Symbol
 
 	for _, symbol := range symbols {
 		// Check symbol kind filter
@@ -414,11 +412,11 @@ func (e *Exporter) exportCSV(result *fastcontext.AnalysisResult) ([]byte, error)
 	writer := csv.NewWriter(&builder)
 
 	// Write symbols header
-	writer.Write([]string{"Type", "ID", "Name", "Kind", "Language", "File", "LineStart", "LineEnd", "Complexity", "IsPublic", "IsExported", "IsTest"})
+	_ = writer.Write([]string{"Type", "ID", "Name", "Kind", "Language", "File", "LineStart", "LineEnd", "Complexity", "IsPublic", "IsExported", "IsTest"})
 
 	// Write symbols
 	for _, symbol := range result.Symbols {
-		writer.Write([]string{
+		_ = writer.Write([]string{
 			"Symbol",
 			symbol.ID,
 			symbol.Name,
@@ -435,11 +433,11 @@ func (e *Exporter) exportCSV(result *fastcontext.AnalysisResult) ([]byte, error)
 	}
 
 	// Write dependencies header
-	writer.Write([]string{"Type", "From", "To", "DependencyType", "Strength", "Context"})
+	_ = writer.Write([]string{"Type", "From", "To", "DependencyType", "Strength", "Context"})
 
 	// Write dependencies
 	for _, dep := range result.Dependencies {
-		writer.Write([]string{
+		_ = writer.Write([]string{
 			"Dependency",
 			dep.From,
 			dep.To,

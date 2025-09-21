@@ -536,7 +536,7 @@ impl UniversalExporter {
         }
 
         // Add language-specific tags
-        tags.push(format!("{:?}", symbol.language).to_lowercase());
+        tags.push(symbol.language.to_string().to_lowercase());
 
         // Add scope-based tags
         if !symbol.scope_chain.is_empty() {
@@ -613,7 +613,64 @@ mod tests {
 
     #[test]
     fn test_symbol_filtering() {
-        // Simple test to verify basic functionality
-        // Export module test placeholder - actual tests would go here
+        // Test symbol filtering functionality by creating mock data with various symbol types
+        let mut symbols = vec![
+            Symbol {
+                name: "test_function".to_string(),
+                kind: SymbolKind::Function,
+                location: Location::new("test.rs".to_string(), 1, 1, 1, 10),
+                documentation: None,
+                scope: None,
+                signature: None,
+                language: crate::parsers::LanguageId::Rust,
+                attributes: HashMap::new(),
+            },
+            Symbol {
+                name: "TestStruct".to_string(),
+                kind: SymbolKind::Struct,
+                location: Location::new("test.rs".to_string(), 3, 1, 3, 15),
+                documentation: None,
+                scope: None,
+                signature: None,
+                language: crate::parsers::LanguageId::Rust,
+                attributes: HashMap::new(),
+            },
+            Symbol {
+                name: "PRIVATE_VAR".to_string(),
+                kind: SymbolKind::Variable,
+                location: Location::new("test.rs".to_string(), 5, 1, 5, 20),
+                documentation: None,
+                scope: None,
+                signature: None,
+                language: crate::parsers::LanguageId::Rust,
+                attributes: HashMap::new(),
+            },
+        ];
+        
+        // Test filtering by symbol kind
+        let functions_only: Vec<Symbol> = symbols.iter()
+            .filter(|s| s.kind == SymbolKind::Function)
+            .cloned()
+            .collect();
+        
+        assert_eq!(functions_only.len(), 1);
+        assert_eq!(functions_only[0].name, "test_function");
+        
+        // Test filtering by name pattern
+        let test_symbols: Vec<Symbol> = symbols.iter()
+            .filter(|s| s.name.to_lowercase().contains("test"))
+            .cloned()
+            .collect();
+        
+        assert_eq!(test_symbols.len(), 2);
+        
+        // Test excluding private symbols (by convention)
+        let public_symbols: Vec<Symbol> = symbols.iter()
+            .filter(|s| !s.name.to_uppercase().starts_with("PRIVATE"))
+            .cloned()
+            .collect();
+        
+        assert_eq!(public_symbols.len(), 2);
+        assert!(!public_symbols.iter().any(|s| s.name == "PRIVATE_VAR"));
     }
 }

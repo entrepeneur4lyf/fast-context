@@ -137,7 +137,7 @@ func (p *Profiler) StartProfiling() error {
 			return fmt.Errorf("failed to create CPU profile file: %w", err)
 		}
 		if err := pprof.StartCPUProfile(p.cpuProfile); err != nil {
-			p.cpuProfile.Close()
+			_ = p.cpuProfile.Close()
 			return fmt.Errorf("failed to start CPU profiling: %w", err)
 		}
 		p.logger.Info("CPU profiling started", "profile_path", cpuPath)
@@ -182,7 +182,7 @@ func (p *Profiler) StopProfiling() (*ProfileResult, error) {
 	// Stop CPU profiling
 	if p.cpuProfile != nil {
 		pprof.StopCPUProfile()
-		p.cpuProfile.Close()
+		_ = p.cpuProfile.Close()
 		result.CPUProfilePath = basePath + ".cpu"
 		p.logger.Info("CPU profiling stopped", "profile_path", result.CPUProfilePath)
 	}
@@ -197,7 +197,7 @@ func (p *Profiler) StopProfiling() (*ProfileResult, error) {
 				result.MemProfilePath = memPath
 				p.logger.Info("Memory profile saved", "profile_path", memPath)
 			}
-			memProfile.Close()
+			_ = memProfile.Close()
 		}
 	}
 
@@ -210,7 +210,7 @@ func (p *Profiler) StopProfiling() (*ProfileResult, error) {
 				result.MutexProfilePath = mutexPath
 				p.logger.Info("Mutex profile saved", "profile_path", mutexPath)
 			}
-			mutexProfile.Close()
+			_ = mutexProfile.Close()
 		}
 	}
 
@@ -223,7 +223,7 @@ func (p *Profiler) StopProfiling() (*ProfileResult, error) {
 				result.BlockProfilePath = blockPath
 				p.logger.Info("Block profile saved", "profile_path", blockPath)
 			}
-			blockProfile.Close()
+			_ = blockProfile.Close()
 		}
 	}
 
@@ -376,22 +376,22 @@ func (p *Profiler) Cleanup() error {
 	// Stop any active profiling
 	if p.cpuProfile != nil {
 		pprof.StopCPUProfile()
-		p.cpuProfile.Close()
+		_ = p.cpuProfile.Close()
 		p.cpuProfile = nil
 	}
 
 	if p.memProfile != nil {
-		p.memProfile.Close()
+		_ = p.memProfile.Close()
 		p.memProfile = nil
 	}
 
 	if p.mutexProfile != nil {
-		p.mutexProfile.Close()
+		_ = p.mutexProfile.Close()
 		p.mutexProfile = nil
 	}
 
 	if p.blockProfile != nil {
-		p.blockProfile.Close()
+		_ = p.blockProfile.Close()
 		p.blockProfile = nil
 	}
 

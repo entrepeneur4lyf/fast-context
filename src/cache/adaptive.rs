@@ -9,29 +9,48 @@ use crate::cache::{
     CacheKey, CacheStats, MultiLevelCache,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock as TokioRwLock;
 
 /// Adaptive cache manager that automatically optimizes caching strategy
 pub struct AdaptiveCacheManager<T>
 where
-    T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync,
+    T: Clone + Serialize + for<'de> Deserialize<'de> + Send + Sync + 'static,
 {
     /// Multi-level cache instance
     cache: MultiLevelCache<T>,
 
     /// Current cache configuration
-    config: Arc<RwLock<CacheConfig>>,
+    config: Arc<TokioRwLock<CacheConfig>>,
 
     /// Project profile for optimization
-    project_profile: Arc<RwLock<Option<ProjectProfile>>>,
+    project_profile: Arc<TokioRwLock<Option<ProjectProfile>>>,
 
     /// Cache statistics and metrics
-    stats: Arc<RwLock<AdaptiveCacheStats>>,
+    stats: Arc<TokioRwLock<AdaptiveCacheStats>>,
 
     /// Project root path
     project_root: PathBuf,
+
+    /// Pre-warming task handle
+    prewarming_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+
+    /// Performance metrics collector
+    metrics_collector: Arc<TokioRwLock<PerformanceMetrics>>,
+}
+
+/// Performance metrics for intelligent cache optimization
+#[derive(Debug, Clone, Default)]
+pub struct PerformanceMetrics {
+    /// Recent access times for latency analysis
+    access_times: VecDeque<std::time::Duration>,
+    /// Hit rate over time
+    hit_rate_samples: VecDeque<f64>,
+    /// Cache efficiency score (0-100)
+    efficiency_score: f64,
 }
 
 /// Extended cache statistics with adaptive features
@@ -135,13 +154,20 @@ where
             }],
         };
 
-        Ok(Self {
+        let manager = Self {
             cache,
-            config: Arc::new(RwLock::new(config)),
-            project_profile: Arc::new(RwLock::new(Some(project_profile))),
-            stats: Arc::new(RwLock::new(stats)),
+            config: Arc::new(TokioRwLock::new(config)),
+            project_profile: Arc::new(TokioRwLock::new(Some(project_profile))),
+            stats: Arc::new(TokioRwLock::new(stats)),
             project_root,
-        })
+            prewarming_task: Arc::new(Mutex::new(None)),
+            metrics_collector: Arc::new(TokioRwLock::new(PerformanceMetrics::default())),
+        };
+
+        // Start intelligent pre-warming
+        manager.start_intelligent_prewarming();
+
+        Ok(manager)
     }
 
     /// Create with custom configuration (bypasses auto-detection)
@@ -174,18 +200,56 @@ where
             optimization_events: vec![],
         };
 
-        Ok(Self {
+        let manager = Self {
             cache,
-            config: Arc::new(RwLock::new(config)),
-            project_profile: Arc::new(RwLock::new(None)),
-            stats: Arc::new(RwLock::new(stats)),
+            config: Arc::new(TokioRwLock::new(config)),
+            project_profile: Arc::new(TokioRwLock::new(None)),
+            stats: Arc::new(TokioRwLock::new(stats)),
             project_root,
-        })
+            prewarming_task: Arc::new(Mutex::new(None)),
+            metrics_collector: Arc::new(TokioRwLock::new(PerformanceMetrics::default())),
+        };
+
+        manager.start_intelligent_prewarming();
+        Ok(manager)
     }
 
-    /// Get cached data with automatic cache optimization
+    /// Get cached data with automatic cache optimization and performance tracking
     pub async fn get(&self, key: &CacheKey) -> Option<T> {
+        let start_time = Instant::now();
         let result = self.cache.get(key).await;
+        let access_time = start_time.elapsed();
+
+        // Update performance metrics
+        {
+            let mut metrics = self.metrics_collector.write().await;
+            metrics.access_times.push_back(access_time);
+            while metrics.access_times.len() > 1000 {
+                metrics.access_times.pop_front();
+            }
+
+            // Update hit rate samples
+            if result.is_some() {
+                metrics.hit_rate_samples.push_back(1.0);
+            } else {
+                metrics.hit_rate_samples.push_back(0.0);
+            }
+            while metrics.hit_rate_samples.len() > 100 {
+                metrics.hit_rate_samples.pop_front();
+            }
+
+            // Calculate efficiency score
+            if !metrics.hit_rate_samples.is_empty() {
+                let recent_hit_rate = metrics.hit_rate_samples.iter().sum::<f64>() / metrics.hit_rate_samples.len() as f64;
+                let avg_latency = if !metrics.access_times.is_empty() {
+                    metrics.access_times.iter().sum::<Duration>() / metrics.access_times.len() as u32
+                } else {
+                    Duration::from_millis(0)
+                };
+                let latency_score = if avg_latency < Duration::from_millis(10) { 1.0 } else { 0.5 };
+                metrics.efficiency_score = recent_hit_rate * 100.0 * latency_score;
+            }
+        }
 
         // Update statistics
         {
@@ -412,8 +476,8 @@ where
                     config.background_warming_threads = 2;
                 }
                 CachePolicyType::Persistent => {
-                     true;
                     config.compression_enabled = true;
+                    config.enable_l2_cache = true;
                 }
                 CachePolicyType::Enterprise => {
                     config.streaming_enabled = true;
@@ -455,12 +519,11 @@ where
             match new_policy {
                 CachePolicyType::Minimal => {
                     config.enable_l2_cache = false;
-                     false;
                     config.enable_predictive_caching = false;
                     config.enable_cache_warming = false;
+                    config.compression_enabled = false;
                 }
                 CachePolicyType::Balanced => {
-                     false;
                     config.compression_enabled = false;
                     config.background_warming_threads = 1;
                 }
@@ -488,6 +551,104 @@ where
         }
 
         Ok(())
+    }
+
+    /// Start intelligent pre-warming based on access patterns
+    fn start_intelligent_prewarming(&self) {
+        let prewarming_task = {
+            let project_root = self.project_root.clone();
+            let metrics = self.metrics_collector.clone();
+            
+            tokio::spawn(async move {
+                let mut interval = tokio::time::interval(Duration::from_secs(300)); // Every 5 minutes
+                
+                loop {
+                    interval.tick().await;
+                    
+                    // Check if pre-warming is beneficial based on metrics
+                    let should_prewarm = {
+                        let metrics_guard = metrics.read().await;
+                        !metrics_guard.access_times.is_empty() && 
+                        metrics_guard.efficiency_score > 70.0
+                    };
+                    
+                    if should_prewarm {
+                        if let Err(e) = Self::analyze_project_structure(&project_root).await {
+                            eprintln!("Project analysis error: {}", e);
+                        }
+                    }
+                }
+            })
+        };
+        
+        *self.prewarming_task.lock().unwrap() = Some(prewarming_task);
+    }
+
+    /// Analyze project structure to inform cache optimization strategies
+    async fn analyze_project_structure(project_root: &PathBuf) -> Result<(), AdaptiveCacheError> {
+        use std::collections::HashMap;
+        
+        let mut file_counts = HashMap::new();
+        let mut total_size = 0;
+        
+        // Scan project directory to understand structure
+        if let Ok(_entries) = tokio::fs::read_dir(project_root).await {
+            let mut scan_stack = vec![project_root.clone()];
+            
+            while let Some(current_dir) = scan_stack.pop() {
+                if let Ok(mut dir_entries) = tokio::fs::read_dir(&current_dir).await {
+                    while let Ok(Some(entry)) = dir_entries.next_entry().await {
+                        let path = entry.path();
+                        
+                        if let Ok(metadata) = tokio::fs::metadata(&path).await {
+                            if metadata.is_file() {
+                                // Count file extensions
+                                if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
+                                    *file_counts.entry(ext.to_string()).or_insert(0) += 1;
+                                }
+                                
+                                // Get file size
+                                total_size += metadata.len();
+                            } else if metadata.is_dir() {
+                                // Skip hidden directories and common build directories
+                                let file_name = entry.file_name();
+                                let file_name_str = file_name.to_string_lossy();
+                                
+                                if !file_name_str.starts_with('.') && 
+                                   !matches!(file_name_str.as_ref(), "target" | "node_modules" | "build" | "dist") {
+                                    scan_stack.push(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Log analysis results for cache optimization
+        eprintln!("Project analysis completed:");
+        eprintln!("  Total files analyzed: {}", file_counts.values().sum::<i32>());
+        eprintln!("  Total size: {} bytes", total_size);
+        eprintln!("  File types: {:?}", file_counts);
+        
+        // This analysis could be used to:
+        // 1. Adjust cache sizes based on project complexity
+        // 2. Identify frequently accessed file types
+        // 3. Optimize eviction strategies for specific languages
+        // 4. Pre-warm language-specific parsers
+        
+        Ok(())
+    }
+
+    
+    /// Get performance metrics for monitoring
+    pub async fn performance_metrics(&self) -> PerformanceMetrics {
+        self.metrics_collector.read().await.clone()
+    }
+
+    /// Get cache efficiency score (0-100)
+    pub async fn efficiency_score(&self) -> f64 {
+        self.metrics_collector.read().await.efficiency_score
     }
 }
 

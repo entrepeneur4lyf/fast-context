@@ -1,11 +1,16 @@
 //! Symbol extractors for different programming languages
 //!
 //! Each language has its own extractor module that implements the SymbolExtractor trait.
+//! Common utilities are shared across all extractors to reduce duplication.
 
 use crate::parsers::LanguageId;
 use crate::symbols::{Symbol, SymbolExtractor};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tree_sitter::Tree;
+
+// Common utilities shared by all extractors
+pub mod common;
 
 // Language extractor modules
 pub mod bash_extractor;
@@ -60,15 +65,14 @@ pub use yaml_extractor::YamlExtractor;
 pub use typescript_extractor::TypeScriptExtractor;
 pub use zig_extractor::ZigExtractor;
 
-/// Symbol extractor factory
+/// Thread-safe symbol extractor factory
 pub struct SymbolExtractorFactory {
-    extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>>,
+    extractors: Arc<Mutex<HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>>>>,
 }
 
 impl SymbolExtractorFactory {
     pub fn new() -> Self {
-        let mut extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>> =
-            HashMap::new();
+        let mut extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>> = HashMap::new();
 
         // Register language extractors
         extractors.insert(LanguageId::Rust, Box::new(RustExtractor));
@@ -96,7 +100,7 @@ impl SymbolExtractorFactory {
         extractors.insert(LanguageId::Markdown, Box::new(MarkdownExtractor));
         extractors.insert(LanguageId::YAML, Box::new(YamlExtractor));
 
-        Self { extractors }
+        Self { extractors: Arc::new(Mutex::new(extractors)) }
     }
 
     pub fn extract_symbols(
@@ -106,7 +110,8 @@ impl SymbolExtractorFactory {
         file_path: &str,
         language: LanguageId,
     ) -> Vec<Symbol> {
-        if let Some(extractor) = self.extractors.get(&language) {
+        let extractors = self.extractors.lock().unwrap();
+        if let Some(extractor) = extractors.get(&language) {
             extractor.extract_symbols(tree, source, file_path)
         } else {
             Vec::new()

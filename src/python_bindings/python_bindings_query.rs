@@ -28,7 +28,9 @@ impl PyCodeQueryEngine {
     /// Find symbols by name pattern (supports regex)
     pub fn find_symbols_by_pattern(&self, pattern: String) -> PyResult<Vec<PySymbol>> {
         let regex = regex::Regex::new(&pattern)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid regex pattern: {}", e)))?;
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
+                format!("Invalid regex pattern for symbol search '{}': {}", pattern, e)
+            ))?;
         
         let mut results = Vec::new();
         

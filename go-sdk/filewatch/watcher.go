@@ -74,7 +74,7 @@ type fileState struct {
 	modTime   time.Time
 	checksum  string
 	isDir     bool
-	lastEvent *FileEvent
+	// lastEvent *FileEvent // Commented out as unused
 }
 
 // WatchStats contains statistics for the file watcher

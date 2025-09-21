@@ -61,168 +61,258 @@ impl JavaExtractor {
         symbols: &mut Vec<Symbol>,
         scope_stack: &mut Vec<Scope>,
     ) {
+        // Handle current node based on its kind
+        self.handle_node_by_kind(&node, source, file_path, symbols, scope_stack);
+
+        // Recursively process child nodes
+        self.process_child_nodes(node, source, file_path, symbols, scope_stack);
+
+        // Clean up scope if needed
+        self.cleanup_scope_if_needed(&node, scope_stack);
+    }
+
+    fn handle_node_by_kind(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         match node.kind() {
             "package_declaration" => {
-                // Find scoped_identifier child directly
-                let mut cursor = node.walk();
-                for child in node.children(&mut cursor) {
-                    if child.kind() == "scoped_identifier" {
-                        let package_name = self.extract_scoped_identifier(&child, source);
-                        let location = Location::from_node(&node, file_path);
-
-                        symbols.push(Symbol {
-                            name: package_name,
-                            kind: SymbolKind::Namespace,
-                            location,
-                            scope_chain: vec![],
-                            language: LanguageId::Java,
-                            documentation: None,
-                            modifiers: vec!["package".to_string()],
-                            signature: None,
-                        });
-                        break;
-                    }
-                }
+                self.handle_package_declaration(node, source, file_path, symbols);
             }
             "import_declaration" => {
-                self.extract_import(&node, source, file_path, symbols, scope_stack);
+                self.extract_import(node, source, file_path, symbols, scope_stack);
             }
             "class_declaration" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = safe_node_text(&name_node, source);
-                    let location = Location::from_node(&node, file_path);
-
-                    // Push class as scope for nested items
-                    let scope = Scope {
-                        name: name.clone(),
-                        kind: SymbolKind::Class,
-                        location: location.clone(),
-                    };
-                    scope_stack.push(scope);
-
-                    let modifiers = self.extract_class_modifiers(&node, source);
-                    let documentation = self.extract_javadoc(&node, source);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Class,
-                        location,
-                        scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
-                        language: LanguageId::Java,
-                        documentation,
-                        modifiers,
-                        signature: None,
-                    });
-                }
+                self.handle_class_declaration(node, source, file_path, symbols, scope_stack);
             }
             "interface_declaration" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = safe_node_text(&name_node, source);
-                    let location = Location::from_node(&node, file_path);
-
-                    // Push interface as scope for nested items
-                    let scope = Scope {
-                        name: name.clone(),
-                        kind: SymbolKind::Interface,
-                        location: location.clone(),
-                    };
-                    scope_stack.push(scope);
-
-                    let modifiers = self.extract_class_modifiers(&node, source);
-                    let documentation = self.extract_javadoc(&node, source);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Interface,
-                        location,
-                        scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
-                        language: LanguageId::Java,
-                        documentation,
-                        modifiers,
-                        signature: None,
-                    });
-                }
+                self.handle_interface_declaration(node, source, file_path, symbols, scope_stack);
             }
             "enum_declaration" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = safe_node_text(&name_node, source);
-                    let location = Location::from_node(&node, file_path);
-
-                    let modifiers = self.extract_class_modifiers(&node, source);
-                    let documentation = self.extract_javadoc(&node, source);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Enum,
-                        location,
-                        scope_chain: scope_stack.clone(),
-                        language: LanguageId::Java,
-                        documentation,
-                        modifiers,
-                        signature: None,
-                    });
-                }
+                self.handle_enum_declaration(node, source, file_path, symbols);
             }
             "method_declaration" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = safe_node_text(&name_node, source);
-                    let location = Location::from_node(&node, file_path);
-
-                    let signature = self.extract_method_signature(&node, source);
-                    let modifiers = self.extract_method_modifiers(&node, source);
-                    let documentation = self.extract_javadoc(&node, source);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Method,
-                        location,
-                        scope_chain: scope_stack.clone(),
-                        language: LanguageId::Java,
-                        documentation,
-                        modifiers,
-                        signature,
-                    });
-                }
+                self.handle_method_declaration(node, source, file_path, symbols, scope_stack);
             }
             "constructor_declaration" => {
-                if let Some(name_node) = node.child_by_field_name("name") {
-                    let name = safe_node_text(&name_node, source);
-                    let location = Location::from_node(&node, file_path);
-
-                    let signature = self.extract_method_signature(&node, source);
-                    let modifiers = self.extract_method_modifiers(&node, source);
-                    let documentation = self.extract_javadoc(&node, source);
-
-                    symbols.push(Symbol {
-                        name,
-                        kind: SymbolKind::Method, // Constructor is treated as a special method
-                        location,
-                        scope_chain: scope_stack.clone(),
-                        language: LanguageId::Java,
-                        documentation,
-                        modifiers: {
-                            let mut mods = modifiers;
-                            mods.push("constructor".to_string());
-                            mods
-                        },
-                        signature,
-                    });
-                }
+                self.handle_constructor_declaration(node, source, file_path, symbols, scope_stack);
             }
             "field_declaration" => {
-                // Extract field names from variable_declarator children
-                self.extract_fields(&node, source, file_path, symbols, scope_stack);
+                self.extract_fields(node, source, file_path, symbols, scope_stack);
             }
             _ => {}
         }
+    }
 
-        // Recursively process child nodes
+    fn handle_package_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+    ) {
+        // Find scoped_identifier child directly
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "scoped_identifier" {
+                let package_name = self.extract_scoped_identifier(&child, source);
+                let location = Location::from_node(node, file_path);
+
+                symbols.push(Symbol {
+                    name: package_name,
+                    kind: SymbolKind::Namespace,
+                    location,
+                    scope_chain: vec![],
+                    language: LanguageId::Java,
+                    documentation: None,
+                    modifiers: vec!["package".to_string()],
+                    signature: None,
+                });
+                break;
+            }
+        }
+    }
+
+    fn handle_class_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = safe_node_text(&name_node, source);
+            let location = Location::from_node(node, file_path);
+
+            // Push class as scope for nested items
+            let scope = Scope {
+                name: name.clone(),
+                kind: SymbolKind::Class,
+                location: location.clone(),
+            };
+            scope_stack.push(scope);
+
+            let modifiers = self.extract_class_modifiers(node, source);
+            let documentation = self.extract_javadoc(node, source);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Class,
+                location,
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
+                language: LanguageId::Java,
+                documentation,
+                modifiers,
+                signature: None,
+            });
+        }
+    }
+
+    fn handle_interface_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = safe_node_text(&name_node, source);
+            let location = Location::from_node(node, file_path);
+
+            // Push interface as scope for nested items
+            let scope = Scope {
+                name: name.clone(),
+                kind: SymbolKind::Interface,
+                location: location.clone(),
+            };
+            scope_stack.push(scope);
+
+            let modifiers = self.extract_class_modifiers(node, source);
+            let documentation = self.extract_javadoc(node, source);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Interface,
+                location,
+                scope_chain: scope_stack[..scope_stack.len() - 1].to_vec(),
+                language: LanguageId::Java,
+                documentation,
+                modifiers,
+                signature: None,
+            });
+        }
+    }
+
+    fn handle_enum_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = safe_node_text(&name_node, source);
+            let location = Location::from_node(node, file_path);
+
+            let modifiers = self.extract_class_modifiers(node, source);
+            let documentation = self.extract_javadoc(node, source);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Enum,
+                location,
+                scope_chain: vec![],
+                language: LanguageId::Java,
+                documentation,
+                modifiers,
+                signature: None,
+            });
+        }
+    }
+
+    fn handle_method_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = safe_node_text(&name_node, source);
+            let location = Location::from_node(node, file_path);
+
+            let signature = self.extract_method_signature(node, source);
+            let modifiers = self.extract_method_modifiers(node, source);
+            let documentation = self.extract_javadoc(node, source);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Method,
+                location,
+                scope_chain: scope_stack.to_vec(),
+                language: LanguageId::Java,
+                documentation,
+                modifiers,
+                signature,
+            });
+        }
+    }
+
+    fn handle_constructor_declaration(
+        &self,
+        node: &Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
+        if let Some(name_node) = node.child_by_field_name("name") {
+            let name = safe_node_text(&name_node, source);
+            let location = Location::from_node(node, file_path);
+
+            let signature = self.extract_method_signature(node, source);
+            let modifiers = self.extract_method_modifiers(node, source);
+            let documentation = self.extract_javadoc(node, source);
+
+            symbols.push(Symbol {
+                name,
+                kind: SymbolKind::Method, // Constructor is treated as a special method
+                location,
+                scope_chain: scope_stack.to_vec(),
+                language: LanguageId::Java,
+                documentation,
+                modifiers: {
+                    let mut mods = modifiers;
+                    mods.push("constructor".to_string());
+                    mods
+                },
+                signature,
+            });
+        }
+    }
+
+    fn process_child_nodes(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             self.extract_from_node(child, source, file_path, symbols, scope_stack);
         }
+    }
 
-        // Pop scope if we added one for this node
+    fn cleanup_scope_if_needed(&self, node: &Node, scope_stack: &mut Vec<Scope>) {
         if matches!(node.kind(), "class_declaration" | "interface_declaration") {
             scope_stack.pop();
         }

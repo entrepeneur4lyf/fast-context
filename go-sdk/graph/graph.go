@@ -296,12 +296,12 @@ func (g *SimpleGraph) Copy() Graph {
 	
 	// Copy nodes
 	for _, node := range g.GetNodes() {
-		newGraph.AddNode(node.ID, node.Weight)
+		_ = newGraph.AddNode(node.ID, node.Weight)
 	}
 	
 	// Copy edges
 	for _, edge := range g.GetEdges() {
-		newGraph.AddEdge(edge.From, edge.To, edge.Weight)
+		_ = newGraph.AddEdge(edge.From, edge.To, edge.Weight)
 	}
 	
 	return newGraph
@@ -512,12 +512,12 @@ func (g *SimpleDiGraph) IsConnected() bool {
 	
 	// Copy all nodes
 	for _, node := range g.GetNodes() {
-		undirectedCopy.AddNode(node.ID, node.Weight)
+		_ = undirectedCopy.AddNode(node.ID, node.Weight)
 	}
 	
 	// Copy all edges as undirected
 	for _, edge := range g.GetEdges() {
-		undirectedCopy.AddEdge(edge.From, edge.To, edge.Weight)
+		_ = undirectedCopy.AddEdge(edge.From, edge.To, edge.Weight)
 	}
 	
 	return undirectedCopy.IsConnected()
@@ -544,12 +544,12 @@ func (g *SimpleDiGraph) Copy() Graph {
 	
 	// Copy nodes
 	for _, node := range g.GetNodes() {
-		newGraph.AddNode(node.ID, node.Weight)
+		_ = newGraph.AddNode(node.ID, node.Weight)
 	}
 	
 	// Copy edges
 	for _, edge := range g.GetEdges() {
-		newGraph.AddDirectedEdge(edge.From, edge.To, edge.Weight)
+		_ = newGraph.AddDirectedEdge(edge.From, edge.To, edge.Weight)
 	}
 	
 	return newGraph
@@ -973,12 +973,12 @@ func (g *SimpleDiGraph) reverseGraph() DiGraph {
 	
 	// Copy all nodes
 	for _, node := range g.GetNodes() {
-		reversed.AddNode(node.ID, node.Weight)
+		_ = reversed.AddNode(node.ID, node.Weight)
 	}
 	
 	// Reverse all edges
 	for _, edge := range g.GetEdges() {
-		reversed.AddDirectedEdge(edge.To, edge.From, edge.Weight)
+		_ = reversed.AddDirectedEdge(edge.To, edge.From, edge.Weight)
 	}
 	
 	return reversed

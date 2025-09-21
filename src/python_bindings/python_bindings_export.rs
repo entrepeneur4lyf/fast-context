@@ -148,7 +148,7 @@ impl PyJsonExporter {
         Ok(())
     }
     
-    /// Generate simple embeddings for symbols (placeholder implementation)
+    /// Generate feature-based embeddings for symbols
     fn generate_embeddings(&self, analysis: &AnalysisResult) -> String {
         let mut embeddings = serde_json::Map::new();
         

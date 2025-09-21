@@ -4,7 +4,8 @@
 //! Provides unified AST parsing interface for consistent symbol extraction across languages.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use lru::LruCache;
+use std::num::NonZeroUsize;
 use tree_sitter::{Language, Parser, Tree};
 
 
@@ -204,26 +205,40 @@ pub struct ParseResult {
     pub source: String,
 }
 
-/// Multi-language parser factory with caching
+/// Multi-language parser factory with LRU caching and size limits
 pub struct ParserFactory {
-    parsers: HashMap<LanguageId, Parser>,
+    parsers: LruCache<LanguageId, Parser>,
+    max_parsers: usize,
 }
 
 impl ParserFactory {
-    /// Create a new parser factory
+    /// Create a new parser factory with default size limits
     pub fn new() -> Self {
+        Self::with_capacity(10) // Reasonable default for most projects
+    }
+
+    /// Create a new parser factory with custom capacity
+    pub fn with_capacity(max_parsers: usize) -> Self {
+        // Validate cache size is reasonable (between 1 and 1000)
+        let validated_size = crate::validation::validate_range(max_parsers, 1, 1000, "max_parsers")
+            .unwrap_or_else(|e| {
+                eprintln!("Warning: Invalid parser cache size {}: {}", max_parsers, e);
+                10 // Default to reasonable value
+            });
+        
         Self {
-            parsers: HashMap::new(),
+            parsers: LruCache::new(NonZeroUsize::new(validated_size).unwrap_or_else(|| NonZeroUsize::new(1).unwrap())),
+            max_parsers: validated_size,
         }
     }
 
     /// Get or create a parser for the specified language
     pub fn get_parser(&mut self, language: LanguageId) -> Option<&mut Parser> {
-        if let std::collections::hash_map::Entry::Vacant(e) = self.parsers.entry(language) {
+        if self.parsers.get(&language).is_none() {
             if let Some(ts_language) = language.tree_sitter_language() {
                 let mut parser = Parser::new();
                 if parser.set_language(&ts_language).is_ok() {
-                    e.insert(parser);
+                    self.parsers.put(language, parser);
                 } else {
                     return None;
                 }
@@ -244,6 +259,27 @@ impl ParserFactory {
             language,
             source: source.to_string(),
         })
+    }
+
+    /// Get current cache size
+    pub fn cache_size(&self) -> usize {
+        self.parsers.len()
+    }
+
+    /// Get maximum cache capacity
+    pub fn cache_capacity(&self) -> usize {
+        self.max_parsers
+    }
+
+    /// Clear all cached parsers
+    pub fn clear_cache(&mut self) {
+        self.parsers.clear();
+    }
+
+    /// Resize the cache and evict excess parsers if needed
+    pub fn resize_cache(&mut self, new_capacity: usize) {
+        self.max_parsers = new_capacity;
+        self.parsers.resize(NonZeroUsize::new(new_capacity).unwrap_or_else(|| NonZeroUsize::new(1).unwrap()));
     }
 
     /// Parse file by detecting language from extension

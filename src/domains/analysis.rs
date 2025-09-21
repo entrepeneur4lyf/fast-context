@@ -15,6 +15,56 @@ use crate::watcher::CodebaseWatcher;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::runtime::Runtime;
+use std::cell::RefCell;
+use std::thread_local;
+
+thread_local! {
+    static ANALYSIS_DEPTH: RefCell<u32> = RefCell::new(0);
+}
+
+/// Maximum recursion depth to prevent stack overflow
+const MAX_RECURSION_DEPTH: u32 = 10;
+
+/// Guard against circular dependencies and infinite recursion
+pub struct RecursionGuard {
+    depth: u32,
+}
+
+impl RecursionGuard {
+    /// Create a new recursion guard, incrementing depth
+    pub fn new() -> Result<Self, AnalysisError> {
+        let depth = ANALYSIS_DEPTH.with(|d| {
+            let current = *d.borrow();
+            *d.borrow_mut() = current + 1;
+            current + 1
+        });
+        
+        if depth > MAX_RECURSION_DEPTH {
+            ANALYSIS_DEPTH.with(|d| *d.borrow_mut() = 0); // Reset on error
+            return Err(AnalysisError::Project {
+                message: format!("Maximum recursion depth exceeded: {}", depth),
+            });
+        }
+        
+        Ok(Self { depth })
+    }
+    
+    /// Get current depth
+    pub fn depth(&self) -> u32 {
+        self.depth
+    }
+}
+
+impl Drop for RecursionGuard {
+    fn drop(&mut self) {
+        ANALYSIS_DEPTH.with(|d| {
+            let current = *d.borrow();
+            if current > 0 {
+                *d.borrow_mut() = current - 1;
+            }
+        });
+    }
+}
 
 /// Analysis domain configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -249,8 +299,7 @@ impl AnalysisEngine {
                     message: "No analysis result to export".to_string(),
                 })?;
 
-        // Use the actual JsonExporter instead of placeholder
-        use crate::export::JsonExporter;
+                use crate::export::JsonExporter;
 
         let exporter = JsonExporter::new(analysis_result.clone(), self.config.project_root.clone());
 
@@ -294,8 +343,10 @@ impl AnalysisEngine {
         use crate::core::CoreAnalyzer;
         use crate::parsers::LanguageId;
 
-        // Use the WORKING core analyzer instead of placeholder
-        let core_analyzer = CoreAnalyzer::new(
+        // Guard against circular dependencies and infinite recursion
+        let _guard = RecursionGuard::new()?;
+        
+                let core_analyzer = CoreAnalyzer::new(
             self.config.project_root.clone(),
             Some(self.config.languages.clone()),
             Some(self.config.ignore_patterns.clone()),
@@ -401,12 +452,12 @@ impl AnalysisEngine {
         
         for entry in WalkDir::new(&self.config.project_root).into_iter().filter_map(|e| e.ok()) {
             if entry.file_type().is_file() {
-                let path_str = entry.path().to_string_lossy().to_string();
+                let path_str = entry.path().to_string_lossy();
                 if crate::utils::should_ignore_file(&path_str, &self.config.ignore_patterns) {
                     continue;
                 }
                 
-                if let Ok(content) = fs::read_to_string(&path_str) {
+                if let Ok(content) = fs::read_to_string(&*path_str) {
                     if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
                         let symbols = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
                         graph_builder.add_file_symbols(symbols, &path_str);
