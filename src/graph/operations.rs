@@ -73,6 +73,15 @@ pub struct GraphStats {
     pub connected_components: usize,
     /// Graph density (ratio of actual edges to possible edges)
     pub density: f64,
+    /// Whether the graph contains cycles
+    pub has_cycles_flag: bool,
+}
+
+impl GraphStats {
+    /// Check if the graph contains cycles
+    pub fn has_cycles(&self) -> bool {
+        self.has_cycles_flag
+    }
 }
 
 /// Path analysis result

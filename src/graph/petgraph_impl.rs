@@ -533,6 +533,9 @@ where
             0.0
         };
 
+        // Check for cycles
+        let has_cycles_flag = !self.find_cycles().is_empty();
+        
         GraphStats {
             node_count,
             edge_count,
@@ -540,6 +543,7 @@ where
             max_degree,
             connected_components,
             density,
+            has_cycles_flag,
         }
     }
 
