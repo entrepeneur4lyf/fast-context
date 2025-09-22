@@ -499,7 +499,7 @@ where
             let mut total = 0;
             let mut max = 0;
             
-            for (node_id, _) in &self.node_id_map {
+            for node_id in self.node_id_map.keys() {
                 {
                     let cache = self.degree_cache.lock().unwrap();
                     if let Some((in_deg, out_deg)) = cache.get(node_id) {

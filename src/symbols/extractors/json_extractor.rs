@@ -474,7 +474,7 @@ impl JsonExtractor {
     }
 
     fn get_node_text(&self, node: &Node, source: &str) -> String {
-        safe_node_text(&node, source)
+        safe_node_text(node, source)
     }
 
     fn clean_json_string(&self, value: &str) -> String {

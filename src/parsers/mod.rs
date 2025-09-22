@@ -197,6 +197,105 @@ impl LanguageId {
     }
 }
 
+/// Thread-local parser factory pool for performance optimization
+pub struct ParserFactoryPool {
+    factories: std::sync::Mutex<Vec<ParserFactory>>,
+    max_size: usize,
+}
+
+impl ParserFactoryPool {
+    /// Create a new parser factory pool
+    pub fn new(max_size: usize) -> Self {
+        let mut factories = Vec::with_capacity(max_size);
+        // Pre-allocate some factories
+        for _ in 0..max_size.min(4) {
+            factories.push(ParserFactory::with_capacity(10));
+        }
+        
+        Self {
+            factories: std::sync::Mutex::new(factories),
+            max_size,
+        }
+    }
+
+    /// Get a parser factory from the pool
+    pub fn get_factory(&self) -> ParserFactory {
+        let mut factories = match self.factories.lock() {
+            Ok(factories) => factories,
+            Err(_) => {
+                // If lock is poisoned, create a new factory
+                return ParserFactory::with_capacity(10);
+            }
+        };
+        factories.pop().unwrap_or_else(|| ParserFactory::with_capacity(10))
+    }
+
+    /// Return a parser factory to the pool
+    pub fn return_factory(&self, factory: ParserFactory) {
+        let mut factories = match self.factories.lock() {
+            Ok(factories) => factories,
+            Err(_) => {
+                // If lock is poisoned, just drop the factory
+                return;
+            }
+        };
+        if factories.len() < self.max_size {
+            factories.push(factory);
+        }
+        // If pool is full, the factory is dropped (cleaned up)
+    }
+}
+
+/// Scoped parser factory guard for automatic pool management
+pub struct ScopedParserFactory {
+    factory: Option<ParserFactory>,
+}
+
+impl Default for ScopedParserFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ScopedParserFactory {
+    /// Get a parser factory from the thread-local pool
+    pub fn new() -> Self {
+        let factory = PARSER_POOL.with(|pool| {
+            pool.borrow_mut().get_factory()
+        });
+        Self {
+            factory: Some(factory),
+        }
+    }
+
+    /// Get a mutable reference to the parser factory
+    pub fn get_mut(&mut self) -> &mut ParserFactory {
+        self.factory.as_mut().expect("ScopedParserFactory should always contain a factory")
+    }
+
+    /// Parse a file using the pooled factory
+    pub fn parse_file(&mut self, content: &str, file_path: &str) -> Option<ParseResult> {
+        self.factory.as_mut().expect("ScopedParserFactory should always contain a factory").parse_file(content, file_path)
+    }
+}
+
+impl Drop for ScopedParserFactory {
+    fn drop(&mut self) {
+        if let Some(factory) = self.factory.take() {
+            PARSER_POOL.with(|pool| {
+                pool.borrow_mut().return_factory(factory);
+            });
+        }
+    }
+}
+
+/// Thread-local parser factory pool for parallel processing
+thread_local! {
+    static PARSER_POOL: std::cell::RefCell<ParserFactoryPool> = std::cell::RefCell::new(
+        ParserFactoryPool::new(8) // Reasonable pool size for parallel processing
+    );
+}
+
 /// Parse result containing the AST and metadata
 #[derive(Debug)]
 pub struct ParseResult {
@@ -226,8 +325,10 @@ impl ParserFactory {
                 10 // Default to reasonable value
             });
         
+        let cache_capacity = NonZeroUsize::new(validated_size)
+            .unwrap_or_else(|| NonZeroUsize::new(1).expect("Cache capacity should be at least 1"));
         Self {
-            parsers: LruCache::new(NonZeroUsize::new(validated_size).unwrap_or_else(|| NonZeroUsize::new(1).unwrap())),
+            parsers: LruCache::new(cache_capacity),
             max_parsers: validated_size,
         }
     }
@@ -279,7 +380,9 @@ impl ParserFactory {
     /// Resize the cache and evict excess parsers if needed
     pub fn resize_cache(&mut self, new_capacity: usize) {
         self.max_parsers = new_capacity;
-        self.parsers.resize(NonZeroUsize::new(new_capacity).unwrap_or_else(|| NonZeroUsize::new(1).unwrap()));
+        let new_size = NonZeroUsize::new(new_capacity)
+            .unwrap_or_else(|| NonZeroUsize::new(1).expect("Cache capacity should be at least 1"));
+        self.parsers.resize(new_size);
     }
 
     /// Parse file by detecting language from extension

@@ -351,7 +351,7 @@ impl JavaExtractor {
         // Look for modifiers node
         if let Some(modifiers_node) = node.child_by_field_name("modifiers") {
             // For Java, the modifiers node often contains the actual modifiers as its text content
-            if let Some(modifier_text) = modifiers_node.utf8_text(source.as_bytes()).ok() {
+            if let Ok(modifier_text) = modifiers_node.utf8_text(source.as_bytes()) {
                 // Split by whitespace to handle multiple modifiers
                 for modifier in modifier_text.split_whitespace() {
                     if matches!(
@@ -372,7 +372,7 @@ impl JavaExtractor {
             // Also check if modifiers node has children
             let mut cursor = modifiers_node.walk();
             for child in modifiers_node.children(&mut cursor) {
-                if let Some(modifier) = child.utf8_text(source.as_bytes()).ok() {
+                if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
                     let modifier = modifier.trim();
                     if matches!(
                         modifier,
@@ -400,7 +400,7 @@ impl JavaExtractor {
         // Look for modifiers node - in Java tree-sitter, modifiers is a single node containing modifier keywords
         if let Some(modifiers_node) = node.child_by_field_name("modifiers") {
             // For Java, the modifiers node often contains the actual modifiers as its text content
-            if let Some(modifier_text) = modifiers_node.utf8_text(source.as_bytes()).ok() {
+            if let Ok(modifier_text) = modifiers_node.utf8_text(source.as_bytes()) {
                 // Split by whitespace to handle multiple modifiers
                 for modifier in modifier_text.split_whitespace() {
                     if matches!(
@@ -415,7 +415,7 @@ impl JavaExtractor {
             // Also check if modifiers node has children (some versions might structure it differently)
             let mut cursor = modifiers_node.walk();
             for child in modifiers_node.children(&mut cursor) {
-                if let Some(modifier) = child.utf8_text(source.as_bytes()).ok() {
+                if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
                     let modifier = modifier.trim();
                     if matches!(
                         modifier,
@@ -430,7 +430,7 @@ impl JavaExtractor {
         // Also check for modifier keywords directly as children (fallback)
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            if let Some(text) = child.utf8_text(source.as_bytes()).ok() {
+            if let Ok(text) = child.utf8_text(source.as_bytes()) {
                 let text = text.trim();
                 if matches!(
                     text,
@@ -503,7 +503,7 @@ impl JavaExtractor {
         // Look for modifiers node
         if let Some(modifiers_node) = node.child_by_field_name("modifiers") {
             // For Java, the modifiers node often contains the actual modifiers as its text content
-            if let Some(modifier_text) = modifiers_node.utf8_text(source.as_bytes()).ok() {
+            if let Ok(modifier_text) = modifiers_node.utf8_text(source.as_bytes()) {
                 // Split by whitespace to handle multiple modifiers
                 for modifier in modifier_text.split_whitespace() {
                     if matches!(
@@ -524,7 +524,7 @@ impl JavaExtractor {
             // Also check if modifiers node has children
             let mut cursor = modifiers_node.walk();
             for child in modifiers_node.children(&mut cursor) {
-                if let Some(modifier) = child.utf8_text(source.as_bytes()).ok() {
+                if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
                     let modifier = modifier.trim();
                     if matches!(
                         modifier,
@@ -618,11 +618,11 @@ impl JavaExtractor {
                     let name_str = safe_node_text(&name, source);
                     format!("{scope_str}.{name_str}")
                 } else {
-                    safe_node_text(&node, source)
+                    safe_node_text(node, source)
                 }
             }
-            "identifier" => safe_node_text(&node, source),
-            _ => safe_node_text(&node, source),
+            "identifier" => safe_node_text(node, source),
+            _ => safe_node_text(node, source),
         }
     }
 

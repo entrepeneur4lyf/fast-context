@@ -146,7 +146,7 @@ impl PhpExtractor {
                         documentation: None,
                         modifiers: vec![node.kind().to_string()],
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -194,7 +194,7 @@ impl PhpExtractor {
                         documentation,
                         modifiers,
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -249,7 +249,7 @@ impl PhpExtractor {
                         documentation,
                         modifiers,
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -288,7 +288,7 @@ impl PhpExtractor {
                         documentation: None,
                         modifiers: vec!["interface".to_string()],
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -327,7 +327,7 @@ impl PhpExtractor {
                         documentation: None,
                         modifiers: vec!["trait".to_string()],
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -388,7 +388,7 @@ impl PhpExtractor {
                         documentation,
                         modifiers,
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -441,7 +441,7 @@ impl PhpExtractor {
                                 documentation: None,
                                 modifiers,
                                 signature: Some(
-                                    safe_node_text(&node, source),
+                                    safe_node_text(node, source),
                                 ),
                             };
                             symbols.push(symbol);
@@ -512,7 +512,7 @@ impl PhpExtractor {
                         documentation: None,
                         modifiers: vec!["variable".to_string()],
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -544,7 +544,7 @@ impl PhpExtractor {
                         documentation: None,
                         modifiers: vec!["namespace".to_string()],
                         signature: Some(
-                            safe_node_text(&node, source),
+                            safe_node_text(node, source),
                         ),
                     };
                     symbols.push(symbol);
@@ -587,7 +587,7 @@ impl PhpExtractor {
                                 documentation: None,
                                 modifiers: vec!["use".to_string()],
                                 signature: Some(
-                                    safe_node_text(&node, source),
+                                    safe_node_text(node, source),
                                 ),
                             };
                             symbols.push(symbol);

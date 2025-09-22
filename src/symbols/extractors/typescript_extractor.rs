@@ -535,10 +535,10 @@ impl TypeScriptExtractor {
         }
         
         // Remove leading and trailing empty lines
-        while result_lines.first().map_or(false, |s| s.is_empty()) {
+        while result_lines.first().is_some_and(|s| s.is_empty()) {
             result_lines.remove(0);
         }
-        while result_lines.last().map_or(false, |s| s.is_empty()) {
+        while result_lines.last().is_some_and(|s| s.is_empty()) {
             result_lines.pop();
         }
         

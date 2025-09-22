@@ -19,7 +19,7 @@ use std::cell::RefCell;
 use std::thread_local;
 
 thread_local! {
-    static ANALYSIS_DEPTH: RefCell<u32> = RefCell::new(0);
+    static ANALYSIS_DEPTH: RefCell<u32> = const { RefCell::new(0) };
 }
 
 /// Maximum recursion depth to prevent stack overflow

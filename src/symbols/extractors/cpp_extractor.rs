@@ -445,31 +445,28 @@ impl CppExtractor {
 
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
-            match child.kind() {
-                "template_parameter_list" => {
-                    let mut param_cursor = child.walk();
-                    for param in child.children(&mut param_cursor) {
-                        match param.kind() {
-                            "type_parameter" => {
-                                if let Some(name_node) = param.child_by_field_name("name") {
-                                    let name = self.get_node_text(&name_node, source);
-                                    template_info.push(format!("tparam:{}", name));
-                                }
+            if child.kind() == "template_parameter_list" {
+                let mut param_cursor = child.walk();
+                for param in child.children(&mut param_cursor) {
+                    match param.kind() {
+                        "type_parameter" => {
+                            if let Some(name_node) = param.child_by_field_name("name") {
+                                let name = self.get_node_text(&name_node, source);
+                                template_info.push(format!("tparam:{}", name));
                             }
-                            "parameter_declaration" => {
-                                if let Some(type_node) = param.child_by_field_name("type") {
-                                    let type_name = self.get_node_text(&type_node, source);
-                                    if let Some(name_node) = param.child_by_field_name("declarator") {
-                                        let name = self.get_node_text(&name_node, source);
-                                        template_info.push(format!("nparam:{}:{}", type_name, name));
-                                    }
-                                }
-                            }
-                            _ => {}
                         }
+                        "parameter_declaration" => {
+                            if let Some(type_node) = param.child_by_field_name("type") {
+                                let type_name = self.get_node_text(&type_node, source);
+                                if let Some(name_node) = param.child_by_field_name("declarator") {
+                                    let name = self.get_node_text(&name_node, source);
+                                    template_info.push(format!("nparam:{}:{}", type_name, name));
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
-                _ => {}
             }
         }
 

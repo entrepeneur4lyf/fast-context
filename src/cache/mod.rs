@@ -34,6 +34,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs as async_fs;
 use tokio::sync::RwLock as TokioRwLock;
 
+
 /// Cache key for identifying cached items
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CacheKey {
@@ -139,18 +140,15 @@ struct AccessPattern {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Default)]
 pub enum AccessPatternType {
     Random,
     Temporal,  // Time-based locality
     Frequency,  // Frequency-based locality
+    #[default]
     Unknown,
 }
 
-impl Default for AccessPatternType {
-    fn default() -> Self {
-        AccessPatternType::Unknown
-    }
-}
 
 impl AccessPattern {
     /// Analyze access patterns to optimize caching strategy
@@ -207,9 +205,11 @@ impl AccessPattern {
 
 impl<T: Clone> L1Cache<T> {
     pub fn new(capacity: usize) -> Self {
+        let validated_capacity = NonZeroUsize::new(capacity)
+            .unwrap_or_else(|| NonZeroUsize::new(1).expect("Capacity should be at least 1"));
         Self {
             cache: Arc::new(RwLock::new(LruCache::new(
-                NonZeroUsize::new(capacity).unwrap(),
+                validated_capacity,
             ))),
             max_size: capacity,
             hit_count: Arc::new(AtomicU64::new(0)),
@@ -221,7 +221,13 @@ impl<T: Clone> L1Cache<T> {
     /// Optimized get operation with read lock for better concurrency
     pub fn get(&self, key: &CacheKey) -> Option<T> {
         // Try read lock first for better performance in read-heavy workloads
-        let cache = self.cache.read().unwrap();
+        let cache = match self.cache.read() {
+            Ok(cache) => cache,
+            Err(_) => {
+                // Log error and return None if lock fails
+                return None;
+            }
+        };
         
         if let Some(entry) = cache.peek(key) {
             // Update hit counter atomically
@@ -237,10 +243,13 @@ impl<T: Clone> L1Cache<T> {
             drop(cache);
             
             // Update access time with write lock (brief operation)
-            let mut cache = self.cache.write().unwrap();
-            if let Some(entry) = cache.get_mut(key) {
-                entry.last_accessed = get_current_timestamp();
-                entry.access_count += 1;
+            if let Ok(mut cache) = self.cache.write() {
+                if let Some(entry) = cache.get_mut(key) {
+                    entry.last_accessed = get_current_timestamp();
+                    entry.access_count += 1;
+                }
+            } else {
+                eprintln!("Warning: Failed to acquire write lock for cache access time update");
             }
             
             Some(data)
@@ -254,42 +263,48 @@ impl<T: Clone> L1Cache<T> {
 
     /// Update access pattern analysis for intelligent optimization
     fn update_access_pattern(&self, key: &CacheKey, _is_hit: bool) {
-        let mut pattern = self.access_pattern.write().unwrap();
-        pattern.total_accesses += 1;
-        
-        // Track recent accesses for pattern analysis
-        pattern.recent_accesses.push_back((key.clone(), std::time::Instant::now()));
-        
-        // Keep only recent accesses (last 1000)
-        while pattern.recent_accesses.len() > 1000 {
-            pattern.recent_accesses.pop_front();
-        }
-        
-        // Track hot keys
-        *pattern.hot_keys.entry(key.clone()).or_insert(0) += 1;
-        
-        // Analyze access pattern every 100 accesses
-        if pattern.total_accesses % 100 == 0 {
-            pattern.analyze_pattern();
+        if let Ok(mut pattern) = self.access_pattern.write() {
+            pattern.total_accesses += 1;
+            
+            // Track recent accesses for pattern analysis
+            pattern.recent_accesses.push_back((key.clone(), std::time::Instant::now()));
+            
+            // Keep only recent accesses (last 1000)
+            while pattern.recent_accesses.len() > 1000 {
+                pattern.recent_accesses.pop_front();
+            }
+            
+            // Track hot keys
+            *pattern.hot_keys.entry(key.clone()).or_insert(0) += 1;
+            
+            // Analyze access pattern every 100 accesses
+            if pattern.total_accesses % 100 == 0 {
+                pattern.analyze_pattern();
+            }
+        } else {
+            eprintln!("Warning: Failed to acquire write lock for access pattern update");
         }
     }
 
     /// Optimized put operation with intelligent eviction
     pub fn put(&self, key: CacheKey, data: T, file_size: u64, dependencies: Vec<String>) {
-        let mut cache = self.cache.write().unwrap();
-        let entry = CacheEntry::new(data, file_size, dependencies);
-        
-        // Check if we're at capacity and need intelligent eviction
-        if cache.len() >= self.max_size {
-            self.intelligent_eviction(&mut cache);
+        if let Ok(mut cache) = self.cache.write() {
+            let entry = CacheEntry::new(data, file_size, dependencies);
+            
+            // Check if we're at capacity and need intelligent eviction
+            if cache.len() >= self.max_size {
+                self.intelligent_eviction(&mut cache);
+            }
+            
+            cache.put(key, entry);
+        } else {
+            eprintln!("Warning: Failed to acquire write lock for cache put operation");
         }
-        
-        cache.put(key, entry);
     }
     
     /// Intelligent eviction based on access patterns rather than simple LRU
     fn intelligent_eviction(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
-        let pattern = self.access_pattern.read().unwrap();
+        if let Ok(pattern) = self.access_pattern.read() {
         
         match pattern.pattern_type {
             AccessPatternType::Frequency => {
@@ -304,6 +319,9 @@ impl<T: Clone> L1Cache<T> {
                 // Default to LRU for unknown or random patterns
                 // The LruCache already handles this efficiently
             }
+        }
+        } else {
+            eprintln!("Warning: Failed to acquire read lock for access pattern during eviction");
         }
     }
     
@@ -333,8 +351,12 @@ impl<T: Clone> L1Cache<T> {
     }
 
     pub fn remove(&self, key: &CacheKey) -> Option<T> {
-        let mut cache = self.cache.write().unwrap();
-        cache.pop(key).map(|entry| entry.data)
+        if let Ok(mut cache) = self.cache.write() {
+            cache.pop(key).map(|entry| entry.data)
+        } else {
+            eprintln!("Warning: Failed to acquire write lock for cache remove operation");
+            None
+        }
     }
 
     pub fn stats(&self) -> CacheStats {
@@ -346,38 +368,59 @@ impl<T: Clone> L1Cache<T> {
             0.0
         };
 
-        let cache = self.cache.read().unwrap();
+        let entries = if let Ok(cache) = self.cache.read() {
+            cache.len()
+        } else {
+            eprintln!("Warning: Failed to acquire read lock for cache stats");
+            0
+        };
+        
         CacheStats {
             hits,
             misses,
             hit_rate,
-            entries: cache.len(),
+            entries,
             max_entries: self.max_size,
         }
     }
 
     /// Get access pattern information for optimization
     pub fn get_access_pattern(&self) -> AccessPatternType {
-        let pattern = self.access_pattern.read().unwrap();
-        pattern.pattern_type.clone()
+        if let Ok(pattern) = self.access_pattern.read() {
+            pattern.pattern_type.clone()
+        } else {
+            eprintln!("Warning: Failed to acquire read lock for access pattern");
+            AccessPatternType::Unknown
+        }
     }
 
     /// Get predicted hot keys for prefetching
     pub fn get_hot_keys(&self, limit: usize) -> Vec<CacheKey> {
-        let pattern = self.access_pattern.read().unwrap();
-        pattern.get_hot_keys(limit)
+        if let Ok(pattern) = self.access_pattern.read() {
+            pattern.get_hot_keys(limit)
+        } else {
+            eprintln!("Warning: Failed to acquire read lock for hot keys");
+            Vec::new()
+        }
     }
 
     pub fn clear(&self) {
-        let mut cache = self.cache.write().unwrap();
-        cache.clear();
+        if let Ok(mut cache) = self.cache.write() {
+            cache.clear();
+        } else {
+            eprintln!("Warning: Failed to acquire write lock for cache clear");
+            return;
+        }
         
         // Reset access pattern tracking
-        let mut pattern = self.access_pattern.write().unwrap();
-        pattern.recent_accesses.clear();
-        pattern.hot_keys.clear();
-        pattern.total_accesses = 0;
-        pattern.pattern_type = AccessPatternType::Unknown;
+        if let Ok(mut pattern) = self.access_pattern.write() {
+            pattern.recent_accesses.clear();
+            pattern.hot_keys.clear();
+            pattern.total_accesses = 0;
+            pattern.pattern_type = AccessPatternType::Unknown;
+        } else {
+            eprintln!("Warning: Failed to acquire write lock for pattern clear");
+        }
     }
 }
 
@@ -548,7 +591,15 @@ impl L2Cache {
 
     fn hash_key(&self, key: &CacheKey) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(bincode::serialize(key).unwrap());
+        match bincode::serialize(key) {
+            Ok(serialized) => hasher.update(serialized),
+            Err(_e) => {
+                // Fallback to string-based hashing if serialization fails
+                hasher.update(key.file_path.as_bytes());
+                hasher.update(key.content_hash.as_bytes());
+                hasher.update(format!("{:?}", key.cache_type).as_bytes());
+            }
+        }
         format!("{:x}", hasher.finalize())
     }
 
@@ -566,10 +617,14 @@ impl L2Cache {
     async fn evict_lru_entries(&self, needed_bytes: u64) -> Result<(), Box<dyn std::error::Error>> {
         // Use cached eviction candidates if available and fresh
         let candidates = {
-            let cache = self.eviction_cache.read().unwrap();
-            if !cache.is_empty() {
-                Some(cache.clone())
+            if let Ok(cache) = self.eviction_cache.read() {
+                if !cache.is_empty() {
+                    Some(cache.clone())
+                } else {
+                    None
+                }
             } else {
+                eprintln!("Warning: Failed to acquire read lock for eviction cache");
                 None
             }
         };
@@ -587,7 +642,11 @@ impl L2Cache {
             sorted_entries.sort_by_key(|(_, metadata)| metadata.last_accessed);
 
             // Cache for future evictions
-            *self.eviction_cache.write().unwrap() = sorted_entries.clone();
+            if let Ok(mut cache) = self.eviction_cache.write() {
+                *cache = sorted_entries.clone();
+            } else {
+                eprintln!("Warning: Failed to acquire write lock for eviction cache update");
+            }
             sorted_entries
         };
 
@@ -607,8 +666,11 @@ impl L2Cache {
                 freed_bytes += removed_size;
                 
                 // Update eviction cache
-                let mut cache = self.eviction_cache.write().unwrap();
-                cache.retain(|(k, _)| k != &key);
+                if let Ok(mut cache) = self.eviction_cache.write() {
+                    cache.retain(|(k, _)| k != &key);
+                } else {
+                    eprintln!("Warning: Failed to acquire write lock for eviction cache removal");
+                }
             }
         }
 
@@ -635,7 +697,11 @@ impl L2Cache {
             })
         };
         
-        *self.compaction_task.lock().unwrap() = Some(compaction_task);
+        if let Ok(mut task) = self.compaction_task.lock() {
+            *task = Some(compaction_task);
+        } else {
+            eprintln!("Warning: Failed to acquire lock for compaction task");
+        }
     }
 
     /// Background compaction to clean up orphaned cache files
@@ -655,13 +721,12 @@ impl L2Cache {
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             
-            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("cache") {
-                if !valid_files.contains(&path) {
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("cache")
+                && !valid_files.contains(&path) {
                     // Orphaned file, remove it
                     tokio::fs::remove_file(&path).await?;
                     removed_count += 1;
                 }
-            }
         }
 
         if removed_count > 0 {
@@ -677,7 +742,10 @@ impl L2Cache {
         if let Some(metadata) = index.get_mut(key) {
             metadata.last_accessed = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .unwrap()
+                .unwrap_or_else(|_| {
+                    eprintln!("Warning: System clock appears to be before UNIX epoch in cache update");
+                    Duration::from_secs(0)
+                })
                 .as_secs();
         }
     }
@@ -798,18 +866,25 @@ where
         for file in &files_to_invalidate {
             // Get keys to remove (LRU cache doesn't have retain method)
             let keys_to_remove: Vec<CacheKey> = {
-                let cache = self.l1.cache.read().unwrap();
-                cache
-                    .iter()
-                    .filter(|(key, _)| key.file_path.contains(file))
-                    .map(|(key, _)| key.clone())
-                    .collect()
+                if let Ok(cache) = self.l1.cache.read() {
+                    cache
+                        .iter()
+                        .filter(|(key, _)| key.file_path.contains(file))
+                        .map(|(key, _)| key.clone())
+                        .collect()
+                } else {
+                    eprintln!("Warning: Failed to acquire read lock for dependency invalidation");
+                    Vec::new()
+                }
             };
 
             // Remove the keys
-            let mut cache = self.l1.cache.write().unwrap();
-            for key in keys_to_remove {
-                cache.pop(&key);
+            if let Ok(mut cache) = self.l1.cache.write() {
+                for key in keys_to_remove {
+                    cache.pop(&key);
+                }
+            } else {
+                eprintln!("Warning: Failed to acquire write lock for dependency invalidation");
             }
         }
 
@@ -909,8 +984,20 @@ where
         // For now, implement a simple file-based approach
         if let Ok(content) = async_fs::read_to_string(file).await {
             // Simple regex-based extraction for demonstration
-            let use_re = Regex::new(r"use\s+([^;]+);").unwrap();
-            let mod_re = Regex::new(r"mod\s+([^;]+);").unwrap();
+            let use_re = match Regex::new(r"use\s+([^;]+);") {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile Rust use regex: {}", e);
+                    return Vec::new();
+                }
+            };
+            let mod_re = match Regex::new(r"mod\s+([^;]+);") {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile Rust mod regex: {}", e);
+                    return Vec::new();
+                }
+            };
             
             for cap in use_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
@@ -936,8 +1023,20 @@ where
         let mut deps = Vec::new();
         
         if let Ok(content) = async_fs::read_to_string(file).await {
-            let import_re = Regex::new(r"import\s+([^#\n]+)").unwrap();
-            let from_re = Regex::new(r"from\s+([^#\s]+)\s+import").unwrap();
+            let import_re = match Regex::new(r"import\s+([^#\n]+)") {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile Python import regex: {}", e);
+                    return Vec::new();
+                }
+            };
+            let from_re = match Regex::new(r"from\s+([^#\s]+)\s+import") {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile Python from regex: {}", e);
+                    return Vec::new();
+                }
+            };
             
             for cap in import_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
@@ -963,8 +1062,20 @@ where
         let mut deps = Vec::new();
         
         if let Ok(content) = async_fs::read_to_string(file).await {
-            let require_re = Regex::new(r#"(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)"#).unwrap();
-            let import_re = Regex::new(r#"import\s+.*?from\s+["']([^"']+)["']"#).unwrap();
+            let require_re = match Regex::new(r#"(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)"#) {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile JavaScript require regex: {}", e);
+                    return Vec::new();
+                }
+            };
+            let import_re = match Regex::new(r#"import\s+.*?from\s+["']([^"']+)["']"#) {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile JavaScript import regex: {}", e);
+                    return Vec::new();
+                }
+            };
             
             for cap in require_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
@@ -987,7 +1098,13 @@ where
         let mut deps = Vec::new();
         
         if let Ok(content) = async_fs::read_to_string(file).await {
-            let include_re = Regex::new(r#"#include\s*[<"]([^>"]+)[>"]"#).unwrap();
+            let include_re = match Regex::new(r#"#include\s*[<"]([^>"]+)[>"]"#) {
+                Ok(regex) => regex,
+                Err(e) => {
+                    eprintln!("Warning: Failed to compile C++ include regex: {}", e);
+                    return Vec::new();
+                }
+            };
             
             for cap in include_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
@@ -1086,8 +1203,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_l2_cache() {
-        let temp_dir = TempDir::new().unwrap();
-        let cache = L2Cache::new(temp_dir.path().to_path_buf(), 10).unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temporary directory for L2 cache test");
+        let cache = L2Cache::new(temp_dir.path().to_path_buf(), 10)
+            .expect("Failed to create L2 cache for test");
 
         let key = CacheKey {
             file_path: "test.rs".to_string(),
@@ -1098,7 +1216,7 @@ mod tests {
         cache
             .put(key.clone(), "test_data".to_string(), vec![])
             .await
-            .unwrap();
+            .expect("Failed to put data in L2 cache");
         let result: Option<String> = cache.get(&key).await;
 
         assert_eq!(result, Some("test_data".to_string()));

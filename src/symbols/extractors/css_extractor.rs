@@ -594,7 +594,7 @@ impl CssExtractor {
     }
 
     fn get_node_text(&self, node: &Node, source: &str) -> String {
-        safe_node_text(&node, source)
+        safe_node_text(node, source)
     }
 
     fn extract_css_doc(&self, node: &Node, source: &str) -> Option<String> {

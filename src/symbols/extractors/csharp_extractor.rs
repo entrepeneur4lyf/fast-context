@@ -404,7 +404,7 @@ impl CSharpExtractor {
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             if child.kind() == "modifier" {
-                if let Some(modifier_text) = child.utf8_text(source.as_bytes()).ok() {
+                if let Ok(modifier_text) = child.utf8_text(source.as_bytes()) {
                     modifiers.push(modifier_text.to_string());
                 }
             }

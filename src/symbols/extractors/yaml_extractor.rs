@@ -216,7 +216,7 @@ impl YamlExtractor {
         scope_stack: &[Scope],
     ) {
         // YAML anchor: &anchor_name
-        let anchor_text = safe_node_text(&node, source);
+        let anchor_text = safe_node_text(node, source);
         if !anchor_text.is_empty() {
             let clean_name = anchor_text.trim_start_matches('&');
             let location = Location::from_node(node, file_path);
@@ -243,7 +243,7 @@ impl YamlExtractor {
         scope_stack: &[Scope],
     ) {
         // YAML alias: *anchor_name
-        let alias_text = safe_node_text(&node, source);
+        let alias_text = safe_node_text(node, source);
         if !alias_text.is_empty() {
             let clean_name = alias_text.trim_start_matches('*');
             let location = Location::from_node(node, file_path);
@@ -341,7 +341,7 @@ impl YamlExtractor {
         scope_stack: &[Scope],
     ) {
         // YAML comment: # comment text
-        let comment_text = safe_node_text(&node, source);
+        let comment_text = safe_node_text(node, source);
         if !comment_text.is_empty() && comment_text.len() > 5 {
             let clean_comment = comment_text.trim_start_matches('#').trim();
             if !clean_comment.is_empty() && clean_comment.len() > 10 {

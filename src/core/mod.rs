@@ -77,12 +77,10 @@ impl CoreAnalyzer {
 
     /// Common analysis logic shared between Python and non-Python implementations
     fn analyze_internal(&self) -> FastContextResult<InternalAnalysisResult> {
-        use crate::parsers::ParserFactory;
         use crate::symbols::{SymbolExtractorFactory, Symbol};
         use crate::symbols::dependency_extractor::DependencyExtractorFactory;
         use rayon::prelude::*;
-        use std::fs;
-        use std::time::Instant;
+                use std::time::Instant;
         
         let _start_time = Instant::now();
         
@@ -91,22 +89,43 @@ impl CoreAnalyzer {
             .map(|entry| entry.path().to_path_buf())
             .collect();
 
-        // Process files in parallel - each thread gets its own factories
+        // Process files in parallel with streaming support for large files
         let results: Vec<_> = file_paths.par_iter()
             .filter_map(|file_path| {
                 let path_str = file_path.to_string_lossy();
-                match fs::read_to_string(file_path) {
-                    Ok(content) => Some((file_path.clone(), content, path_str.to_string())),
-                    Err(_) => None,
+                
+                // Check file size to decide between streaming and regular reading
+                match file_path.metadata() {
+                    Ok(metadata) if metadata.len() > 1024 * 1024 => { // Files > 1MB use streaming
+                        match crate::validation::StreamingTextReader::new(file_path, Some(64 * 1024), Some(10 * 1024 * 1024)) {
+                            Ok(mut reader) => {
+                                // Read file in chunks and reconstruct content
+                                let mut content = String::new();
+                                while let Ok(Some(line)) = reader.read_next_line() {
+                                    content.push_str(&line);
+                                    content.push('\n');
+                                }
+                                Some((file_path.clone(), content, path_str.to_string()))
+                            }
+                            Err(_) => None,
+                        }
+                    }
+                    _ => {
+                        // Small files use regular reading for better performance
+                        match crate::validation::secure_read_file(file_path) {
+                            Ok(content) => Some((file_path.clone(), content, path_str.to_string())),
+                            Err(_) => None,
+                        }
+                    }
                 }
             })
             .filter_map(|(_file_path, content, path_str)| {
-                // Create fresh factories for each thread to avoid mutable state sharing
-                let mut parser_factory = ParserFactory::new();
+                // Use pooled factories for performance optimization
+                let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
                 let extractor_factory = SymbolExtractorFactory::new();
                 let dep_factory = DependencyExtractorFactory::new();
 
-                if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
+                if let Some(parse) = scoped_factory.parse_file(&content, &path_str) {
                     let syms: Vec<Symbol> = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
                     let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, syms.clone(), &path_str, parse.language);
                     Some(FileAnalysisResult {
@@ -205,19 +224,17 @@ impl CoreAnalyzer {
     }
 
     pub fn find_symbols_by_kind(&self, symbol_kind: String) -> FastContextResult<Vec<String>> {
-        use crate::parsers::ParserFactory;
         use crate::symbols::SymbolExtractorFactory;
         use crate::symbols::SymbolKind;
-        use std::fs;
-
-        let mut parser_factory = ParserFactory::new();
+        
         let extractor_factory = SymbolExtractorFactory::new();
         let mut results = Vec::new();
 
         for entry in self.walk_project_files() {
             let path_str = entry.path().to_string_lossy();
-            if let Ok(content) = fs::read_to_string(entry.path()) {
-                if let Some(parse) = parser_factory.parse_file(&content, path_str.as_ref()) {
+            if let Ok(content) = crate::validation::secure_read_file(&entry.path()) {
+                let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
+                if let Some(parse) = scoped_factory.parse_file(&content, path_str.as_ref()) {
                     let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
                     let filtered = syms.into_iter().filter(|s| {
                         let k = match s.kind {
@@ -250,13 +267,13 @@ impl CoreAnalyzer {
     }
 
     pub fn find_symbols_in_file(&self, file_path: String) -> FastContextResult<Vec<String>> {
-        use crate::parsers::ParserFactory;
         use crate::symbols::{SymbolExtractorFactory, SymbolKind};
-        use std::fs;
-
-        let content = fs::read_to_string(&file_path)?;
-        let mut parser_factory = ParserFactory::new();
-        if let Some(parse) = parser_factory.parse_file(&content, &file_path) {
+        
+        // Use secure file reading with path validation
+        let content = crate::validation::secure_read_file(&std::path::Path::new(&file_path))
+            .map_err(|e| format!("Invalid file path '{}': {}", file_path, e))?;
+        let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
+        if let Some(parse) = scoped_factory.parse_file(&content, &file_path) {
             let extractor_factory = SymbolExtractorFactory::new();
             let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, &file_path, parse.language);
             let mut out: Vec<String> = Vec::new();
@@ -285,20 +302,18 @@ impl CoreAnalyzer {
     }
 
     pub fn find_dependencies(&self, symbol_name: String) -> FastContextResult<Vec<String>> {
-        use crate::parsers::ParserFactory;
         use crate::symbols::{SymbolExtractorFactory};
         use crate::symbols::dependency_extractor::DependencyExtractorFactory;
-        use std::fs;
-
-        let mut parser_factory = ParserFactory::new();
+        
         let extractor_factory = SymbolExtractorFactory::new();
         let dep_factory = DependencyExtractorFactory::new();
         let mut results: Vec<String> = Vec::new();
 
         for entry in self.walk_project_files() {
             let path_str = entry.path().to_string_lossy();
-            if let Ok(content) = fs::read_to_string(entry.path()) {
-                if let Some(parse) = parser_factory.parse_file(&content, path_str.as_ref()) {
+            if let Ok(content) = crate::validation::secure_read_file(&entry.path()) {
+                let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
+                if let Some(parse) = scoped_factory.parse_file(&content, path_str.as_ref()) {
                     let symbols = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
                     let deps = dep_factory.extract_dependencies(&parse.tree, &parse.source, symbols, path_str.as_ref(), parse.language);
                     for d in deps {
@@ -314,19 +329,17 @@ impl CoreAnalyzer {
     }
 
     pub fn find_complex_symbols(&self, threshold: u32) -> FastContextResult<Vec<String>> {
-        use crate::parsers::ParserFactory;
         use crate::symbols::SymbolExtractorFactory;
         use crate::symbols::SymbolKind;
-        use std::fs;
-
-        let mut parser_factory = ParserFactory::new();
+        
         let extractor_factory = SymbolExtractorFactory::new();
         let mut complex: Vec<String> = Vec::new();
 
         for entry in self.walk_project_files() {
             let path_str = entry.path().to_string_lossy();
-            if let Ok(content) = fs::read_to_string(entry.path()) {
-                if let Some(parse) = parser_factory.parse_file(&content, path_str.as_ref()) {
+            if let Ok(content) = crate::validation::secure_read_file(&entry.path()) {
+                let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
+                if let Some(parse) = scoped_factory.parse_file(&content, path_str.as_ref()) {
                     // naive complexity: number of control-flow tokens in file + function count
                     let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
                     let func_count = syms.iter().filter(|s| matches!(s.kind, SymbolKind::Function | SymbolKind::Method)).count() as u32;

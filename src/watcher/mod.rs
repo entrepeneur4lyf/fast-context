@@ -140,7 +140,13 @@ impl CodebaseWatcher {
 
             while let Ok(event) = rx.recv() {
                 if let Some(changes) = Self::process_fs_event(event, &config_clone) {
-                    let mut debouncer = debouncer_clone.lock().unwrap();
+                    let mut debouncer = match debouncer_clone.lock() {
+                        Ok(debouncer) => debouncer,
+                        Err(e) => {
+                            eprintln!("Warning: Failed to acquire debouncer lock: {}", e);
+                            continue;
+                        }
+                    };
 
                     for change in changes {
                         debouncer.add_change(change);
@@ -250,7 +256,13 @@ impl CodebaseWatcher {
 
     /// Force flush any pending changes
     pub fn flush_changes(&self) -> Vec<FileChange> {
-        let mut debouncer = self.debouncer.lock().unwrap();
+        let mut debouncer = match self.debouncer.lock() {
+            Ok(debouncer) => debouncer,
+            Err(e) => {
+                eprintln!("Warning: Failed to acquire debouncer lock: {}", e);
+                return Vec::new();
+            }
+        };
         debouncer.flush()
     }
 
@@ -445,7 +457,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "Timing-sensitive test that may fail in CI environments"]
     async fn test_file_watcher_integration() {
-        let temp_dir = TempDir::new().unwrap();
+        let temp_dir = TempDir::new().expect("Failed to create temporary directory for watcher test");
         let test_file = temp_dir.path().join("test.rs");
 
         let config = WatcherConfig {
@@ -454,11 +466,11 @@ mod tests {
             ..Default::default()
         };
 
-        let watcher = CodebaseWatcher::new(config).unwrap();
+        let watcher = CodebaseWatcher::new(config).expect("Failed to create codebase watcher for test");
         let mut receiver = watcher.subscribe();
 
         // Create a test file
-        fs::write(&test_file, "fn main() {}").unwrap();
+        fs::write(&test_file, "fn main() {}").expect("Failed to write test file");
 
         // Wait for the change event
         tokio::time::timeout(Duration::from_secs(5), async {

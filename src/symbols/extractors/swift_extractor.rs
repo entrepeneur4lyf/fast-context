@@ -488,7 +488,7 @@ impl SwiftExtractor {
         let return_type = node
             .child_by_field_name("result")
             .map(|r| safe_node_text(&r, source))
-            .unwrap_or_else(|| "".to_string());
+            .unwrap_or_default();
 
         let return_part = if return_type.is_empty() {
             String::new()

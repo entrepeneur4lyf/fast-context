@@ -487,7 +487,7 @@ impl LuaExtractor {
     }
 
     fn get_node_text(&self, node: &Node, source: &str) -> String {
-        safe_node_text(&node, source)
+        safe_node_text(node, source)
     }
 
     fn clean_string_literal(&self, text: &str) -> String {

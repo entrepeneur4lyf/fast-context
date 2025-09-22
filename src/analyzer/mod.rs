@@ -101,13 +101,14 @@ impl FastContextAnalyzer {
         let runtime = Runtime::new()
             .map_err(|e| napi::Error::from_reason(format!("Failed to create runtime: {e}")))?;
 
-        // Validate project root exists
-        if !std::path::Path::new(&config.project_root).exists() {
-            return Err(napi::Error::from_reason(format!(
-                "Project root does not exist: {}",
-                config.project_root
-            )));
-        }
+        // Validate project root exists and is accessible
+        crate::validation::validate_directory_path(&config.project_root)
+            .map_err(|e| napi::Error::from_reason(format!(
+                "Invalid project root '{}': {}", config.project_root, e
+            )))?;
+
+        // Validate configuration parameters
+        Self::validate_config(&config)?;
 
         // Initialize domain architecture components
         let domain_metrics = Arc::new(domains::core::Metrics::new());
@@ -142,7 +143,7 @@ impl FastContextAnalyzer {
         let js_result = AnalysisResultJs {
             file_count: summary.file_count,
             symbol_count: summary.symbol_count,
-            relationship_count: 0,
+            relationship_count: summary.relationships.len() as u32,
             languages: summary.languages.clone(),
             duration_ms: duration.as_millis() as u32,
             memory_usage_mb: None,
@@ -174,7 +175,7 @@ impl FastContextAnalyzer {
             *analysis = Some(AnalysisResult {
                 file_count: summary.file_count as usize,
                 symbol_count: summary.symbol_count as usize,
-                relationship_count: 0,
+                relationship_count: summary.relationships.len(),
                 languages,
                 graph: petgraph::Graph::new(),
             });
@@ -287,15 +288,11 @@ impl FastContextAnalyzer {
     pub fn find_symbols_in_file(&self, file_path: String) -> napi::Result<Vec<String>> {
         use std::path::Path;
 
-        let full_path = if Path::new(&file_path).is_absolute() {
-            file_path
-        } else {
-            format!("{}/{}", self.project_root, file_path)
-        };
-
-        if !Path::new(&full_path).exists() {
-            return Err(napi::Error::from_reason(format!("File not found: {full_path}")));
-        }
+        // Use secure path resolution within project boundaries
+        let full_path = crate::validation::resolve_project_path(
+            &std::path::Path::new(&self.project_root), 
+            &file_path
+        ).map_err(|e| napi::Error::from_reason(format!("Invalid file path '{}': {}", file_path, e)))?;
 
         crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
             .find_symbols_in_file(full_path)
@@ -363,6 +360,51 @@ impl FastContextAnalyzer {
         }
 
         false
+    }
+
+    /// Validate analyzer configuration for security
+    fn validate_config(config: &AnalyzerConfig) -> napi::Result<()> {
+        use crate::validation::*;
+        
+        // Validate project root path (already done above, but double-check for security)
+        validate_config_key("project_root")?;
+        if config.project_root.trim().is_empty() {
+            return Err(napi::Error::from_reason("Project root cannot be empty"));
+        }
+        
+        // Validate languages if provided
+        if let Some(ref languages) = config.languages {
+            validate_languages(languages)
+                .map_err(|e| napi::Error::from_reason(format!("Invalid languages: {}", e)))?;
+        }
+        
+        // Validate ignore patterns if provided
+        if let Some(ref patterns) = config.ignore_patterns {
+            validate_ignore_patterns(patterns)
+                .map_err(|e| napi::Error::from_reason(format!("Invalid ignore patterns: {}", e)))?;
+        }
+        
+        // Validate cache policy if provided
+        if let Some(ref policy) = config.cache_policy {
+            validate_string(policy, 50, "cache_policy")?;
+            let allowed_policies = ["auto", "minimal", "balanced", "adaptive", "persistent"];
+            if !allowed_policies.contains(&policy.to_lowercase().as_str()) {
+                return Err(napi::Error::from_reason(
+                    format!("Invalid cache policy: {}. Allowed: {}", policy, allowed_policies.join(", "))
+                ));
+            }
+        }
+        
+        // Validate numeric parameters
+        if let Some(max_files) = config.max_files {
+            if max_files > 1000000 {
+                return Err(napi::Error::from_reason(
+                    "max_files too large: must be <= 1,000,000"
+                ));
+            }
+        }
+        
+        Ok(())
     }
 }
 
