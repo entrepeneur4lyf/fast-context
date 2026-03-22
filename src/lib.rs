@@ -51,8 +51,8 @@ pub mod validation;  // Input validation and security
 // 🏗️ NEW MODULAR ARCHITECTURE - Proper separation of concerns
 #[cfg(feature = "nodejs")]
 pub mod analyzer;    // FastContextAnalyzer implementation
-#[cfg(feature = "nodejs")]
-pub mod api;         // Unified API layer (Node.js only)
+#[cfg(any())]
+pub mod api;         // Temporarily excluded from the Node build until reconciled
 pub mod graph;       // Graph algorithms and data structures
 pub mod utils;
 mod test_display;       // Utility functions
@@ -73,16 +73,22 @@ pub mod core;        // Shared Send + Sync CoreAnalyzer
 #[cfg(feature = "python")]
 pub mod python_bindings;
 #[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_util.rs"]
 pub mod python_bindings_util;
 #[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_graph.rs"]
 pub mod python_bindings_graph;
 #[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_export.rs"]
 pub mod python_bindings_export;
 #[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_query.rs"]
 pub mod python_bindings_query;
 #[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_config.rs"]
 pub mod python_bindings_config;
 #[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_cache.rs"]
 pub mod python_bindings_cache;
 
 // 🎯 RE-EXPORTS - Clean public API
@@ -95,4 +101,5 @@ pub use utils::{get_version, get_supported_languages, detect_language, check_con
 
 // Additional re-exports for testing and advanced usage
 pub use core::CoreAnalyzer;
+pub use errors::{FastContextError, FastContextResult};
 pub use parsers::LanguageId;

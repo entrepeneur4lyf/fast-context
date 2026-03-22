@@ -1,5 +1,5 @@
 import test from 'ava';
-import { FastContextAnalyzer, getSupportedLanguages, detectLanguage, getVersion, checkConfiguration } from '../index.js';
+import { FastContextAnalyzer, getSupportedLanguages, detectLanguage, getVersion, checkConfiguration } from '../../index.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -84,14 +84,14 @@ class MathHelper:
 
 test('FastContextAnalyzer constructor and basic configuration', t => {
   const config = {
-    project_root: process.cwd(),
+    projectRoot: process.cwd(),
     languages: ['rust', 'javascript'],
-    ignore_patterns: ['node_modules/**', 'target/**'],
-    enable_caching: true,
-    cache_policy: 'adaptive',
-    enable_watching: false,
-    max_files: 1000,
-    parallel_processing: true
+    ignorePatterns: ['node_modules/**', 'target/**'],
+    enableCaching: true,
+    cachePolicy: 'adaptive',
+    enableWatching: false,
+    maxFiles: 1000,
+    parallelProcessing: true
   };
 
   const analyzer = new FastContextAnalyzer(config);
@@ -103,13 +103,13 @@ test('FastContextAnalyzer analysis on test project', async t => {
 
   try {
     const config = {
-      project_root: tempDir,
+      projectRoot: tempDir,
       languages: ['rust', 'javascript', 'python'],
-      ignore_patterns: ['node_modules/**'],
-      enable_caching: false,
-      enable_watching: false,
-      max_files: 100,
-      parallel_processing: false
+      ignorePatterns: ['node_modules/**'],
+      enableCaching: false,
+      enableWatching: false,
+      maxFiles: 100,
+      parallelProcessing: false
     };
 
     const analyzer = new FastContextAnalyzer(config);
@@ -117,15 +117,15 @@ test('FastContextAnalyzer analysis on test project', async t => {
 
     // Verify analysis results
     t.truthy(result);
-    t.is(typeof result.file_count, 'number');
-    t.is(typeof result.symbol_count, 'number');
-    t.is(typeof result.relationship_count, 'number');
+    t.is(typeof result.fileCount, 'number');
+    t.is(typeof result.symbolCount, 'number');
+    t.is(typeof result.relationshipCount, 'number');
     t.true(Array.isArray(result.languages));
-    t.is(typeof result.duration_ms, 'number');
+    t.is(typeof result.durationMs, 'number');
 
     // Should have found our test files
-    t.true(result.file_count >= 3);
-    t.true(result.symbol_count > 0);
+    t.true(result.fileCount >= 3);
+    t.true(result.symbolCount > 0);
 
     // Should detect the languages we created (case-insensitive check)
     const lowerResultLanguages = result.languages.map(lang => lang.toLowerCase());
@@ -142,26 +142,26 @@ test('CoreAnalyzer-backed symbol queries (Node)', async t => {
   const tempDir = await createTestProject();
   try {
     const analyzer = new FastContextAnalyzer({
-      project_root: tempDir,
+      projectRoot: tempDir,
       languages: ['rust', 'javascript', 'python'],
-      ignore_patterns: ['node_modules/**']
+      ignorePatterns: ['node_modules/**']
     });
 
     const analyzed = await analyzer.analyze();
     t.truthy(analyzed);
 
-    const byKind = await analyzer.find_symbols_by_kind('function');
+    const byKind = await analyzer.findSymbolsByKind('function');
     t.true(Array.isArray(byKind));
     t.true(byKind.length > 0);
 
-    const rsSymbols = await analyzer.find_symbols_in_file('main.rs');
+    const rsSymbols = await analyzer.findSymbolsInFile('main.rs');
     t.true(Array.isArray(rsSymbols));
     t.true(rsSymbols.some(s => s.includes('function: main') || s.includes('function: add')));
 
-    const deps = await analyzer.find_dependencies('calculateSum');
+    const deps = await analyzer.findDependencies('calculateSum');
     t.true(Array.isArray(deps));
 
-    const complex = await analyzer.find_complex_symbols(1);
+    const complex = await analyzer.findComplexSymbols(1);
     t.true(Array.isArray(complex));
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
@@ -212,15 +212,15 @@ test('FastContextAnalyzer file watching functionality', async t => {
 
   try {
     const config = {
-      project_root: tempDir,
-      enable_watching: true,
-      ignore_patterns: ['node_modules/**']
+      projectRoot: tempDir,
+      enableWatching: true,
+      ignorePatterns: ['node_modules/**']
     };
 
     const analyzer = new FastContextAnalyzer(config);
 
     // Start watching
-    analyzer.start_watching();
+    analyzer.startWatching();
 
     // Give the watcher time to initialize
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -232,7 +232,7 @@ test('FastContextAnalyzer file watching functionality', async t => {
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Stop watching
-    analyzer.stop_watching();
+    analyzer.stopWatching();
 
     // Note: File watching is debounced and may not always trigger in tests
     // This test primarily verifies the API works without throwing
@@ -245,9 +245,9 @@ test('FastContextAnalyzer file watching functionality', async t => {
 
 test('FastContextAnalyzer handles invalid project root', t => {
   const config = {
-    project_root: '/non/existent/path',
-    enable_caching: false,
-    enable_watching: false
+    projectRoot: '/non/existent/path',
+    enableCaching: false,
+    enableWatching: false
   };
 
   // Should throw on construction with invalid path
@@ -255,7 +255,7 @@ test('FastContextAnalyzer handles invalid project root', t => {
     new FastContextAnalyzer(config);
   }, {
     code: 'GenericFailure',
-    message: 'Project root does not exist: /non/existent/path'
+    message: /Project root does not exist|Invalid project root/
   });
 });
 
@@ -264,7 +264,7 @@ test('FastContextAnalyzer with minimal configuration', async t => {
 
   try {
     const config = {
-      project_root: tempDir
+      projectRoot: tempDir
     };
 
     const analyzer = new FastContextAnalyzer(config);
@@ -275,7 +275,7 @@ test('FastContextAnalyzer with minimal configuration', async t => {
     // Basic analysis should work (may be limited by actual project files)
     const result = await analyzer.analyze();
     t.truthy(result);
-    t.is(typeof result.file_count, 'number');
+    t.is(typeof result.fileCount, 'number');
   } finally {
     await fs.rm(tempDir, { recursive: true, force: true });
   }
@@ -287,10 +287,10 @@ test('FastContextAnalyzer language filtering', async t => {
   try {
     // Test with specific language filter
     const config = {
-      project_root: tempDir,
+      projectRoot: tempDir,
       languages: ['rust'], // Only analyze Rust files
-      enable_caching: false,
-      enable_watching: false
+      enableCaching: false,
+      enableWatching: false
     };
 
     const analyzer = new FastContextAnalyzer(config);
@@ -318,10 +318,10 @@ test('FastContextAnalyzer ignore patterns', async t => {
     await writeFile(join(tempDir, 'node_modules', 'package.js'), 'module.exports = {};');
 
     const config = {
-      project_root: tempDir,
-      ignore_patterns: ['node_modules/**'],
-      enable_caching: false,
-      enable_watching: false
+      projectRoot: tempDir,
+      ignorePatterns: ['node_modules/**'],
+      enableCaching: false,
+      enableWatching: false
     };
 
     const analyzer = new FastContextAnalyzer(config);

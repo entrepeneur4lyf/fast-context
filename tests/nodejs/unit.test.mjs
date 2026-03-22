@@ -1,5 +1,5 @@
 import test from 'ava';
-import { getSupportedLanguages, detectLanguage, getVersion, checkConfiguration } from '../index.js';
+import { getSupportedLanguages, detectLanguage, getVersion, checkConfiguration } from '../../index.js';
 
 // Unit tests for utility functions that don't require heavy setup
 
@@ -105,7 +105,7 @@ test('checkConfiguration returns status message', t => {
 });
 
 test('Module exports contain expected functions', async t => {
-  const module = await import('../index.js');
+  const module = await import('../../index.js');
   
   // Core utility functions
   t.is(typeof module.getSupportedLanguages, 'function');
@@ -118,7 +118,7 @@ test('Module exports contain expected functions', async t => {
 });
 
 test('FastContextAnalyzer class exists and is constructible', async t => {
-  const { FastContextAnalyzer } = await import('../index.js');
+  const { FastContextAnalyzer } = await import('../../index.js');
   
   t.is(typeof FastContextAnalyzer, 'function');
   
@@ -131,7 +131,7 @@ test('FastContextAnalyzer class exists and is constructible', async t => {
 });
 
 test('FastContextAnalyzer methods exist', async t => {
-  const { FastContextAnalyzer } = await import('../index.js');
+  const { FastContextAnalyzer } = await import('../../index.js');
   
   const config = { projectRoot: process.cwd() };
   const analyzer = new FastContextAnalyzer(config);

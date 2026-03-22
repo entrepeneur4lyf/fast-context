@@ -71,6 +71,12 @@ pub struct FastContextAnalyzer {
     #[allow(dead_code)]
     runtime: Arc<Runtime>,
     project_root: String,
+    languages: Vec<String>,
+    ignore_patterns: Vec<String>,
+    #[allow(dead_code)]
+    max_files: Option<u32>,
+    #[allow(dead_code)]
+    parallel_processing: bool,
 
     // Thread-safe shared state using Arc<RwLock<T>>
     analysis: Arc<RwLock<Option<AnalysisResult>>>,
@@ -121,6 +127,10 @@ impl FastContextAnalyzer {
         Ok(Self {
             runtime: Arc::new(runtime),
             project_root: config.project_root,
+            languages: config.languages.unwrap_or_default(),
+            ignore_patterns: config.ignore_patterns.unwrap_or_default(),
+            max_files: config.max_files,
+            parallel_processing: config.parallel_processing.unwrap_or(true),
             analysis: Arc::new(RwLock::new(None)),
             query_engine: Arc::new(RwLock::new(None)),
             cache_manager: Arc::new(RwLock::new(None)),
@@ -135,7 +145,11 @@ impl FastContextAnalyzer {
     /// Analyze the codebase and return analysis results
     #[napi]
     pub fn analyze(&self) -> napi::Result<AnalysisResultJs> {
-        let core = crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None);
+        let core = crate::core::CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        );
         let start_time = std::time::Instant::now();
         let summary = core.analyze().map_err(|e| napi::Error::from_reason(e.to_string()))?;
         let duration = start_time.elapsed();
@@ -278,7 +292,11 @@ impl FastContextAnalyzer {
     /// Find symbols by kind (function, class, variable, etc.)
     #[napi]
     pub fn find_symbols_by_kind(&self, kind: String) -> napi::Result<Vec<String>> {
-        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+        crate::core::CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        )
             .find_symbols_by_kind(kind)
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
@@ -286,23 +304,29 @@ impl FastContextAnalyzer {
     /// Find symbols in a specific file
     #[napi]
     pub fn find_symbols_in_file(&self, file_path: String) -> napi::Result<Vec<String>> {
-        use std::path::Path;
-
         // Use secure path resolution within project boundaries
         let full_path = crate::validation::resolve_project_path(
             &std::path::Path::new(&self.project_root), 
             &file_path
         ).map_err(|e| napi::Error::from_reason(format!("Invalid file path '{}': {}", file_path, e)))?;
 
-        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
-            .find_symbols_in_file(full_path)
+        crate::core::CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        )
+            .find_symbols_in_file(full_path.to_string_lossy().into_owned())
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
 
     /// Find dependencies of a symbol
     #[napi]
     pub fn find_dependencies(&self, symbol_name: String) -> napi::Result<Vec<String>> {
-        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+        crate::core::CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        )
             .find_dependencies(symbol_name)
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
@@ -310,7 +334,11 @@ impl FastContextAnalyzer {
     /// Find complex symbols (high complexity)
     #[napi]
     pub fn find_complex_symbols(&self, complexity_threshold: u32) -> napi::Result<Vec<String>> {
-        crate::core::CoreAnalyzer::new(self.project_root.clone(), None, None)
+        crate::core::CoreAnalyzer::new(
+            self.project_root.clone(),
+            Some(self.languages.clone()),
+            Some(self.ignore_patterns.clone()),
+        )
             .find_complex_symbols(complexity_threshold)
             .map_err(|e| napi::Error::from_reason(e.to_string()))
     }
@@ -367,7 +395,8 @@ impl FastContextAnalyzer {
         use crate::validation::*;
         
         // Validate project root path (already done above, but double-check for security)
-        validate_config_key("project_root")?;
+        validate_config_key("project_root")
+            .map_err(|e| napi::Error::from_reason(format!("Invalid config key: {}", e)))?;
         if config.project_root.trim().is_empty() {
             return Err(napi::Error::from_reason("Project root cannot be empty"));
         }
@@ -386,7 +415,8 @@ impl FastContextAnalyzer {
         
         // Validate cache policy if provided
         if let Some(ref policy) = config.cache_policy {
-            validate_string(policy, 50, "cache_policy")?;
+            validate_string(policy, 50, "cache_policy")
+                .map_err(|e| napi::Error::from_reason(format!("Invalid cache policy: {}", e)))?;
             let allowed_policies = ["auto", "minimal", "balanced", "adaptive", "persistent"];
             if !allowed_policies.contains(&policy.to_lowercase().as_str()) {
                 return Err(napi::Error::from_reason(

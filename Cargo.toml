@@ -139,3 +139,31 @@ codegen-units = 1
 [[bench]]
 name = "performance_benchmarks"
 harness = false
+
+[[test]]
+name = "api_integration_tests"
+path = "tests/rust/api_integration_tests.rs"
+
+[[test]]
+name = "error_handling_tests"
+path = "tests/rust/error_handling_tests.rs"
+
+[[test]]
+name = "graph_bindings_tests"
+path = "tests/rust/graph_bindings_tests.rs"
+
+[[test]]
+name = "integration_tests"
+path = "tests/rust/integration_tests.rs"
+
+[[test]]
+name = "nodejs_api_tests"
+path = "tests/rust/nodejs_api_tests.rs"
+
+[[test]]
+name = "performance_tests"
+path = "tests/rust/performance_tests.rs"
+
+[[test]]
+name = "symbol_extraction_tests"
+path = "tests/rust/symbol_extraction_tests.rs"

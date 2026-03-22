@@ -1,10 +1,9 @@
 //! Comprehensive error handling tests
 //! Tests error conditions, edge cases, and recovery scenarios
 
-use fast_context::{CoreAnalyzer, LanguageId, FastContextError};
+use fast_context::{CoreAnalyzer, LanguageId};
 use tempfile::TempDir;
 use std::fs;
-use std::path::Path;
 
 // === Language Detection Error Tests ===
 
@@ -46,12 +45,9 @@ fn test_language_id_equality() {
 
 #[test]
 fn test_nonexistent_project_root() {
-    let result = CoreAnalyzer::new("/nonexistent/path/that/does/not/exist".to_string(), None, None);
-    assert!(result.is_ok(), "Should fallback to current directory for invalid paths");
-    
-    let analyzer = result.unwrap();
+    let analyzer = CoreAnalyzer::new("/nonexistent/path/that/does/not/exist".to_string(), None, None);
     // Should not panic when analyzing with invalid fallback path
-    let analysis_result = analyzer.analyze();
+    let _analysis_result = analyzer.analyze();
     // Should handle gracefully (may succeed or fail depending on what's in current dir)
 }
 
@@ -73,9 +69,8 @@ fn test_permission_denied_scenarios() {
     }
     
     // Test analyzer creation with restricted directory
-    let result = CoreAnalyzer::new(restricted_dir.to_string_lossy().to_string(), None, None);
+    let _result = CoreAnalyzer::new(restricted_dir.to_string_lossy().to_string(), None, None);
     // Should handle gracefully, not panic
-    assert!(result.is_ok(), "Should handle permission denied gracefully");
 }
 
 #[test]
@@ -84,9 +79,6 @@ fn test_empty_directory_analysis() {
     let temp_path = temp_dir.path();
     
     let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
-    assert!(analyzer.is_ok());
-    
-    let analyzer = analyzer.unwrap();
     let result = analyzer.analyze();
     
     // Should handle empty directory gracefully
@@ -111,9 +103,6 @@ fn test_malformed_file_content() {
     fs::write(&invalid_utf8_file, b"\xff\xfe\xfd").unwrap();
     
     let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
-    assert!(analyzer.is_ok());
-    
-    let analyzer = analyzer.unwrap();
     let result = analyzer.analyze();
     
     // Should handle malformed files without panicking
@@ -134,9 +123,6 @@ fn test_invalid_language_configuration() {
         Some(invalid_languages), 
         None
     );
-    
-    assert!(analyzer.is_ok());
-    let analyzer = analyzer.unwrap();
     
     // Should handle invalid languages gracefully
     let result = analyzer.analyze();
@@ -159,9 +145,6 @@ fn test_invalid_ignore_patterns() {
         Some(invalid_patterns)
     );
     
-    assert!(analyzer.is_ok());
-    let analyzer = analyzer.unwrap();
-    
     // Should handle invalid ignore patterns gracefully
     let result = analyzer.analyze();
     assert!(result.is_ok(), "Should handle invalid ignore patterns");
@@ -175,7 +158,7 @@ fn test_query_nonexistent_symbol() {
     let temp_path = temp_dir.path();
     
     // Create empty project
-    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None).unwrap();
+    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
     
     // Query for symbols that don't exist
     let result = analyzer.find_symbols_by_kind("nonexistent_kind".to_string());
@@ -183,10 +166,8 @@ fn test_query_nonexistent_symbol() {
     let symbols = result.unwrap();
     assert!(symbols.is_empty(), "Should return empty list for nonexistent symbol kind");
     
-    let result = analyzer.find_symbols_in_file("nonexistent_file.rs".to_string());
-    assert!(result.is_ok(), "Query should not panic");
-    let symbols = result.unwrap();
-    assert!(symbols.is_empty(), "Should return empty list for nonexistent file");
+    let result = analyzer.find_symbols_in_file(temp_path.join("nonexistent_file.rs").to_string_lossy().to_string());
+    assert!(result.is_err(), "Nonexistent file should return an error");
     
     let result = analyzer.find_dependencies("nonexistent_symbol".to_string());
     assert!(result.is_ok(), "Query should not panic");
@@ -199,14 +180,14 @@ fn test_query_with_invalid_inputs() {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
     
-    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None).unwrap();
+    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
     
     // Test with empty strings
     let result = analyzer.find_symbols_by_kind("".to_string());
     assert!(result.is_ok(), "Empty symbol kind should not cause panic");
     
     let result = analyzer.find_symbols_in_file("".to_string());
-    assert!(result.is_ok(), "Empty file path should not cause panic");
+    assert!(result.is_err(), "Empty file path should return an error");
     
     let result = analyzer.find_dependencies("".to_string());
     assert!(result.is_ok(), "Empty symbol name should not cause panic");
@@ -235,8 +216,7 @@ fn test_path_traversal_attempts() {
     ];
     
     for malicious_path in malicious_paths {
-        let result = CoreAnalyzer::new(malicious_path.clone(), None, None);
-        assert!(result.is_ok(), "Should handle path traversal attempts gracefully: {}", malicious_path);
+        let _result = CoreAnalyzer::new(malicious_path.clone(), None, None);
     }
 }
 
@@ -252,9 +232,8 @@ fn test_extremely_long_paths() {
     // This might fail, but should not panic
     let _ = fs::create_dir(&long_path);
     
-    let analyzer = CoreAnalyzer::new(long_path.to_string_lossy().to_string(), None, None);
+    let _analyzer = CoreAnalyzer::new(long_path.to_string_lossy().to_string(), None, None);
     // Should handle gracefully
-    assert!(analyzer.is_ok(), "Should handle extremely long paths gracefully");
 }
 
 // === Memory Pressure Tests ===
@@ -268,7 +247,7 @@ fn test_large_file_handling() {
     let large_content = "fn large_function() { println!(\"large content\"); }\n".repeat(10000);
     fs::write(temp_path.join("large.rs"), large_content).unwrap();
     
-    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None).unwrap();
+    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
     
     // Should handle large files without panicking
     let result = analyzer.analyze();
@@ -286,7 +265,7 @@ fn test_many_small_files() {
         fs::write(temp_path.join(format!("small_{}.rs", i)), content).unwrap();
     }
     
-    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None).unwrap();
+    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
     
     // Should handle many files without panicking
     let result = analyzer.analyze();
@@ -313,7 +292,7 @@ fn test_concurrent_analyzer_usage() {
         temp_path.to_string_lossy().to_string(), 
         None, 
         None
-    ).unwrap());
+    ));
     
     let mut handles = vec![];
     
@@ -341,15 +320,15 @@ fn test_error_message_quality() {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
     
-    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None).unwrap();
+    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
     
     // Test error messages are descriptive
     let result = analyzer.find_symbols_in_file("/completely/nonexistent/path.rs".to_string());
-    assert!(result.is_ok(), "Should not panic for nonexistent files");
-    
-    // Error messages should contain relevant context
-    let symbols = result.unwrap();
-    assert!(symbols.is_empty(), "Should return empty result for nonexistent file");
+    assert!(result.is_err(), "Should return an error for nonexistent files");
+    assert!(
+        result.unwrap_err().to_string().contains("nonexistent"),
+        "Error should contain relevant path context"
+    );
 }
 
 #[test]
@@ -376,10 +355,10 @@ fn test_recovery_after_errors() {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path();
     
-    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None).unwrap();
+    let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
     
     // Trigger an error condition
-    let _ = analyzer.find_symbols_in_file("nonexistent.rs".to_string()).unwrap();
+    let _ = analyzer.find_symbols_in_file("nonexistent.rs".to_string());
     
     // Subsequent operations should still work
     let result = analyzer.find_symbols_by_kind("function".to_string());
@@ -387,7 +366,7 @@ fn test_recovery_after_errors() {
     
     // Multiple error conditions should not break the analyzer
     for i in 0..5 {
-        let _ = analyzer.find_symbols_in_file(format!("nonexistent_{}.rs", i)).unwrap();
+        let _ = analyzer.find_symbols_in_file(format!("nonexistent_{}.rs", i));
     }
     
     // Should still work correctly

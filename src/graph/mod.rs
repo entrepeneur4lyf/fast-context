@@ -5,8 +5,6 @@
 
 pub mod operations;
 pub mod petgraph_impl;
-#[cfg(feature = "nodejs")]
-pub mod bindings;
 
 #[cfg(feature = "nodejs")]
 use napi_derive::napi;
@@ -20,6 +18,7 @@ use ts_rs::TS;
 /// Undirected graph implementation
 #[cfg(feature = "nodejs")]
 #[napi]
+#[derive(Clone)]
 #[derive(TS)]
 #[ts(export)]
 pub struct RustworkxGraph {
@@ -534,6 +533,7 @@ impl RustworkxGraph {
 /// Directed graph implementation
 #[cfg(feature = "nodejs")]
 #[napi]
+#[derive(Clone)]
 #[derive(TS)]
 #[ts(export)]
 pub struct RustworkxDiGraph {

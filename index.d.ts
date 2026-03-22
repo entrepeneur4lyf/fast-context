@@ -142,37 +142,180 @@ export interface AnalysisProgress {
 export declare function getVersion(): string
 /** Get list of supported programming languages */
 export declare function getSupportedLanguages(): Array<string>
-
-// ========================================
-// Auto-generated types from Rust structs
-// ========================================
-
-export type FastContextAnalyzerType = Record<string, never>;
-/** AnalyzerConfig type definition */
-export interface AnalyzerConfig { projectRoot: string, languages: Array<string> | null, ignorePatterns: Array<string> | null, enableCaching: boolean | null, cachePolicy: string | null, enableWatching: boolean | null, maxFiles: number | null, parallelProcessing: boolean | null, }
-/** AnalysisResultJs type definition */
-export interface AnalysisResultJs { fileCount: number, symbolCount: number, relationshipCount: number, languages: Array<string>, durationMs: number, memoryUsageMb: number | null, }
-/** QueryResultJs type definition */
-export interface QueryResultJs { symbols: Array<SymbolInfoJs>, context: ContextInfoJs, suggestions: Array<string>, totalResults: number, }
-/** SymbolInfoJs type definition */
-export interface SymbolInfoJs { name: string, qualifiedName: string, kind: string, filePath: string, language: string, startLine: number, endLine: number, complexity: number, dependencies: Array<string>, dependents: Array<string>, signature: string | null, documentation: string | null, modifiers: Array<string>, }
-/** ContextInfoJs type definition */
-export interface ContextInfoJs { totalSymbols: number, filesInvolved: number, complexityScore: number, architecturalPatterns: Array<string>, potentialIssues: Array<string>, }
-/** ExportOptionsJs type definition */
-export interface ExportOptionsJs { prettyPrint: boolean | null, includeDetails: boolean | null, includeRelationships: boolean | null, maxSymbols: number | null, format: string | null, streaming: boolean | null, }
-/** PaginationOptionsJs type definition */
-export interface PaginationOptionsJs { page: number, pageSize: number, sortField: string | null, sortDirection: string | null, }
-/** FilterOptionsJs type definition */
-export interface FilterOptionsJs { symbolKinds: Array<string> | null, languages: Array<string> | null, filePatterns: Array<string> | null, minComplexity: number | null, maxComplexity: number | null, documentedOnly: boolean | null, }
-/** FileChangeEventJs type definition */
-export interface FileChangeEventJs { changeType: string, filePath: string, oldPath: string | null, timestamp: number, language: string | null, affectsAnalysis: boolean, }
-/** FileChangeBatchJs type definition */
-export interface FileChangeBatchJs { changes: Array<FileChangeEventJs>, changeCount: number, batchTimestamp: number, requiresReanalysis: boolean, impactLevel: string, }
-/** StreamingOptionsJs type definition */
-export interface StreamingOptionsJs { enabled: boolean, chunkSize: number, includeProgress: boolean | null, chunkTimeoutMs: number | null, }
-/** QueryChunkJs type definition */
-export interface QueryChunkJs { symbols: Array<SymbolInfoJs>, chunkIndex: number, totalChunks: number, isLast: boolean, progress: number, processingTimeMs: number, }
-/** RustworkxGraph type definition */
-export interface RustworkxGraph {  }
-/** RustworkxDiGraph type definition */
-export interface RustworkxDiGraph {  }
+/** Detect the programming language of a file based on its extension */
+export declare function detectLanguage(filePath: string): string | null
+/** Check if the analyzer configuration is valid */
+export declare function checkConfiguration(config?: AnalyzerConfig | undefined | null): string
+/** Get system information */
+export declare function getSystemInfo(): string
+/**
+ * Fast-Context codebase analyzer for Node.js
+ *
+ * THREAD-SAFE ARCHITECTURE: This analyzer now uses proper synchronization
+ * for all shared state while maintaining 100% backward compatibility.
+ */
+export declare class FastContextAnalyzer {
+  constructor(config: AnalyzerConfig)
+  /** Analyze the codebase and return analysis results */
+  analyze(): AnalysisResultJs
+  /** Start watching the codebase for changes */
+  startWatching(): void
+  /** Stop watching the codebase */
+  stopWatching(): void
+  /** Get the current analysis results */
+  getAnalysis(): AnalysisResultJs | null
+  /** Find symbols by kind (function, class, variable, etc.) */
+  findSymbolsByKind(kind: string): Array<string>
+  /** Find symbols in a specific file */
+  findSymbolsInFile(filePath: string): Array<string>
+  /** Find dependencies of a symbol */
+  findDependencies(symbolName: string): Array<string>
+  /** Find complex symbols (high complexity) */
+  findComplexSymbols(complexityThreshold: number): Array<string>
+}
+/** Undirected graph implementation */
+export declare class RustworkxGraph {
+  constructor()
+  addNode(weight: string): number
+  addEdge(nodeA: number, nodeB: number, weight: number): number | null
+  nodeCount(): number
+  edgeCount(): number
+  removeNode(node: number): boolean
+  removeEdge(nodeA: number, nodeB: number): boolean
+  hasEdge(nodeA: number, nodeB: number): boolean
+  getNodeData(node: number): string | null
+  getEdgeData(nodeA: number, nodeB: number): number | null
+  neighbors(node: number): Array<number>
+  clear(): void
+  /**
+   * Dijkstra's shortest path algorithm
+   * Returns a list of [nodeId, distance] pairs for JavaScript compatibility
+   */
+  dijkstraShortestPaths(source: number, target?: number | undefined | null): Array<Array<number>>
+  /**
+   * All-pairs shortest paths using a simple implementation
+   * Returns a 2D matrix of shortest distances between all pairs of nodes
+   */
+  allPairsShortestPaths(): Array<Array<number | undefined | null>>
+  /**
+   * Betweenness centrality for undirected graphs
+   * Returns a list of [nodeId, centrality] pairs
+   */
+  betweennessCentrality(normalized?: boolean | undefined | null): Array<Array<number>>
+  /**
+   * Closeness centrality for undirected graphs
+   * Returns a list of [nodeId, centrality] pairs
+   */
+  closenessCentrality(normalized?: boolean | undefined | null): Array<Array<number>>
+  /**
+   * Check if the undirected graph is bipartite
+   * Returns true if the graph can be colored with two colors
+   */
+  isBipartite(): boolean
+  /** Get the number of connected components */
+  numberConnectedComponents(): number
+  /**
+   * Get connected components using a simple DFS approach
+   * Returns a list of component IDs for each node
+   */
+  connectedComponents(): Array<number>
+  /**
+   * Depth-first search edges from a starting node
+   * Returns a list of [source, target] edge pairs in DFS order
+   */
+  dfsEdges(start: number): Array<Array<number>>
+  /**
+   * Breadth-first search edges from a starting node
+   * Returns a list of [source, target] edge pairs in BFS order
+   */
+  bfsEdges(start: number): Array<Array<number>>
+  /**
+   * Depth-first search tree from a starting node
+   * Returns a list of nodes in DFS order
+   */
+  dfsTree(start: number): Array<number>
+  /**
+   * Breadth-first search tree from a starting node
+   * Returns a list of nodes in BFS order
+   */
+  bfsTree(start: number): Array<number>
+}
+/** Directed graph implementation */
+export declare class RustworkxDiGraph {
+  constructor()
+  addNode(weight: string): number
+  addEdge(nodeA: number, nodeB: number, weight: number): number | null
+  nodeCount(): number
+  edgeCount(): number
+  removeNode(node: number): boolean
+  removeEdge(nodeA: number, nodeB: number): boolean
+  hasEdge(nodeA: number, nodeB: number): boolean
+  getNodeData(node: number): string | null
+  getEdgeData(nodeA: number, nodeB: number): number | null
+  neighbors(node: number): Array<number>
+  predecessors(node: number): Array<number>
+  successors(node: number): Array<number>
+  clear(): void
+  /**
+   * Dijkstra's shortest path algorithm for directed graphs
+   * Returns a list of [nodeId, distance] pairs for JavaScript compatibility
+   */
+  dijkstraShortestPaths(source: number, target?: number | undefined | null): Array<Array<number>>
+  /**
+   * All-pairs shortest paths for directed graphs
+   * Returns a 2D matrix of shortest distances between all pairs of nodes
+   */
+  allPairsShortestPaths(): Array<Array<number | undefined | null>>
+  /**
+   * Betweenness centrality for directed graphs
+   * Returns a list of [nodeId, centrality] pairs
+   */
+  betweennessCentrality(normalized?: boolean | undefined | null): Array<Array<number>>
+  /**
+   * Closeness centrality for directed graphs
+   * Returns a list of [nodeId, centrality] pairs
+   */
+  closenessCentrality(normalized?: boolean | undefined | null): Array<Array<number>>
+  /**
+   * Check if the directed graph is acyclic (DAG)
+   * Returns true if the graph contains no cycles
+   */
+  isDirectedAcyclicGraph(): boolean
+  /**
+   * Topological sort of the directed graph
+   * Returns nodes in topological order, or empty if graph has cycles
+   */
+  topologicalSort(): Array<number>
+  /**
+   * Get strongly connected components using Tarjan's algorithm
+   * Returns a list of component IDs for each node
+   */
+  stronglyConnectedComponents(): Array<number>
+  /** Get the number of strongly connected components */
+  numberStronglyConnectedComponents(): number
+  /**
+   * Get weakly connected components (treating edges as undirected)
+   * Returns a list of component IDs for each node
+   */
+  weaklyConnectedComponents(): Array<number>
+  /**
+   * Depth-first search edges from a starting node (directed)
+   * Returns a list of [source, target] edge pairs in DFS order
+   */
+  dfsEdges(start: number): Array<Array<number>>
+  /**
+   * Breadth-first search edges from a starting node (directed)
+   * Returns a list of [source, target] edge pairs in BFS order
+   */
+  bfsEdges(start: number): Array<Array<number>>
+  /**
+   * Depth-first search tree from a starting node (directed)
+   * Returns a list of nodes in DFS order
+   */
+  dfsTree(start: number): Array<number>
+  /**
+   * Breadth-first search tree from a starting node (directed)
+   * Returns a list of nodes in BFS order
+   */
+  bfsTree(start: number): Array<number>
+}

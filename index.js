@@ -62,12 +62,14 @@ switch (platform) {
   case 'win32':
     switch (arch) {
       case 'x64':
-        localFileExisted = existsSync(
-          join(__dirname, 'fast-context.win32-x64-msvc.node')
-        )
+        const localMsvcFile = join(__dirname, 'fast-context.win32-x64-msvc.node')
+        const localGnuFile = join(__dirname, 'fast-context.win32-x64-gnu.node')
+        localFileExisted = existsSync(localMsvcFile) || existsSync(localGnuFile)
         try {
-          if (localFileExisted) {
+          if (existsSync(localMsvcFile)) {
             nativeBinding = require('./fast-context.win32-x64-msvc.node')
+          } else if (existsSync(localGnuFile)) {
+            nativeBinding = require('./fast-context.win32-x64-gnu.node')
           } else {
             nativeBinding = require('fast-context-win32-x64-msvc')
           }

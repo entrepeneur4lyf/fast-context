@@ -15,7 +15,7 @@ use ts_rs::TS;
 #[ts(export)]
 pub struct GraphBindings {
     #[ts(skip)]
-    pub graph: super::RustworkxGraph,
+    pub graph: crate::graph::RustworkxGraph,
 }
 
 #[cfg(feature = "nodejs")]
@@ -25,7 +25,7 @@ impl GraphBindings {
     #[napi(constructor)]
     pub fn new() -> Self {
         Self {
-            graph: super::RustworkxGraph::new(),
+            graph: crate::graph::RustworkxGraph::new(),
         }
     }
 
@@ -169,7 +169,7 @@ impl GraphBindings {
 #[ts(export)]
 pub struct DiGraphBindings {
     #[ts(skip)]
-    pub digraph: super::RustworkxDiGraph,
+    pub digraph: crate::graph::RustworkxDiGraph,
 }
 
 #[cfg(feature = "nodejs")]
@@ -179,7 +179,7 @@ impl DiGraphBindings {
     #[napi(constructor)]
     pub fn new() -> Self {
         Self {
-            digraph: super::RustworkxDiGraph::new(),
+            digraph: crate::graph::RustworkxDiGraph::new(),
         }
     }
 

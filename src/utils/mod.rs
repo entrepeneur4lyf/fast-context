@@ -237,13 +237,27 @@ pub fn should_ignore_file(path: &str, ignore_patterns: &[String]) -> bool {
         return false;
     }
 
+    let normalized_path = path.replace('\\', "/");
+
     // Build a GlobSet for the provided patterns. On invalid patterns, fall back to non-ignore.
     let mut builder = globset::GlobSetBuilder::new();
     let mut added = false;
     for pat in ignore_patterns {
-        if let Ok(glob) = globset::Glob::new(pat) {
-            builder.add(glob);
-            added = true;
+        let normalized_pattern = pat.replace('\\', "/");
+        let candidate_patterns = if normalized_pattern.starts_with("**/")
+            || normalized_pattern.starts_with('/')
+            || normalized_pattern.contains(':')
+        {
+            vec![normalized_pattern]
+        } else {
+            vec![normalized_pattern.clone(), format!("**/{}", normalized_pattern)]
+        };
+
+        for candidate in candidate_patterns {
+            if let Ok(glob) = globset::Glob::new(&candidate) {
+                builder.add(glob);
+                added = true;
+            }
         }
     }
     if !added {
@@ -251,7 +265,7 @@ pub fn should_ignore_file(path: &str, ignore_patterns: &[String]) -> bool {
     }
 
     match builder.build() {
-        Ok(set) => set.is_match(path),
+        Ok(set) => set.is_match(&normalized_path),
         Err(_) => false,
     }
 }

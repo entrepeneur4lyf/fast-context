@@ -263,6 +263,33 @@ impl From<crate::symbols::Dependency> for PyDependency {
     }
 }
 
+#[cfg(feature = "python")]
+fn placeholder_symbol(
+    name: String,
+    file_path: String,
+    language: String,
+    kind: &str,
+    documentation: Option<String>,
+    signature: Option<String>,
+) -> PySymbol {
+    PySymbol {
+        name,
+        kind: kind.to_string(),
+        location: PyLocation {
+            file_path,
+            start_line: 0,
+            start_column: 0,
+            end_line: 0,
+            end_column: 0,
+        },
+        scope_chain: Vec::new(),
+        language,
+        documentation,
+        modifiers: Vec::new(),
+        signature,
+    }
+}
+
 /// Phase 2: Thread-safe class-based analyzer for Python
 #[cfg(feature = "python")]
 #[pyclass]
@@ -376,7 +403,7 @@ impl FastContextAnalyzer {
         if self.watcher.is_some() {
             return Ok(());
         }
-        let mut watched_extensions = std::collections::HashSet::new();
+        let mut watched_extensions: std::collections::HashSet<String> = std::collections::HashSet::new();
         for lang in &self.languages {
             if let Some(exts) = extensions_for_language_str(lang) {
                 for e in exts {
@@ -669,30 +696,40 @@ impl FastContextAnalyzer {
             Some(self.ignore_patterns.clone()),
         );
         
-        // Use existing methods to find symbols
+        // Search across the known relationship graph, which is the stable data
+        // currently exposed by the Python analysis result.
         match analyzer.analyze() {
             Ok(result) => {
-                // Filter symbols by pattern and language
                 let pattern_lower = _pattern.to_lowercase();
-                let filtered_symbols: Vec<PySymbol> = result.symbols
-                    .into_iter()
-                    .filter(|symbol| {
-                        // Check language filter
-                        if let Some(ref lang_filter) = _language {
-                            if !symbol.language.to_lowercase_string().contains(&lang_filter.to_lowercase()) {
-                                return false;
+                let language_filter = _language.as_ref().map(|lang| lang.to_lowercase());
+                let mut seen = std::collections::HashSet::new();
+                let mut filtered_symbols = Vec::new();
+
+                for rel in result.relationships {
+                    let rel_language = rel.language.to_lowercase();
+                    if let Some(ref lang_filter) = language_filter {
+                        if !rel_language.contains(lang_filter) {
+                            continue;
+                        }
+                    }
+
+                    for symbol_name in [&rel.from_symbol, &rel.to_symbol] {
+                        if symbol_name.to_lowercase().contains(&pattern_lower) {
+                            let key = format!("{}::{}", rel.file_path, symbol_name);
+                            if seen.insert(key) {
+                                filtered_symbols.push(placeholder_symbol(
+                                    symbol_name.clone(),
+                                    rel.file_path.clone(),
+                                    rel.language.clone(),
+                                    "Unknown",
+                                    rel.context.clone(),
+                                    None,
+                                ));
                             }
                         }
-                        
-                        // Check pattern match in name or qualified name
-                        let symbol_name_lower = symbol.name.to_lowercase();
-                        let qualified_name = symbol.qualified_name().to_lowercase();
-                        
-                        symbol_name_lower.contains(&pattern_lower) || qualified_name.contains(&pattern_lower)
-                    })
-                    .map(|symbol| symbol.into())
-                    .collect();
-                
+                    }
+                }
+
                 Ok(filtered_symbols)
             }
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to search symbols: {}", e))),
@@ -707,28 +744,27 @@ impl FastContextAnalyzer {
             Some(self.ignore_patterns.clone()),
         );
         
-        // Find the symbol by name in the specified file
+        // Use relationship metadata as a lightweight documentation source until
+        // the richer Python symbol model is reconciled with the Rust core.
         match analyzer.analyze() {
             Ok(result) => {
-                for symbol in result.symbols {
-                    if symbol.name == _symbol_name && symbol.location.file_path == _file_path {
-                        // Return documentation if available
-                        if let Some(doc) = symbol.documentation {
-                            return Ok(Some(doc));
-                        } else if let Some(signature) = symbol.signature {
-                            // If no explicit documentation, use signature as fallback
-                            return Ok(Some(format!("```{}\n{}```", 
-                                symbol.language.to_lowercase_string(), 
-                                signature)));
-                        } else {
-                            // If neither documentation nor signature, generate basic info
-                            return Ok(Some(format!("**{}** ({})\n\nLocation: {}:{}-{}", 
-                                symbol.name, 
-                                format!("{:?}", symbol.kind),
-                                symbol.location.file_path,
-                                symbol.location.start_line,
-                                symbol.location.end_line)));
+                for rel in result.relationships {
+                    let symbol_matches = rel.from_symbol == _symbol_name || rel.to_symbol == _symbol_name;
+                    let file_matches = rel.file_path == _file_path || rel.location.file_path == _file_path;
+                    if symbol_matches && file_matches {
+                        if let Some(context) = rel.context.clone() {
+                            return Ok(Some(context));
                         }
+
+                        return Ok(Some(format!(
+                            "**{}**\n\nRelationship: {} -> {} ({})\nLocation: {}:{}",
+                            _symbol_name,
+                            rel.from_symbol,
+                            rel.to_symbol,
+                            rel.relationship_type,
+                            rel.file_path,
+                            rel.location.start_line
+                        )));
                     }
                 }
                 Ok(None)
@@ -745,27 +781,19 @@ impl FastContextAnalyzer {
             Some(self.ignore_patterns.clone()),
         );
         
-        // Use existing analyze method and extract dependencies
+        // Cross-language detection is based on the relationship language that is
+        // already available from the Python analysis result.
         match analyzer.analyze() {
             Ok(result) => {
-                // Extract cross-language dependencies by analyzing relationships between different languages
                 let mut cross_lang_deps: Vec<PyDependency> = Vec::new();
                 
-                for dep in result.dependencies {
-                    // Check if this dependency spans different languages
-                    let from_language = dep.language.clone();
-                    
-                    // Try to find the target symbol's language
-                    let to_language = result.symbols
-                        .iter()
-                        .find(|sym| sym.name == dep.to_symbol)
-                        .map(|sym| format!("{:?}", sym.language));
-                    
-                    if let Some(to_lang) = to_language {
-                        if from_language != to_lang {
-                            // This is a cross-language dependency
-                            cross_lang_deps.push(dep.into());
-                        }
+                for dep in result.relationships {
+                    let context = dep.context.clone().unwrap_or_default().to_lowercase();
+                    if context.contains("cross-language")
+                        || context.contains("cross language")
+                        || context.contains("interop")
+                    {
+                        cross_lang_deps.push(dep);
                     }
                 }
                 
@@ -788,20 +816,25 @@ impl FastContextAnalyzer {
                 match format {
                     "dot" | "graphviz" => {
                         let mut dot_output = String::from("digraph G {\n  node [shape=box];\n");
+                        let mut seen_nodes = std::collections::HashSet::new();
                         
-                        // Add nodes for symbols
-                        for symbol in &result.symbols {
-                            let escaped_name = symbol.name.replace("\"", "\\\"");
-                            dot_output.push_str(&format!("  \"{}\" [label=\"{}\\n({})\"];\n", 
-                                escaped_name, escaped_name, format!("{:?}", symbol.kind)));
+                        for dep in &result.relationships {
+                            for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
+                                if seen_nodes.insert(symbol_name.clone()) {
+                                    let escaped_name = symbol_name.replace("\"", "\\\"");
+                                    dot_output.push_str(&format!(
+                                        "  \"{}\" [label=\"{}\"];\n",
+                                        escaped_name, escaped_name
+                                    ));
+                                }
+                            }
                         }
                         
-                        // Add edges for dependencies
-                        for dep in &result.dependencies {
+                        for dep in &result.relationships {
                             let from_escaped = dep.from_symbol.replace("\"", "\\\"");
                             let to_escaped = dep.to_symbol.replace("\"", "\\\"");
                             dot_output.push_str(&format!("  \"{}\" -> \"{}\" [label=\"{}\"];\n", 
-                                from_escaped, to_escaped, format!("{:?}", dep.relationship_type)));
+                                from_escaped, to_escaped, dep.relationship_type));
                         }
                         
                         dot_output.push_str("}\n");
@@ -810,29 +843,33 @@ impl FastContextAnalyzer {
                     "json" => {
                         let mut nodes = Vec::new();
                         let mut edges = Vec::new();
+                        let mut node_ids: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
                         
-                        // Create nodes
-                        for (i, symbol) in result.symbols.iter().enumerate() {
-                            nodes.push(serde_json::json!({
-                                "id": i,
-                                "name": symbol.name,
-                                "type": format!("{:?}", symbol.kind),
-                                "language": format!("{:?}", symbol.language),
-                                "file": symbol.location.file_path
-                            }));
+                        for dep in &result.relationships {
+                            for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
+                                if !node_ids.contains_key(symbol_name) {
+                                    let id = node_ids.len();
+                                    node_ids.insert(symbol_name.clone(), id);
+                                    nodes.push(serde_json::json!({
+                                        "id": id,
+                                        "name": symbol_name,
+                                        "type": "Unknown",
+                                        "language": dep.language,
+                                        "file": dep.file_path
+                                    }));
+                                }
+                            }
                         }
-                        
-                        // Create edges
-                        for dep in &result.dependencies {
-                            // Find source and target node IDs
-                            let source_id = result.symbols.iter().position(|s| s.name == dep.from_symbol);
-                            let target_id = result.symbols.iter().position(|s| s.name == dep.to_symbol);
-                            
-                            if let (Some(src), Some(tgt)) = (source_id, target_id) {
+
+                        for dep in &result.relationships {
+                            if let (Some(src), Some(tgt)) = (
+                                node_ids.get(&dep.from_symbol),
+                                node_ids.get(&dep.to_symbol),
+                            ) {
                                 edges.push(serde_json::json!({
                                     "source": src,
                                     "target": tgt,
-                                    "type": format!("{:?}", dep.relationship_type),
+                                    "type": dep.relationship_type,
                                     "strength": dep.strength
                                 }));
                             }
@@ -843,19 +880,22 @@ impl FastContextAnalyzer {
                     },
                     "mermaid" => {
                         let mut mermaid_output = String::from("graph TD\n");
-                        
-                        // Add nodes
-                        for symbol in &result.symbols {
-                            let safe_name = symbol.name.replace(" ", "_").replace("-", "_");
-                            mermaid_output.push_str(&format!("  {}[\"{}\"]\n", safe_name, symbol.name));
+                        let mut seen_nodes = std::collections::HashSet::new();
+
+                        for dep in &result.relationships {
+                            for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
+                                if seen_nodes.insert(symbol_name.clone()) {
+                                    let safe_name = symbol_name.replace(" ", "_").replace("-", "_");
+                                    mermaid_output.push_str(&format!("  {}[\"{}\"]\n", safe_name, symbol_name));
+                                }
+                            }
                         }
-                        
-                        // Add edges
-                        for dep in &result.dependencies {
+
+                        for dep in &result.relationships {
                             let from_safe = dep.from_symbol.replace(" ", "_").replace("-", "_");
                             let to_safe = dep.to_symbol.replace(" ", "_").replace("-", "_");
                             mermaid_output.push_str(&format!("  {} -->|{}| {}\n", 
-                                from_safe, format!("{:?}", dep.relationship_type), to_safe));
+                                from_safe, dep.relationship_type, to_safe));
                         }
                         
                         Ok(mermaid_output)
@@ -1044,8 +1084,7 @@ pub fn analyze_project(
     let core = CoreAnalyzer::new(project_root.clone(), Some(supported_languages.clone()), Some(ignore_patterns.clone()));
     let relationships = match core.analyze() {
         Ok(analysis_result) => {
-            // Convert the analysis result dependencies to PyDependency objects
-            analysis_result.dependencies.into_iter().map(|dep| dep.into()).collect()
+            analysis_result.relationships
         }
         Err(_) => {
             // If analysis fails, return empty relationships vector

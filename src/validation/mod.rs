@@ -275,11 +275,14 @@ pub fn secure_read_file(path: &Path) -> ValidationResult<String> {
     let validated_path = validate_file_path(&path.to_string_lossy())?;
     
     // Additional check: ensure we're not reading sensitive system files
-    let path_str = validated_path.to_string_lossy().to_lowercase();
+    let path_str = validated_path
+        .to_string_lossy()
+        .replace('\\', "/")
+        .to_lowercase();
     let sensitive_patterns = [
         "/etc/passwd", "/etc/shadow", "/etc/hosts", "/etc/hostname",
         "/proc/", "/sys/", "/dev/", "/boot/", "/usr/bin/", "/bin/",
-        "password", "secret", "key", "token", "credential"
+        "/windows/system32/config/",
     ];
     
     for pattern in &sensitive_patterns {
@@ -808,40 +811,26 @@ impl StreamingTextReader {
     
     /// Read next line from the file
     pub fn read_next_line(&mut self) -> ValidationResult<Option<String>> {
-        let mut line_buffer = Vec::new();
-        
-        // Start with any incomplete bytes from previous reads
-        if !self.incomplete_bytes.is_empty() {
-            line_buffer.extend_from_slice(&self.incomplete_bytes);
-            self.incomplete_bytes.clear();
-        }
-        
-        while let Some(chunk) = self.reader.read_next_chunk()? {
-            // Find the next newline character
-            if let Some(newline_pos) = chunk.iter().position(|&b| b == b'\n') {
-                // Split at newline
-                line_buffer.extend_from_slice(&chunk[..newline_pos]);
-                
-                // Save the rest for next time (including the \n character for line counting)
-                let remaining_start = newline_pos + 1;
-                if remaining_start < chunk.len() {
-                    self.incomplete_bytes = chunk[remaining_start..].to_vec();
-                }
-                
-                // Decode the line
-                let (text, _, _) = self.encoding.decode(&line_buffer);
+        loop {
+            if let Some(newline_pos) = self.incomplete_bytes.iter().position(|&b| b == b'\n') {
+                let line_bytes: Vec<u8> = self.incomplete_bytes.drain(..newline_pos).collect();
+                self.incomplete_bytes.drain(..1);
+                let (text, _, _) = self.encoding.decode(&line_bytes);
                 return Ok(Some(text.to_string()));
-            } else {
-                // No newline found, add to buffer and continue
-                line_buffer.extend_from_slice(&chunk);
+            }
+
+            match self.reader.read_next_chunk()? {
+                Some(chunk) => self.incomplete_bytes.extend_from_slice(&chunk),
+                None => break,
             }
         }
         
-        if line_buffer.is_empty() {
+        if self.incomplete_bytes.is_empty() {
             Ok(None) // EOF
         } else {
             // Last line without newline
-            let (text, _, _) = self.encoding.decode(&line_buffer);
+            let remaining = std::mem::take(&mut self.incomplete_bytes);
+            let (text, _, _) = self.encoding.decode(&remaining);
             Ok(Some(text.to_string()))
         }
     }
@@ -1118,5 +1107,41 @@ mod tests {
             validate_duration("120s", "test", 10000), // 120 seconds > 10 seconds max
             Err(ValidationError::OutOfRange(_))
         ));
+    }
+
+    #[test]
+    fn test_secure_read_file_allows_ordinary_key_like_filenames() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("api_key.ts");
+        std::fs::write(&file_path, "export const apiKey = 'test';").unwrap();
+
+        let content = secure_read_file(&file_path).unwrap();
+        assert!(content.contains("apiKey"));
+    }
+
+    #[test]
+    fn test_streaming_text_reader_preserves_multiple_lines_per_chunk() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("multi_line.txt");
+        std::fs::write(&file_path, "line1\nline2\nline3\n").unwrap();
+
+        let mut reader = StreamingTextReader::new(&file_path, Some(1024), Some(1024)).unwrap();
+        assert_eq!(reader.read_next_line().unwrap(), Some("line1".to_string()));
+        assert_eq!(reader.read_next_line().unwrap(), Some("line2".to_string()));
+        assert_eq!(reader.read_next_line().unwrap(), Some("line3".to_string()));
+        assert_eq!(reader.read_next_line().unwrap(), None);
+    }
+
+    #[test]
+    fn test_streaming_text_reader_preserves_split_lines_across_chunks() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("split_lines.txt");
+        std::fs::write(&file_path, "alpha\nbeta\ngamma").unwrap();
+
+        let mut reader = StreamingTextReader::new(&file_path, Some(3), Some(1024)).unwrap();
+        assert_eq!(reader.read_next_line().unwrap(), Some("alpha".to_string()));
+        assert_eq!(reader.read_next_line().unwrap(), Some("beta".to_string()));
+        assert_eq!(reader.read_next_line().unwrap(), Some("gamma".to_string()));
+        assert_eq!(reader.read_next_line().unwrap(), None);
     }
 }
