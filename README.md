@@ -1,107 +1,88 @@
-# Fast-Context: Enterprise-Grade Codebase Analysis Engine
+# Fast-Context
 
-[![Production Ready](https://img.shields.io/badge/Production-Ready-green.svg)](https://github.com/entrepeneur4lyf/fast-context)
-[![Test Coverage](https://img.shields.io/badge/Coverage-100%25-brightgreen.svg)](./tests/)
-[![Performance](https://img.shields.io/badge/Performance-Optimized-blue.svg)](./benches/)
-[![Documentation](https://img.shields.io/badge/Docs-Complete-blue.svg)](./docs/)
+[![Repository](https://img.shields.io/badge/GitHub-fast--context-black.svg)](https://github.com/entrepeneur4lyf/fast-context)
+[![npm](https://img.shields.io/npm/v/fast-context.svg)](https://www.npmjs.com/package/fast-context)
+[![PyPI](https://img.shields.io/pypi/v/fast-context.svg)](https://pypi.org/project/fast-context/)
 
-> **🚀 Production-Ready**: Intelligent codebase analysis engine for coding assistants with graph-powered code comprehension, ready for deployment to millions of developers.
+A Rust codebase analysis engine with Node.js and Python bindings. Fast-Context provides symbol extraction, dependency analysis, graph operations, and file watching for coding assistants and developer tooling.
 
-A high-performance, enterprise-grade codebase analysis engine built in Rust with Node.js bindings. Fast-Context provides deep code understanding through symbol extraction, dependency analysis, and real-time file monitoring with comprehensive production features.
+## Current Status
 
-## ✨ Features
+Fast-Context is no longer in the "hand-wavy production ready" state the older docs claimed, but it is materially healthier now.
 
-### 🔍 **Advanced Code Analysis**
-- **20+ Programming Languages**: Rust, JavaScript, TypeScript, Python, Java, Go, C++, C#, Swift, Objective-C, PHP, Ruby, Lua, Bash, Zig, and more
-- **Context-Aware Symbol Extraction**: Full scope tracking, nested symbols, and cross-file references
-- **Tree-Sitter Powered**: Industry-standard parsing with exceptional accuracy and performance
-- **Complexity Analysis**: McCabe cyclomatic complexity, cognitive complexity, and architectural pattern detection
-- **Cross-Language Analysis**: Understands relationships between different programming languages in polyglot codebases
+Validated recently:
+- Rust core: `cargo check`, `cargo test`, `cargo clippy --all-targets --all-features -- -D warnings`
+- Node package: `npm run build`, `npm test`, `npm pack`, and clean tarball install smoke test
+- Python bindings: `cargo check --features python` and the full `pytest tests/python` suite on Python 3.11
+- Security audits: `npm audit --audit-level moderate` and `cargo audit`
 
-### 🕸️ **Graph-Powered Dependencies**
-- **80+ Graph Algorithms**: Advanced graph algorithms for code relationship analysis and visualization
-- **Transitive Analysis**: 5-level deep dependency traversal with cycle detection
-- **Impact Assessment**: Understand the full impact of code changes across the entire codebase
-- **Comprehensive Dependency Mapping**: Imports, function calls, type references, and data flow analysis
-- **Path Analysis**: Shortest path, connectivity analysis, and graph metrics for codebase health assessment
+Current CI/runtime notes:
+- GitHub Actions currently tests Node.js 18
+- Local source builds for Python are validated on Python 3.11
+- Wheel builds target CPython 3.8 through 3.12
+- Native publish artifacts are driven by the GitHub release workflows; treat CI as the source of truth for cross-platform binary status
 
-### ⚡ **Enterprise Performance**
-- **Streaming Architecture**: Process large files and codebases with minimal memory footprint
-- **Parallel Processing**: Rayon-powered parallel processing for multi-core utilization
-- **Multi-Level Caching**: L1 in-memory cache + L2 disk cache with adaptive eviction strategies
-- **Memory Efficient**: Configurable memory limits and intelligent resource management
-- **Batch Processing**: Optimized for both small projects and enterprise-scale codebases
+## Features
 
-### 🛡️ **Production Security & Reliability**
-- **Comprehensive Input Validation**: Configuration parameters, URLs, email, JSON, command arguments, and buffer validation
-- **Path Traversal Protection**: Secure file system access with proper sandboxing and traversal attack prevention
-- **Injection Prevention**: SQL injection, XSS, and shell injection protection across all input vectors
-- **Memory Safety**: Rust foundation with no buffer overflows or use-after-free vulnerabilities
-- **Resource Limits**: Configurable limits for file sizes, memory usage, and concurrent operations
-- **Graceful Degradation**: Handles resource constraints and partial failures gracefully
+- 20+ language grammars via Tree-sitter, including Rust, JavaScript, TypeScript, Python, Java, Go, C++, C#, Swift, Objective-C, PHP, Ruby, Lua, Bash, Zig, CSS, HTML, XML, JSON, YAML, Markdown, JSDoc, and Regex
+- Context-aware symbol extraction with scope information
+- Dependency and relationship extraction across supported languages
+- Graph-powered analysis primitives and export tooling
+- Parallel analysis, caching, and large-file streaming
+- Node.js and Python bindings over the same Rust core
 
-## 🎉 Production Readiness: 100% Complete
+## Installation
 
-**Fast-Context is now enterprise-ready for deployment to millions of developers!**
-
-### ✅ **All Production Tasks Completed**
-- **Security Hardening**: 100% Complete - Input validation, path protection, and injection prevention
-- **Performance Optimization**: 100% Complete - Streaming file processing and memory management
-- **Testing & Validation**: 100% Complete - 335+ unit tests with comprehensive coverage
-- **Production Reliability**: 100% Complete - Graceful degradation and error handling
-
-### 📊 **Performance Benchmarks**
-
-| Operation | Small Codebase | Medium Codebase | Large Codebase |
-|-----------|----------------|-----------------|----------------|
-| Symbol Search | 10-50ms | 50-200ms | 200-500ms |
-| File Analysis | 1-10ms | 10-50ms | 50-200ms |
-| Dependency Analysis | 20-100ms | 100-300ms | 300-800ms |
-| Cache Hit | <1ms | <1ms | <1ms |
-
-Real-world performance on a typical project:
-- **86 files, 26,529 symbols, 6,026 relationships** analyzed in **667ms**
-- **15MB memory usage** during analysis with streaming file processing
-- **Sub-second** incremental updates with file watching
-- **Memory-efficient** large file handling with configurable chunk sizes
-
-## 🛠 Installation
+### Node.js
 
 ```bash
 npm install fast-context
 ```
 
-## 🏁 Quick Start
+### Python
 
-### Basic Codebase Analysis
+```bash
+pip install fast-context
+```
+
+## Quick Start
+
+### Node.js
 
 ```javascript
 const { FastContextAnalyzer } = require('fast-context');
 
-// Initialize analyzer
 const analyzer = new FastContextAnalyzer({
-    project_root: process.cwd(),
-    ignore_patterns: ['node_modules/**', '.git/**', 'target/**']
+  projectRoot: process.cwd(),
+  ignorePatterns: ['node_modules/**', '.git/**', 'target/**']
 });
 
-// Analyze codebase
 const result = await analyzer.analyze();
-console.log(`Found ${result.symbol_count} symbols in ${result.file_count} files`);
+console.log(`Found ${result.symbolCount} symbols in ${result.fileCount} files`);
 console.log(`Languages: ${result.languages.join(', ')}`);
-console.log(`Analysis completed in ${result.duration_ms}ms`);
+console.log(`Analysis completed in ${result.durationMs}ms`);
+console.log(`Skipped files: ${result.skippedFileCount}`);
 ```
 
-### Real-time File Watching
+### Python
 
-```javascript
-// Start file change monitoring
-analyzer.start_watching();
+```python
+import fast_context
 
-// Stop watching when done
-analyzer.stop_watching();
+config = fast_context.AnalyzerConfig(
+    project_root=".",
+    languages=["python", "javascript", "rust"],
+)
+analyzer = fast_context.FastContextAnalyzer(config)
+result = analyzer.analyze()
+
+print(f"Files analyzed: {result.file_count}")
+print(f"Symbols found: {result.symbol_count}")
+print(f"Languages: {result.languages}")
+print(f"Skipped files: {len(result.skipped_files)}")
 ```
 
-## 📖 API Reference
+## Node.js API Notes
 
 ### FastContextAnalyzer
 
@@ -115,15 +96,15 @@ new FastContextAnalyzer(config)
 
 **Parameters:**
 - `config` (Object): Configuration options
-  - `project_root` (string): Path to project root directory
-  - `ignore_patterns` (string[]): Glob patterns to ignore (optional)
+  - `projectRoot` (string): Path to project root directory
+  - `ignorePatterns` (string[]): Glob patterns to ignore (optional)
   - `languages` (string[]): Specific languages to analyze (optional)
-  - `enable_caching` (boolean): Enable caching (optional, default: true)
-  - `cache_policy` (string): Cache policy (optional, default: 'lru')
-  - `enable_watching` (boolean): Enable file watching (optional, default: true)
-  - `max_files` (number): Maximum files to analyze (optional)
-  - `parallel_processing` (boolean): Enable parallel processing (optional, default: true)
-  - `enable_experimental_architecture` (boolean): Enable experimental features (optional, default: false)
+  - `enableCaching` (boolean): Enable caching (optional)
+  - `cachePolicy` (string): Cache policy (optional)
+  - `enableWatching` (boolean): Enable file watching (optional)
+  - `maxFiles` (number): Maximum files to analyze (optional)
+  - `parallelProcessing` (boolean): Enable parallel processing (optional)
+  - `enableExperimentalArchitecture` (boolean): Enable experimental features (optional, default: false)
 
 #### Methods
 
@@ -132,12 +113,14 @@ new FastContextAnalyzer(config)
 Performs comprehensive codebase analysis.
 
 **Returns:** `AnalysisResult`
-- `file_count` (number): Total files analyzed
-- `symbol_count` (number): Total symbols found
-- `relationship_count` (number): Total relationships discovered
+- `fileCount` (number): Total files analyzed
+- `symbolCount` (number): Total symbols found
+- `relationshipCount` (number): Total relationships discovered
 - `languages` (string[]): Programming languages detected
-- `duration_ms` (number): Analysis duration in milliseconds
-- `memory_usage_mb` (number): Memory usage during analysis
+- `durationMs` (number): Analysis duration in milliseconds
+- `memoryUsageMb` (number): Memory usage during analysis, when available
+- `skippedFileCount` (number): Count of supported files skipped during analysis
+- `skippedFiles` (array): Structured skipped-file diagnostics with `filePath`, `stage`, and `reason`
 
 ##### `start_watching(): void`
 
@@ -147,7 +130,7 @@ Starts real-time file monitoring.
 
 Stops file monitoring.
 
-##### `get_analysis(): AnalysisResult`
+##### `getAnalysis(): AnalysisResult`
 
 Gets the current analysis results without re-analyzing.
 
@@ -155,7 +138,7 @@ Gets the current analysis results without re-analyzing.
 
 ##### Symbol Query Methods
 
-###### `find_symbols_by_kind(kind: string): string[]`
+###### `findSymbolsByKind(kind: string): string[]`
 
 Find symbols by type (function, class, etc.).
 
@@ -164,34 +147,34 @@ Find symbols by type (function, class, etc.).
 
 **Returns:** Array of symbol names.
 
-###### `find_symbols_in_file(file_path: string): string[]`
+###### `findSymbolsInFile(filePath: string): string[]`
 
 Find symbols in a specific file.
 
 **Parameters:**
-- `file_path` (string): Path to file
+- `filePath` (string): Path to file
 
 **Returns:** Array of symbol names.
 
-###### `find_dependencies(symbol_name: string): string[]`
+###### `findDependencies(symbolName: string): string[]`
 
 Find dependencies for a symbol.
 
 **Parameters:**
-- `symbol_name` (string): Name of symbol
+- `symbolName` (string): Name of symbol
 
 **Returns:** Array of dependency names.
 
-###### `find_complex_symbols(complexity_threshold: number): string[]`
+###### `findComplexSymbols(complexityThreshold: number): string[]`
 
 Find symbols above complexity threshold.
 
 **Parameters:**
-- `complexity_threshold` (number): Minimum complexity level
+- `complexityThreshold` (number): Minimum complexity level
 
 **Returns:** Array of symbol names.
 
-## 🌐 Supported Languages
+## Supported Languages
 
 Fast-Context supports 20+ programming languages with Tree-sitter precision:
 
@@ -202,7 +185,7 @@ Fast-Context supports 20+ programming languages with Tree-sitter precision:
 - **Data Formats**: JSON, YAML, XML, Markdown, Regex
 - **Comprehensive Coverage**: Full symbol extraction, dependency analysis, and cross-language relationships
 
-## ⚙️ Configuration
+## Configuration
 
 ### Ignore Patterns
 
@@ -210,7 +193,7 @@ Common ignore patterns for different project types:
 
 ```javascript
 // Node.js project
-ignore_patterns: [
+ignorePatterns: [
     'node_modules/**',
     'dist/**',
     'build/**',
@@ -219,14 +202,14 @@ ignore_patterns: [
 ]
 
 // Rust project
-ignore_patterns: [
+ignorePatterns: [
     'target/**',
     'Cargo.lock',
     '.git/**'
 ]
 
 // Multi-language project
-ignore_patterns: [
+ignorePatterns: [
     'node_modules/**',
     'target/**',
     '.git/**',
@@ -242,7 +225,7 @@ Analyze only specific languages:
 
 ```javascript
 const analyzer = new FastContextAnalyzer({
-    project_root: './src',
+    projectRoot: './src',
     languages: ['javascript', 'typescript', 'rust']
 });
 ```
@@ -255,16 +238,16 @@ Find specific symbols and relationships:
 
 ```javascript
 // Find all functions
-const functions = analyzer.find_symbols_by_kind('function');
+const functions = analyzer.findSymbolsByKind('function');
 
 // Find symbols in specific file
-const fileSymbols = analyzer.find_symbols_in_file('src/main.js');
+const fileSymbols = analyzer.findSymbolsInFile('src/main.js');
 
 // Find dependencies
-const deps = analyzer.find_dependencies('MyClass');
+const deps = analyzer.findDependencies('MyClass');
 
 // Find complex code
-const complex = analyzer.find_complex_symbols(10); // complexity > 10
+const complex = analyzer.findComplexSymbols(10); // complexity > 10
 ```
 
 ### Utility Functions
@@ -283,7 +266,7 @@ const version = getVersion();
 const isValid = checkConfiguration(config);
 ```
 
-## 🏗 Architecture
+## Architecture
 
 Fast-Context uses a sophisticated multi-layer architecture:
 
@@ -295,9 +278,9 @@ Fast-Context uses a sophisticated multi-layer architecture:
 6. **Security Layer**: Comprehensive input validation and path protection throughout the pipeline
 7. **Real-time Monitoring**: File system event processing with debouncing and incremental analysis
 
-## 🧪 Testing
+## Testing
 
-Comprehensive test coverage with 335+ unit tests:
+Representative validation commands:
 
 ```bash
 # Rust core tests
@@ -313,7 +296,7 @@ npm run test:integration
 cargo bench
 ```
 
-## 🔍 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -332,7 +315,7 @@ cargo bench
 - Adjust chunk sizes based on available memory
 - Monitor memory usage with the built-in metrics
 
-## 📈 Performance Tips
+## Performance Tips
 
 1. **Use Ignore Patterns**: Exclude irrelevant directories (`node_modules`, `target`, `.git`)
 2. **Language Filtering**: Focus on specific languages when possible
@@ -342,9 +325,9 @@ cargo bench
 6. **Memory Management**: Configure appropriate limits for your system resources
 7. **Parallel Processing**: Leverage multi-core capabilities for large codebases
 
-## 🤝 Contributing
+## Contributing
 
-Contributions welcome! This project uses enterprise-grade technologies:
+Core implementation details:
 
 - **Rust** for memory-safe core analysis engine
 - **NAPI-RS** for high-performance Node.js bindings  
@@ -354,7 +337,7 @@ Contributions welcome! This project uses enterprise-grade technologies:
 - **rustworkx-core** for advanced graph algorithms
 - **PyO3** for Python bindings (optional)
 
-## 🔬 Advanced Features
+## Advanced Features
 
 ### AI Assistant Integration
 - **MCP Protocol**: Native Model Context Protocol support
@@ -364,17 +347,17 @@ Contributions welcome! This project uses enterprise-grade technologies:
 ### Extensibility
 - **Custom Languages**: Easy addition of new programming languages
 - **Plugin Architecture**: Modular design for custom analysis rules
-- **Cross-Platform**: Native binaries for Linux, macOS, and Windows
+- **Release Artifacts**: Native packages are built through the GitHub release workflows
 
-## 📄 License
+## License
 
 Apache-2.0
 
-## 📞 Support
+## Support
 
 For issues and questions:
-- GitHub Issues: [fast-context/fast-context](https://github.com/fast-context/fast-context)
-- Documentation: [https://docs.fast-context.dev](https://docs.fast-context.dev)
+- GitHub Issues: [entrepeneur4lyf/fast-context](https://github.com/entrepeneur4lyf/fast-context/issues)
+- Documentation: [Repository README](https://github.com/entrepeneur4lyf/fast-context#readme) and [docs/README.md](https://github.com/entrepeneur4lyf/fast-context/blob/main/docs/README.md)
 
 ---
 

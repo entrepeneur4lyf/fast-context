@@ -4,19 +4,26 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/fast-context.svg)](https://pypi.org/project/fast-context/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-High-performance codebase analysis engine with graph-powered code comprehension, built in Rust for maximum performance.
+Python bindings for the Fast-Context Rust analysis engine.
 
-## 🚀 Features
+## Status
 
-- **Multi-Language Support**: 20+ programming languages via Tree-sitter parsers
-- **Graph-Powered Analysis**: Advanced dependency and relationship analysis using rustworkx
-- **High Performance**: Rust-based core with Python bindings for optimal speed
-- **AI Assistant Integration**: Built-in MCP (Model Context Protocol) server for AI tools
-- **Streaming Analysis**: Real-time progressive analysis with cancellation support
-- **Rich CLI Tools**: Comprehensive command-line interface with interactive features
-- **Type Safety**: Full type annotations and runtime validation
+Validated recently:
+- `cargo check --features python`
+- `pytest tests/python` on Python 3.11
+- wheel builds in CI for CPython 3.8 through 3.12
 
-## 📦 Installation
+For local source builds, Python 3.11 is the safest supported path today.
+
+## Features
+
+- 20+ language grammars via Tree-sitter
+- Rust-backed analysis with Python bindings
+- Compatibility wrapper for the existing Python API surface
+- MCP and CLI helpers for local tooling integrations
+- Graph bindings and dependency analysis helpers
+
+## Installation
 
 ```bash
 pip install fast-context
@@ -38,69 +45,63 @@ pip install fast-context[dev]
 pip install fast-context[all]
 ```
 
-## 🔧 Quick Start
+## Quick Start
 
 ### Basic Analysis
 
 ```python
 import fast_context
 
-# Initialize analyzer
-analyzer = fast_context.FastContextAnalyzer("/path/to/your/project")
+config = fast_context.AnalyzerConfig(
+    project_root="/path/to/your/project",
+    languages=["python", "javascript", "rust"],
+)
+analyzer = fast_context.FastContextAnalyzer(config)
 
-# Analyze codebase
 result = analyzer.analyze()
 
-print(f"Found {len(result.symbols)} symbols")
-print(f"Analysis took {result.performance_metrics.total_time_ms}ms")
+print(f"Files analyzed: {result.file_count}")
+print(f"Symbols found: {result.symbol_count}")
+print(f"Languages: {result.languages}")
+print(f"Skipped files: {len(result.skipped_files)}")
 ```
 
-### Advanced Usage
-
-```python
-import fast_context
-
-# Configure analyzer
-config = fast_context.AnalyzerConfig(
-    languages=["python", "javascript", "rust"],
-    include_patterns=["src/**/*.py", "lib/**/*.js"],
-    exclude_patterns=["**/test_*.py", "**/node_modules/**"],
-    max_file_size_mb=10
-)
-
-analyzer = fast_context.FastContextAnalyzer("/path/to/project", config)
-
-# Get symbols by type
-functions = analyzer.find_symbols_by_kind("function")
-classes = analyzer.find_symbols_by_kind("class")
-
-# Analyze dependencies
-deps = analyzer.analyze_dependencies()
-print(f"Found {len(deps.internal)} internal dependencies")
-```
-
-### Graph Analysis
+### Compatibility Helpers
 
 ```python
 import fast_context
 
 analyzer = fast_context.FastContextAnalyzer("/path/to/project")
 
-# Get dependency graph
-graph = analyzer.get_dependency_graph()
+functions = analyzer.find_symbols_by_kind("function")
+symbols = analyzer.extract_symbols("/path/to/project/app.py")
+deps = analyzer.analyze_dependencies("/path/to/project")
+graph = analyzer.create_dependency_graph("/path/to/project")
 
-# Analyze graph properties
-print(f"Nodes: {graph.node_count()}")
-print(f"Edges: {graph.edge_count()}")
-
-# Find strongly connected components
-components = graph.strongly_connected_components()
-print(f"Found {len(components)} components")
+print(functions[:5])
+print(symbols)
+print(graph["edges"][:5])
 ```
 
-## 🖥️ Command Line Interface
+### Asynchronous Native API
 
-Fast-Context includes a powerful CLI:
+```python
+import asyncio
+import fast_context
+
+async def main():
+    analyzer = fast_context.FastContextAnalyzer(
+        fast_context.AnalyzerConfig(project_root=".")
+    )
+    result = await analyzer.analyze_async()
+    print(result.file_count, result.symbol_count)
+
+asyncio.run(main())
+```
+
+## Command Line Interface
+
+Fast-Context includes a CLI:
 
 ```bash
 # Analyze current directory
@@ -109,17 +110,11 @@ fast-context analyze
 # Analyze specific directory
 fast-context analyze /path/to/project
 
-# Search for symbols
-fast-context search "function_name"
-
-# Get dependency information
-fast-context deps --format json
-
-# Interactive REPL mode
-fast-context repl
+# Show current configuration
+fast-context config show
 ```
 
-## 🤖 AI Assistant Integration
+## AI Assistant Integration
 
 Fast-Context includes an MCP server for AI assistant integration:
 
@@ -146,7 +141,7 @@ Add to your Claude Desktop configuration:
 }
 ```
 
-## 📚 Supported Languages
+## Supported Languages
 
 Fast-Context supports 20+ programming languages:
 
@@ -156,37 +151,21 @@ Fast-Context supports 20+ programming languages:
 **Scripting**: Python, Ruby, PHP, Lua, Bash
 **Data**: JSON, YAML, XML, Markdown
 
-## 🔧 Configuration
+## Configuration
 
-### Configuration File
+The most reliable configuration path today is constructing `AnalyzerConfig` directly in Python.
 
-Create a `.fast-context.toml` file in your project root:
-
-```toml
-[analysis]
-languages = ["python", "javascript"]
-include_patterns = ["src/**/*", "lib/**/*"]
-exclude_patterns = ["**/test_*", "**/node_modules/**"]
-max_file_size_mb = 10
-
-[graph]
-enable_dependency_analysis = true
-max_depth = 5
-
-[mcp]
-enable_server = true
-port = 8080
+```python
+config = fast_context.AnalyzerConfig(
+    project_root=".",
+    languages=["python", "javascript"],
+    ignore_patterns=["node_modules/**", ".git/**", "target/**"],
+    max_files=5000,
+    parallel_processing=True,
+)
 ```
 
-### Environment Variables
-
-```bash
-export FAST_CONTEXT_LOG_LEVEL=info
-export FAST_CONTEXT_CACHE_DIR=/tmp/fast-context
-export FAST_CONTEXT_MAX_WORKERS=8
-```
-
-## 🚀 Performance
+## Performance
 
 Fast-Context is built for performance:
 
@@ -195,22 +174,16 @@ Fast-Context is built for performance:
 - **Efficient Parsing**: Tree-sitter parsers with caching
 - **Memory Optimization**: Streaming analysis for large codebases
 
-### Benchmarks
+Benchmarks in the older docs were aspirational. Treat the automated test and release workflows as the current source of truth for validated performance and platform support.
 
-| Project Size | Analysis Time | Memory Usage |
-|-------------|---------------|--------------|
-| Small (1K files) | ~100ms | ~50MB |
-| Medium (10K files) | ~1s | ~200MB |
-| Large (100K files) | ~10s | ~1GB |
-
-## 🛠️ Development
+## Development
 
 ### Building from Source
 
 ```bash
 # Clone repository
-git clone https://github.com/entrepeneur4lyf/rustworkx-nodejs.git
-cd rustworkx-nodejs
+git clone https://github.com/entrepeneur4lyf/fast-context.git
+cd fast-context
 
 # Install Python dependencies
 pip install -e ".[dev]"
@@ -219,29 +192,21 @@ pip install -e ".[dev]"
 maturin develop --features python
 
 # Run tests
-pytest tests/
+python -m pytest tests/python
 ```
 
-### Contributing
+## License
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/entrepeneur4lyf/fast-context/blob/main/LICENSE) for details.
 
-## 📄 License
+## Links
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](https://github.com/entrepeneur4lyf/rustworkx-nodejs/blob/main/LICENSE) for details.
-
-## 🔗 Links
-
-- **Repository**: https://github.com/entrepeneur4lyf/rustworkx-nodejs
-- **Documentation**: https://github.com/entrepeneur4lyf/rustworkx-nodejs#readme
-- **Issues**: https://github.com/entrepeneur4lyf/rustworkx-nodejs/issues
+- **Repository**: https://github.com/entrepeneur4lyf/fast-context
+- **Documentation**: https://github.com/entrepeneur4lyf/fast-context#readme
+- **Issues**: https://github.com/entrepeneur4lyf/fast-context/issues
 - **PyPI**: https://pypi.org/project/fast-context/
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with:
 - [Rust](https://www.rust-lang.org/) - Systems programming language

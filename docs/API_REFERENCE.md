@@ -34,13 +34,13 @@ Creates a new analyzer instance with the specified configuration.
 **Example:**
 ```typescript
 const analyzer = new FastContextAnalyzer({
-  project_root: "/path/to/project",
-  include_patterns: ["**/*.rs", "**/*.js", "**/*.ts"],
-  exclude_patterns: ["target/**", "node_modules/**"],
-  max_file_size: 1024 * 1024, // 1MB
-  enable_caching: true,
-  cache_ttl_seconds: 300,
-  analysis_timeout_seconds: 30
+  projectRoot: "/path/to/project",
+  languages: ["rust", "javascript", "typescript"],
+  ignorePatterns: ["target/**", "node_modules/**"],
+  enableCaching: true,
+  enableWatching: false,
+  maxFiles: 5000,
+  parallelProcessing: true
 });
 ```
 
@@ -52,39 +52,33 @@ Configuration object for the analyzer.
 
 ```typescript
 interface AnalyzerConfig {
-  project_root: string;                    // Root directory of the project
-  include_patterns: string[];              // Glob patterns for files to include
-  exclude_patterns: string[];              // Glob patterns for files to exclude
-  max_file_size: number;                   // Maximum file size in bytes
-  follow_symlinks: boolean;                // Whether to follow symbolic links
-  respect_gitignore: boolean;              // Whether to respect .gitignore files
-  analysis_timeout_seconds: number;        // Timeout for analysis operations
-  enable_caching: boolean;                 // Enable result caching
-  cache_ttl_seconds: number;               // Cache time-to-live in seconds
-  max_cache_size: number;                  // Maximum number of cached entries
-  enable_incremental: boolean;             // Enable incremental analysis
-  language_config: Record<string, any>;    // Language-specific configuration
+  projectRoot: string
+  languages?: string[]
+  ignorePatterns?: string[]
+  enableCaching?: boolean
+  cachePolicy?: string
+  enableWatching?: boolean
+  maxFiles?: number
+  parallelProcessing?: boolean
+  enableExperimentalArchitecture?: boolean
 }
 ```
 
 **Default Values:**
-- `max_file_size`: 5MB
-- `follow_symlinks`: false
-- `respect_gitignore`: true
-- `analysis_timeout_seconds`: 60
-- `enable_caching`: true
-- `cache_ttl_seconds`: 300 (5 minutes)
-- `max_cache_size`: 1000
-- `enable_incremental`: true
+- `languages`: all supported languages
+- `ignorePatterns`: `node_modules/**`, `target/**`, `.git/**`
+- `enableCaching`: optional
+- `enableWatching`: optional
+- `parallelProcessing`: `true`
 
 ## Symbol Search APIs
 
-### find_symbols_by_kind
+### findSymbolsByKind
 
 Search for symbols by their kind/type.
 
 ```typescript
-find_symbols_by_kind(kind: string): QueryResult
+findSymbolsByKind(kind: string): string[]
 ```
 
 **Parameters:**
@@ -102,16 +96,12 @@ find_symbols_by_kind(kind: string): QueryResult
 - `"trait"` - Traits and protocols
 - `"type_alias"` - Type aliases and typedefs
 
-**Returns:** QueryResult with matching symbols
+**Returns:** Array of matching symbol names
 
 **Example:**
 ```typescript
-const functions = analyzer.find_symbols_by_kind("function");
-console.log(`Found ${functions.symbols.length} functions`);
-
-functions.symbols.forEach(symbol => {
-  console.log(`${symbol.symbol.name} at ${symbol.file_path}:${symbol.symbol.location.start_line}`);
-});
+const functions = analyzer.findSymbolsByKind("function");
+console.log(`Found ${functions.length} functions`);
 ```
 
 **Input Validation:**
@@ -121,32 +111,23 @@ functions.symbols.forEach(symbol => {
 
 ## File Analysis APIs
 
-### find_symbols_in_file
+### findSymbolsInFile
 
 Find all symbols in a specific file.
 
 ```typescript
-find_symbols_in_file(file_path: string): QueryResult
+findSymbolsInFile(filePath: string): string[]
 ```
 
 **Parameters:**
-- `file_path`: string - Path to the file to analyze
+- `filePath`: string - Path to the file to analyze, resolved relative to `projectRoot`
 
-**Returns:** QueryResult with symbols found in the file
+**Returns:** Array of `"<kind>: <name>"` entries
 
 **Example:**
 ```typescript
-const symbols = analyzer.find_symbols_in_file("src/main.rs");
-console.log(`File contains ${symbols.symbols.length} symbols`);
-
-// Group symbols by kind
-const byKind = symbols.symbols.reduce((acc, symbol) => {
-  const kind = symbol.symbol.kind;
-  acc[kind] = (acc[kind] || 0) + 1;
-  return acc;
-}, {});
-
-console.log("Symbol distribution:", byKind);
+const symbols = analyzer.findSymbolsInFile("src/main.rs");
+console.log(`File contains ${symbols.length} exported symbol entries`);
 ```
 
 **Security Features:**
@@ -162,70 +143,37 @@ console.log("Symbol distribution:", byKind);
 
 ## Dependency Analysis APIs
 
-### find_dependents
-
-Find symbols that depend on the given symbol (who uses this symbol).
-
-```typescript
-find_dependents(symbol_name: string): QueryResult
-```
-
-**Parameters:**
-- `symbol_name`: string - Name of the symbol to find dependents for
-
-**Returns:** QueryResult with symbols that depend on the target symbol
-
-**Features:**
-- **Transitive Analysis**: Finds dependencies up to 5 levels deep
-- **Cycle Detection**: Prevents infinite loops in dependency chains
-- **Impact Analysis**: Includes complexity scoring and architectural insights
-
-**Example:**
-```typescript
-const dependents = analyzer.find_dependents("DatabaseConnection");
-console.log(`${dependents.symbols.length} symbols depend on DatabaseConnection`);
-
-// Analyze impact
-console.log(`Total complexity impact: ${dependents.context.complexity_score}`);
-console.log(`Files affected: ${dependents.context.files_involved}`);
-
-// Review suggestions
-dependents.suggestions.forEach(suggestion => {
-  console.log(`Suggestion: ${suggestion}`);
-});
-```
-
-### find_dependencies
+### findDependencies
 
 Find symbols that the given symbol depends on (what this symbol uses).
 
 ```typescript
-find_dependencies(symbol_name: string): QueryResult
+findDependencies(symbolName: string): string[]
 ```
 
 **Parameters:**
-- `symbol_name`: string - Name of the symbol to find dependencies for
+- `symbolName`: string - Name of the symbol to find dependencies for
 
-**Returns:** QueryResult with symbols that the target symbol depends on
-
-**Features:**
-- **Transitive Analysis**: Finds dependencies up to 5 levels deep
-- **Dependency Chain Analysis**: Tracks complete dependency paths
-- **Circular Dependency Detection**: Identifies potential circular references
+**Returns:** Array of formatted dependency strings
 
 **Example:**
 ```typescript
-const dependencies = analyzer.find_dependencies("UserService");
-console.log(`UserService depends on ${dependencies.symbols.length} symbols`);
-
-// Check for potential issues
-if (dependencies.context.potential_issues.length > 0) {
-  console.log("Potential issues found:");
-  dependencies.context.potential_issues.forEach(issue => {
-    console.log(`- ${issue}`);
-  });
-}
+const dependencies = analyzer.findDependencies("UserService");
+console.log(`UserService depends on ${dependencies.length} symbols`);
 ```
+
+### findComplexSymbols
+
+Find files or symbols above a complexity threshold.
+
+```typescript
+findComplexSymbols(complexityThreshold: number): string[]
+```
+
+**Parameters:**
+- `complexityThreshold`: number - Minimum complexity level
+
+**Returns:** Array of formatted strings describing complex files/symbols
 
 ## Return Types
 
@@ -288,7 +236,7 @@ All APIs use Result-based error handling. Possible error types:
 
 ```typescript
 try {
-  const result = analyzer.find_symbols_by_kind("function");
+  const result = analyzer.findSymbolsByKind("function");
   // Process result
 } catch (error) {
   if (error.message.includes("InvalidInput")) {

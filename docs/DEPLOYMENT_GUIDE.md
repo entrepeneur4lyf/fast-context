@@ -23,8 +23,8 @@ This guide covers deploying Fast-Context in production environments, including c
 - **CPU**: 2 cores, 2.0 GHz
 - **Memory**: 4GB RAM
 - **Storage**: 1GB available space
-- **OS**: Linux (Ubuntu 20.04+), macOS (10.15+), Windows (10+)
-- **Node.js**: 16.x or higher
+- **OS**: Linux, macOS, or Windows
+- **Node.js**: 18.x or higher
 
 ### Recommended for Production
 
@@ -81,29 +81,16 @@ CMD ["npm", "start"]
 
 ```typescript
 const config = {
-  project_root: process.env.PROJECT_ROOT || "/app/codebase",
-  include_patterns: [
-    "**/*.rs", "**/*.js", "**/*.ts", "**/*.py", 
-    "**/*.java", "**/*.go", "**/*.cs"
-  ],
-  exclude_patterns: [
-    "target/**", "node_modules/**", "dist/**", 
+  projectRoot: process.env.PROJECT_ROOT || "/app/codebase",
+  languages: ["rust", "javascript", "typescript", "python"],
+  ignorePatterns: [
+    "target/**", "node_modules/**", "dist/**",
     "build/**", ".git/**", "**/*.test.*"
   ],
-  max_file_size: 5 * 1024 * 1024, // 5MB
-  follow_symlinks: false,
-  respect_gitignore: true,
-  analysis_timeout_seconds: 120,
-  enable_caching: true,
-  cache_ttl_seconds: 1800, // 30 minutes
-  max_cache_size: 5000,
-  enable_incremental: true,
-  language_config: {
-    rust: { max_complexity_threshold: 15 },
-    javascript: { max_complexity_threshold: 10 },
-    typescript: { max_complexity_threshold: 10 },
-    python: { max_complexity_threshold: 12 }
-  }
+  enableCaching: true,
+  enableWatching: false,
+  maxFiles: 5000,
+  parallelProcessing: true
 };
 ```
 

@@ -2,6 +2,8 @@
 
 Welcome to the Fast-Context documentation! This directory contains comprehensive guides for using and deploying Fast-Context.
 
+For the current validation/support status, start with the repository [README](https://github.com/entrepeneur4lyf/fast-context#readme). The workflow files in [`.github/workflows`](https://github.com/entrepeneur4lyf/fast-context/tree/main/.github/workflows) are the source of truth for the actively tested platform matrix.
+
 ## 📚 Documentation Index
 
 ### **Core Documentation**
