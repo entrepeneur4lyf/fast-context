@@ -38,10 +38,10 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "cargo test --lib generate_typescript_types && node scripts/update-types.js && napi build --platform --release --features nodejs && node scripts/patch-win32-loader.js && node scripts/prepare-package-json.js",
-    "build:debug": "cargo test --lib generate_typescript_types && node scripts/update-types.js && napi build --platform --features nodejs && node scripts/patch-win32-loader.js && node scripts/prepare-package-json.js",
+    "build": "cargo test --lib generate_typescript_types && node scripts/update-types.js && napi build --platform --release --features nodejs && node scripts/patch-win32-loader.js && node scripts/prepare-package-json.js local",
+    "build:debug": "cargo test --lib generate_typescript_types && node scripts/update-types.js && napi build --platform --features nodejs && node scripts/patch-win32-loader.js && node scripts/prepare-package-json.js local",
     "generate-types": "cargo test --lib generate_typescript_types && node scripts/update-types.js",
-    "prepublishOnly": "napi prepublish -t npm && node scripts/prepare-package-json.js",
+    "prepublishOnly": "napi prepublish -t npm && node scripts/prepare-package-json.js publish",
     "test": "ava",
     "test:integration": "cargo test --test api_integration_tests --test error_handling_tests --test graph_bindings_tests --test integration_tests --test nodejs_api_tests",
     "test:bench": "cargo bench",
@@ -85,7 +85,9 @@
   "optionalDependencies": {
     "fast-context-darwin-arm64": "0.1.0",
     "fast-context-darwin-x64": "0.1.0",
+    "fast-context-linux-arm64-gnu": "0.1.0",
     "fast-context-linux-arm64-musl": "0.1.0",
+    "fast-context-linux-arm-gnueabihf": "0.1.0",
     "fast-context-linux-x64-gnu": "0.1.0",
     "fast-context-linux-x64-musl": "0.1.0",
     "fast-context-win32-arm64-msvc": "0.1.0",

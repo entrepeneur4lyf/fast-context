@@ -96,6 +96,8 @@ Thumbs.db
 *.bak
 *.tmp
 *.temp
+*.pyd
+__pycache__/
 .gitnexus
 
 # Local agent metadata
