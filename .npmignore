@@ -5,7 +5,6 @@ rustworkx-0.16.0/
 src/
 build.rs
 Cargo.toml
-*.node
 .DS_Store
 node_modules/
 npm-debug.log*
