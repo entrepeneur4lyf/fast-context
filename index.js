@@ -8,10 +8,42 @@ const { existsSync, readFileSync } = require('fs')
 const { join } = require('path')
 
 const { platform, arch } = process
+const supportedPlatforms = new Set([
+  'darwin-x64',
+  'darwin-arm64',
+  'freebsd-x64',
+  'linux-x64-gnu',
+  'linux-x64-musl',
+  'linux-arm64-gnu',
+  'linux-arm64-musl',
+  'linux-arm-gnueabihf',
+  'win32-x64-msvc',
+  'win32-arm64-msvc',
+])
 
 let nativeBinding = null
 let localFileExisted = false
 let loadError = null
+
+function supportedPlatformKey() {
+  switch (platform) {
+    case 'win32':
+      if (arch === 'x64') return 'win32-x64-msvc'
+      if (arch === 'arm64') return 'win32-arm64-msvc'
+      return `${platform}-${arch}`
+    case 'darwin':
+      return `${platform}-${arch}`
+    case 'freebsd':
+      return `${platform}-${arch}`
+    case 'linux':
+      if (arch === 'x64') return isMusl() ? 'linux-x64-musl' : 'linux-x64-gnu'
+      if (arch === 'arm64') return isMusl() ? 'linux-arm64-musl' : 'linux-arm64-gnu'
+      if (arch === 'arm') return isMusl() ? 'linux-arm-musleabihf' : 'linux-arm-gnueabihf'
+      return `${platform}-${arch}`
+    default:
+      return `${platform}-${arch}`
+  }
+}
 
 function isMusl() {
   // For Node 10
@@ -306,6 +338,14 @@ switch (platform) {
 }
 
 if (!nativeBinding) {
+  const platformKey = supportedPlatformKey()
+  if (!supportedPlatforms.has(platformKey)) {
+    throw new Error(
+      `Unsupported platform: ${platformKey}. Supported Node.js release targets: ${Array.from(
+        supportedPlatforms
+      ).join(', ')}`
+    )
+  }
   if (loadError) {
     throw loadError
   }

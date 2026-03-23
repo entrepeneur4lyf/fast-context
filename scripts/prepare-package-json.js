@@ -8,6 +8,7 @@ const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'))
 packageJson.optionalDependencies = {
   'fast-context-darwin-arm64': packageJson.version,
   'fast-context-darwin-x64': packageJson.version,
+  'fast-context-freebsd-x64': packageJson.version,
   'fast-context-linux-arm64-gnu': packageJson.version,
   'fast-context-linux-arm64-musl': packageJson.version,
   'fast-context-linux-arm-gnueabihf': packageJson.version,

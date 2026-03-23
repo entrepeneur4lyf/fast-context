@@ -34,7 +34,7 @@
     "zod": "^4.1.9"
   },
   "engines": {
-    "node": ">= 10"
+    "node": ">= 18"
   },
   "scripts": {
     "artifacts": "napi artifacts",
@@ -85,6 +85,7 @@
   "optionalDependencies": {
     "fast-context-darwin-arm64": "0.1.0",
     "fast-context-darwin-x64": "0.1.0",
+    "fast-context-freebsd-x64": "0.1.0",
     "fast-context-linux-arm64-gnu": "0.1.0",
     "fast-context-linux-arm64-musl": "0.1.0",
     "fast-context-linux-arm-gnueabihf": "0.1.0",
