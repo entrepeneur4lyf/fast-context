@@ -2,222 +2,215 @@
 
 ## Objective
 
-Get the project to a publishable state by fixing confirmed release blockers first, then repairing correctness bugs, then restoring trust in the Node and Python public APIs with real validation.
+Get the project from "locally working" to "release-safe and enterprise-ready" by closing the remaining gaps in release automation, CI truthfulness, binding validation, and analysis trust signals.
 
 ## Current State
 
-Confirmed as of this review:
+Confirmed locally:
 
 - `cargo check`: passes
+- `cargo check --features python`: passes with Python 3.11
 - `npm run build:debug`: passes
-- `cargo check --features python`: fails
-- `npm test`: fails
-- `npm run test:integration`: fails
+- `npm run build`: passes
+- `npm test`: passes
+- `npm pack` + clean install smoke test: passes
+- `cargo clippy --all-targets --all-features -- -D warnings`: passes
 
-That means the Rust core is in better shape than the published surfaces around it.
+Known remaining issues:
+
+- `cargo test --features nodejs --test nodejs_api_tests` still has older failing cases
+- release automation is split across multiple workflows and one path is stale
+- package metadata still references the old `rustworkx-nodejs` identity
+- Python is buildable but not fully qualified by the main CI/test pipeline
+- analysis still silently drops some unreadable/unparseable files
+- local worktree still contains unrelated uncommitted changes outside the finished remediation commits
 
 ## Release Blockers
 
-### A. Repair Python feature build
+### A. Unify and fix release automation
 
-Status: `BLOCKED BY CODE`
-
-Problems:
-
-- [ ] Fix Python submodule declarations in [src/lib.rs](/C:/Users/shawn/workspace/fast-context/src/lib.rs)
-  - `python_bindings_util`
-  - `python_bindings_graph`
-  - `python_bindings_export`
-  - `python_bindings_query`
-  - `python_bindings_config`
-  - `python_bindings_cache`
-- [ ] Point those declarations at the actual files under [src/python_bindings](/C:/Users/shawn/workspace/fast-context/src/python_bindings)
-- [ ] Reconcile the Python result model in [src/python_bindings.rs](/C:/Users/shawn/workspace/fast-context/src/python_bindings.rs)
-  - either make `AnalysisResult` actually contain `symbols` and `dependencies`
-  - or stop methods from treating it as if it does
-- [ ] Remove or rewrite helper methods that depend on unavailable fields
-- [ ] Fix remaining Python compile errors after the structural cleanup
-
-Acceptance criteria:
-
-- [ ] `cargo check --features python` passes
-- [ ] Python bindings import successfully in the Python 3.11 environment
-- [ ] The documented Python API matches the implemented one
-
-### B. Restore Node testability
-
-Status: `BLOCKED BY HARNESS`
+Status: `BLOCKED BY STALE WORKFLOWS`
 
 Problems:
 
-- [ ] Fix the bad relative imports in:
-  - [tests/nodejs/integration.test.mjs](/C:/Users/shawn/workspace/fast-context/tests/nodejs/integration.test.mjs)
-  - [tests/nodejs/unit.test.mjs](/C:/Users/shawn/workspace/fast-context/tests/nodejs/unit.test.mjs)
-- [ ] Standardize on one JS API contract
-  - config naming: `projectRoot` vs `project_root`
-  - result naming: `fileCount` vs `file_count`
-  - method naming: `startWatching` vs `start_watching`
-- [ ] Align tests with the generated Node contract in [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts)
-- [ ] Verify the built addon can actually be loaded from [index.js](/C:/Users/shawn/workspace/fast-context/index.js)
+- [ ] Choose one authoritative release pipeline between:
+  - [/.github/workflows/ci.yml](C:/Users/shawn/workspace/fast-context/.github/workflows/ci.yml)
+  - [/.github/workflows/release.yml](C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
+- [ ] Remove or rewrite the stale Yarn-based release flow in [/.github/workflows/release.yml](C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
+- [ ] Make release scripts match the current npm-based packaging/build flow
+- [ ] Ensure release artifact names match the actual package/module names
+- [ ] Verify the selected workflow publishes the right npm package and downloads the right native artifacts
 
 Acceptance criteria:
 
-- [ ] `npm test` passes
-- [ ] `require('./index.js')` works in the repo root after build
-- [ ] Tests exercise the real public API instead of a stale contract
+- [ ] One release workflow exists for npm publication
+- [ ] It uses the current package name and current build commands
+- [ ] A dry-run release path can be executed without manual patching
 
-### C. Restore Rust integration coverage
+### B. Fix stale package/project metadata
 
-Status: `BLOCKED BY SCRIPTING`
+Status: `BLOCKED BY IDENTITY DRIFT`
 
 Problems:
 
-- [ ] Fix `test:integration` in [package.json](/C:/Users/shawn/workspace/fast-context/package.json)
-- [ ] Decide how Rust integration tests should be discovered:
-  - move files from `tests/rust/` to `tests/`
-  - or add explicit `[[test]]` entries to [Cargo.toml](/C:/Users/shawn/workspace/fast-context/Cargo.toml)
-- [ ] Confirm the intended files actually run:
-  - [tests/rust/api_integration_tests.rs](/C:/Users/shawn/workspace/fast-context/tests/rust/api_integration_tests.rs)
-  - [tests/rust/integration_tests.rs](/C:/Users/shawn/workspace/fast-context/tests/rust/integration_tests.rs)
-  - [tests/rust/nodejs_api_tests.rs](/C:/Users/shawn/workspace/fast-context/tests/rust/nodejs_api_tests.rs)
-  - [tests/rust/symbol_extraction_tests.rs](/C:/Users/shawn/workspace/fast-context/tests/rust/symbol_extraction_tests.rs)
+- [ ] Replace stale `rustworkx-nodejs` references in:
+  - [/Cargo.toml](C:/Users/shawn/workspace/fast-context/Cargo.toml)
+  - [/pyproject.toml](C:/Users/shawn/workspace/fast-context/pyproject.toml)
+  - [/.github/workflows/release.yml](C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
+- [ ] Check README/docs/package metadata for stale install/package names
+- [ ] Ensure homepage/repository/issues/changelog URLs all point at the current project identity
 
 Acceptance criteria:
 
-- [ ] `npm run test:integration` passes
-- [ ] `cargo test --tests -- --list` shows the expected integration binaries
+- [ ] No shipped metadata points at the old project name
+- [ ] npm/PyPI/repo URLs are internally consistent
 
-## High-Priority Correctness Work
+### C. Restore honest Node-feature validation
 
-### D. Make Node analyzer config real
+Status: `BLOCKED BY FAILING TEST TARGET`
 
-Status: `CONFIRMED BUG`
+Problems:
 
-Problems in [src/analyzer/mod.rs](/C:/Users/shawn/workspace/fast-context/src/analyzer/mod.rs):
-
-- [ ] Persist user config on `FastContextAnalyzer`
-- [ ] Pass stored `languages` and `ignore_patterns` into `CoreAnalyzer`
-- [ ] Decide how `max_files` and `parallel_processing` should be enforced
-- [ ] Update all analyzer entrypoints, not just `analyze()`
-
-Acceptance criteria:
-
-- [ ] Language filtering behaves correctly
-- [ ] Ignore patterns behave correctly
-- [ ] Repeated analysis uses the same config consistently
-
-### E. Fix large-file streaming reconstruction
-
-Status: `CONFIRMED BUG`
-
-Problems in [src/validation/mod.rs](/C:/Users/shawn/workspace/fast-context/src/validation/mod.rs):
-
-- [ ] Rewrite `StreamingTextReader::read_next_line()` so it preserves all newlines within a chunk
-- [ ] Ensure chunk remainders are buffered without collapsing multiple lines
-- [ ] Add coverage for:
-  - multiple newlines in one chunk
-  - newline across chunk boundaries
-  - last line without trailing newline
-  - file above streaming threshold
+- [ ] Fix the remaining failures in [tests/rust/nodejs_api_tests.rs](C:/Users/shawn/workspace/fast-context/tests/rust/nodejs_api_tests.rs):
+  - `test_nodejs_find_symbols_in_file`
+  - `test_nodejs_get_file_dependencies`
+- [ ] Decide whether these tests are asserting the wrong contract or exposing real runtime bugs
+- [ ] Keep the new `maxFiles` / `parallelProcessing` coverage green
+- [ ] Document the environment constraint around local Node-API loader noise on Windows
 
 Acceptance criteria:
 
-- [ ] Streaming and non-streaming reads produce identical text for fixtures
-- [ ] Large-file symbol counts are stable across repeated runs
+- [ ] `cargo test --features nodejs --test nodejs_api_tests` is green or intentionally narrowed with documented rationale
+- [ ] Node-facing Rust tests match the shipped contract
 
-### F. Stop silently excluding ordinary files
+### D. Add real Python qualification to CI
 
-Status: `CONFIRMED BUG`
+Status: `BLOCKED BY PIPELINE COVERAGE`
 
-Problems in [src/validation/mod.rs](/C:/Users/shawn/workspace/fast-context/src/validation/mod.rs) and [src/core/mod.rs](/C:/Users/shawn/workspace/fast-context/src/core/mod.rs):
+Problems:
 
-- [ ] Narrow the sensitive-path filter to actual system/secret locations
-- [ ] Remove generic substring blocking for names like `key`, `token`, `secret`
-- [ ] Stop swallowing file-read failures during analysis
-- [ ] Surface skipped-file diagnostics in a structured way
-- [ ] Add fixtures such as:
-  - `api_key.ts`
-  - `tokenizer.py`
-  - `secret-santa.js`
+- [ ] Add `cargo check --features python` to active CI
+- [ ] Add Python install/import validation against the built extension
+- [ ] Add `pytest` coverage for the supported Python API surface
+- [ ] Decide which Python test files are authoritative and which are legacy/noise
+- [ ] Make CI use a supported interpreter range and document it clearly
 
 Acceptance criteria:
 
-- [ ] Ordinary project files with those names are analyzed
-- [ ] Truly blocked files are reported explicitly
+- [ ] Main CI proves Python bindings compile
+- [ ] Main CI proves Python bindings import
+- [ ] Main CI runs a meaningful Python test suite
 
-## API Contract Reconciliation
+## Correctness and Trust Gaps
 
-### G. Choose and enforce one Node contract
+### E. Stop silently dropping failed files
 
-Status: `DRIFT DETECTED`
+Status: `CONFIRMED TRUST GAP`
+
+Problems in [/src/core/mod.rs](C:/Users/shawn/workspace/fast-context/src/core/mod.rs):
+
+- [ ] Stop turning file read/stream/parse failures into silent `None`
+- [ ] Surface skipped files in a structured result or diagnostics channel
+- [ ] Distinguish:
+  - unreadable files
+  - blocked files
+  - parse failures
+  - unsupported files
+- [ ] Add tests that verify these failures are visible to callers
+
+Acceptance criteria:
+
+- [ ] Analysis results expose skipped-file diagnostics explicitly
+- [ ] Users can tell the difference between "0 symbols" and "file was skipped"
+
+### F. Review remaining dirty core changes before release
+
+Status: `BLOCKED BY LOCAL WORKTREE NOISE`
+
+Problems:
+
+- [ ] Review the remaining uncommitted changes under `/src` and `/tests`
+- [ ] Separate intentional follow-up work from accidental/local churn
+- [ ] Commit, shelve, or revert them before a release candidate
+
+Acceptance criteria:
+
+- [ ] Release branch/worktree is clean
+- [ ] Every remaining code change has an owner and a reason
+
+## Hardening and Polish
+
+### G. Enterprise CI gate
+
+Status: `NOT YET COMPLETE`
 
 Tasks:
 
-- [ ] Pick the public casing convention for Node
-  - likely camelCase, since [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) is generated that way
-- [ ] Make runtime, tests, examples, and docs agree
-- [ ] Remove stale snake_case expectations from Node-facing material
-- [ ] Clean up duplicated type declarations in [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts)
+- [ ] Define one required release gate covering:
+  - `cargo check`
+  - `cargo clippy --all-targets --all-features -- -D warnings`
+  - `cargo test`
+  - `cargo check --features python`
+  - `npm run build`
+  - `npm test`
+  - Node tarball smoke install
+  - Python wheel/sdist smoke install
+- [ ] Make the gate enforceable in CI, not just locally
+- [ ] Ensure failures stop publication automatically
 
 Acceptance criteria:
 
-- [ ] One contract exists across runtime, TS definitions, tests, and docs
+- [ ] Release cannot proceed unless the full gate is green
 
-### H. Choose and enforce one Python contract
+### H. Cross-platform packaging confidence
 
-Status: `DRIFT DETECTED`
+Status: `PARTIALLY VALIDATED`
 
 Tasks:
 
-- [ ] Decide whether the supported Python API is sync, async, or both
-- [ ] Make [python/README.md](/C:/Users/shawn/workspace/fast-context/python/README.md) match the shipped API
-- [ ] Make [tests/python/test_python_bindings.py](/C:/Users/shawn/workspace/fast-context/tests/python/test_python_bindings.py) and related Python tests match the same contract
-- [ ] Remove examples that depend on nonexistent result fields
+- [ ] Validate npm native artifact flow for Linux/macOS/Windows
+- [ ] Validate Python wheel output for supported Python versions/platforms
+- [ ] Confirm package contents are minimal and correct on each publish target
+- [ ] Do a dry-run for npm and PyPI publication
 
 Acceptance criteria:
 
-- [ ] README snippets run unchanged
-- [ ] Python tests validate only supported behavior
+- [ ] Cross-platform artifacts build and install cleanly
+- [ ] No platform depends on ad hoc local fixes
 
-## Verification Matrix
+### I. Docs and support policy cleanup
 
-Run these after each major phase, and all of them before publish:
+Status: `NEEDS FINAL PASS`
 
-- [ ] `cargo check`
-- [ ] `npm run build:debug`
-- [ ] `npm test`
-- [ ] `npm run test:integration`
-- [ ] `cargo check --features python`
-- [ ] Python binding smoke test in `fast-context-py311`
+Tasks:
 
-Recommended Python env:
+- [ ] Define the supported Node versions
+- [ ] Define the supported Python versions
+- [ ] Define the supported OS/architecture matrix
+- [ ] Align README/docs/examples with the actual shipped APIs and release flows
 
-- `E:\models\bin\conda\envs\fast-context-py311\python.exe`
+Acceptance criteria:
+
+- [ ] A user can follow the docs without hitting stale names or dead paths
 
 ## Recommended Execution Order
 
-1. Restore broken validation paths
-   - fix Python module wiring
-   - fix Node test imports
-   - fix Rust integration test discovery
-2. Reconcile the public API contracts
-   - Node casing and method names
-   - Python result model and method surface
-3. Fix confirmed correctness bugs
-   - Node config propagation
-   - streaming line reconstruction
-   - sensitive-file filtering
-4. Re-run the full verification matrix
-5. Only then consider packaging dry runs and publication
+1. Fix release workflow drift
+2. Fix stale metadata/project identity
+3. Make Node-feature Rust tests honest and green
+4. Add real Python validation to active CI
+5. Expose skipped-file diagnostics instead of silently dropping failures
+6. Clean the remaining local worktree noise
+7. Run full release dry-runs for npm and PyPI
 
 ## Publish Gate
 
-Do not publish until all of the following are true:
+Do not call this enterprise-ready until all of the following are true:
 
-- [ ] Python feature build is clean
-- [ ] Node tests pass
-- [ ] Rust integration tests are actually running
-- [ ] Config-sensitive behaviors are covered by tests
-- [ ] Large-file streaming behavior is covered by tests
-- [ ] Filtered/skipped-file behavior is covered by tests
-- [ ] Node and Python docs match the shipped APIs
+- [ ] Release workflows are current and consistent
+- [ ] Metadata uses the current project identity everywhere
+- [ ] Node-feature Rust tests are green or intentionally scoped with rationale
+- [ ] Python compile/import/tests are enforced in CI
+- [ ] Analysis reports skipped files explicitly
+- [ ] Cross-platform package dry-runs succeed
+- [ ] Release worktree is clean

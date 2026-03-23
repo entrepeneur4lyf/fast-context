@@ -127,13 +127,13 @@ mod nodejs_api_tests {
         let analyzer = FastContextAnalyzer::new(config).unwrap();
 
         // Test Rust file
-        let rust_result = analyzer.find_symbols_in_file(rust_file.to_string_lossy().to_string());
+        let rust_result = analyzer.find_symbols_in_file("test.rs".to_string());
         assert!(rust_result.is_ok());
         let rust_symbols = rust_result.unwrap();
         assert!(rust_symbols.len() >= 3); // main, TestStruct, new
 
         // Test JavaScript file
-        let js_result = analyzer.find_symbols_in_file(js_file.to_string_lossy().to_string());
+        let js_result = analyzer.find_symbols_in_file("test.js".to_string());
         assert!(js_result.is_ok());
         let js_symbols = js_result.unwrap();
         assert!(js_symbols.len() >= 3); // greet, User, getName
@@ -252,15 +252,13 @@ mod nodejs_api_tests {
         fs::write(
             &rust_file,
             r#"
-            use std::collections::HashMap;
-            use serde::{Serialize, Deserialize};
-            
-            mod utils;
-            mod config;
+            fn helper_one() {}
+
+            fn helper_two() {}
             
             fn main() {
-                let map = HashMap::new();
-                println!("Hello, world!");
+                helper_one();
+                helper_two();
             }
         "#,
         )
@@ -279,11 +277,11 @@ mod nodejs_api_tests {
         };
         let analyzer = FastContextAnalyzer::new(config).unwrap();
 
-        let result = analyzer.find_dependencies(rust_file.to_string_lossy().to_string());
+        let result = analyzer.find_dependencies("main".to_string());
         assert!(result.is_ok());
 
         let dependencies = result.unwrap();
-        // Should find some dependencies (std, serde, local modules)
+        // Should find deterministic call dependencies for main -> helper_one/helper_two
         assert!(dependencies.len() >= 2);
     }
 

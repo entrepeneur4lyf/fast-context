@@ -46,20 +46,20 @@
     "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs/issues"
   },
   "dependencies": {
-    "zod": "^3.22.0",
-    "events": "^3.3.0"
+    "events": "^3.3.0",
+    "zod": "^3.22.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
     "@types/events": "^3.0.0",
-    "typescript": "^5.0.0",
-    "jest": "^29.0.0",
     "@types/jest": "^29.0.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
+    "eslint": "^9.39.4",
+    "jest": "^29.0.0",
+    "rimraf": "^5.0.0",
     "ts-jest": "^29.0.0",
-    "eslint": "^8.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "rimraf": "^5.0.0"
+    "typescript": "^5.0.0"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -68,7 +68,6 @@
   "publishConfig": {
     "access": "public"
   },
-
   "files": [
     "dist/**/*",
     "README.md"
