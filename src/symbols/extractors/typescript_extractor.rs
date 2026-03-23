@@ -508,10 +508,11 @@ impl TypeScriptExtractor {
         // Remove TSDoc comment markers
         if cleaned.starts_with("/**") {
             cleaned = cleaned[3..].to_string();
-        } else if cleaned.starts_with("/*") {
-            cleaned = cleaned[2..].to_string();
-        } else if cleaned.starts_with("//") {
-            cleaned = cleaned[2..].to_string();
+        } else if let Some(stripped) = cleaned
+            .strip_prefix("/*")
+            .or_else(|| cleaned.strip_prefix("//"))
+        {
+            cleaned = stripped.to_string();
         }
         
         if cleaned.ends_with("*/") {
@@ -524,8 +525,8 @@ impl TypeScriptExtractor {
         
         for line in lines {
             let trimmed = line.trim();
-            if trimmed.starts_with('*') {
-                result_lines.push(trimmed[1..].trim());
+            if let Some(stripped) = trimmed.strip_prefix('*') {
+                result_lines.push(stripped.trim());
             } else if !trimmed.is_empty() {
                 result_lines.push(trimmed);
             } else {

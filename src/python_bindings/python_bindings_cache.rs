@@ -175,6 +175,13 @@ impl PyCacheStatistics {
     }
 }
 
+#[cfg(feature = "python")]
+impl Default for PyCacheStatistics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Multi-level cache implementation
 #[cfg(feature = "python")]
 #[pyclass]
@@ -517,7 +524,7 @@ impl PyMultiLevelCache {
             for cache_file in cache_files.flatten() {
                 if let Ok(metadata) = cache_file.metadata() {
                     total_size += metadata.len();
-                    entries.push((cache_file.path(), metadata.len(), metadata.modified().unwrap_or(UNIX_EPOCH.into())));
+                    entries.push((cache_file.path(), metadata.len(), metadata.modified().unwrap_or(UNIX_EPOCH)));
                 }
             }
         }
@@ -557,7 +564,7 @@ impl PyMultiLevelCache {
             for cache_file in cache_files.flatten() {
                 if let Ok(entry) = self.load_from_disk(&cache_file.path()) {
                     if entry.is_expired() {
-                        let _ = fs::remove_file(&cache_file.path());
+                        let _ = fs::remove_file(cache_file.path());
                     }
                 }
             }

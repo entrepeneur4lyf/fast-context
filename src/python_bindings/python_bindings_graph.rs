@@ -29,11 +29,45 @@ pub struct PyRustworkxGraph {
     graph: Arc<Mutex<UnGraph<String, f64>>>,
 }
 
+#[cfg(feature = "python")]
+impl Clone for PyRustworkxGraph {
+    fn clone(&self) -> Self {
+        let graph = self.graph.lock().unwrap();
+        Self {
+            graph: Arc::new(Mutex::new(graph.clone())),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl Default for PyRustworkxGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Python wrapper for petgraph directed graph  
 #[cfg(feature = "python")]
 #[pyclass]
 pub struct PyRustworkxDiGraph {
     graph: Arc<Mutex<DiGraph<String, f64>>>,
+}
+
+#[cfg(feature = "python")]
+impl Clone for PyRustworkxDiGraph {
+    fn clone(&self) -> Self {
+        let graph = self.graph.lock().unwrap();
+        Self {
+            graph: Arc::new(Mutex::new(graph.clone())),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl Default for PyRustworkxDiGraph {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Result from path algorithms
@@ -277,15 +311,15 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
         let mut distances = vec![vec![f64::INFINITY; node_count]; node_count];
         
         // Set diagonal to 0 and direct edges to their weights
-        for i in 0..node_count {
-            distances[i][i] = 0.0;
+        for (i, row) in distances.iter_mut().enumerate().take(node_count) {
+            row[i] = 0.0;
             let source_idx = NodeIndex::new(i);
             
             // Set direct edge weights
             for edge in graph.edges_directed(source_idx, petgraph::Direction::Outgoing) {
                 let target_idx = edge.target().index();
                 let weight = *edge.weight();
-                distances[i][target_idx] = weight.min(distances[i][target_idx]);
+                row[target_idx] = weight.min(row[target_idx]);
             }
         }
         
@@ -302,10 +336,10 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
         
         // Convert to the expected format with Option<f64>
         let mut result = vec![vec![None; node_count]; node_count];
-        for i in 0..node_count {
-            for j in 0..node_count {
-                if distances[i][j].is_finite() {
-                    result[i][j] = Some(distances[i][j]);
+        for (i, row) in distances.iter().enumerate().take(node_count) {
+            for (j, distance) in row.iter().enumerate().take(node_count) {
+                if distance.is_finite() {
+                    result[i][j] = Some(*distance);
                 }
             }
         }
@@ -390,11 +424,9 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
         }
     }
 
-    pub fn clone(&self) -> Self {
-        let graph = self.graph.lock().unwrap();
-        Self {
-            graph: Arc::new(Mutex::new(graph.clone())),
-        }
+    #[pyo3(name = "clone")]
+    pub fn clone_graph(&self) -> Self {
+        Clone::clone(self)
     }
 
     pub fn __str__(&self) -> String {
@@ -619,11 +651,9 @@ impl PyRustworkxDiGraph {
         }
     }
 
-    pub fn clone(&self) -> Self {
-        let graph = self.graph.lock().unwrap();
-        Self {
-            graph: Arc::new(Mutex::new(graph.clone())),
-        }
+    #[pyo3(name = "clone")]
+    pub fn clone_graph(&self) -> Self {
+        Clone::clone(self)
     }
 
     pub fn __str__(&self) -> String {

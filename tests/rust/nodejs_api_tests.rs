@@ -155,7 +155,7 @@ mod nodejs_api_tests {
             parallel_processing: Some(true),
             enable_experimental_architecture: Some(false),
         };
-        let mut analyzer = FastContextAnalyzer::new(config).unwrap();
+        let analyzer = FastContextAnalyzer::new(config).unwrap();
 
         let result = analyzer.analyze();
         assert!(result.is_ok());
@@ -224,7 +224,7 @@ mod nodejs_api_tests {
             parallel_processing: Some(true),
             enable_experimental_architecture: Some(false),
         };
-        let mut analyzer = FastContextAnalyzer::new(config).unwrap();
+        let analyzer = FastContextAnalyzer::new(config).unwrap();
 
         // Test starting and stopping watcher
         let watch_result = analyzer.start_watching();
@@ -290,7 +290,7 @@ mod nodejs_api_tests {
             parallel_processing: Some(true),
             enable_experimental_architecture: Some(false),
         };
-        let mut analyzer = FastContextAnalyzer::new(config).unwrap();
+        let analyzer = FastContextAnalyzer::new(config).unwrap();
 
         let start = std::time::Instant::now();
         let result = analyzer.analyze();

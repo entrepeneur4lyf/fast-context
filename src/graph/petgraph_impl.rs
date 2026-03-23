@@ -91,7 +91,7 @@ where
         for node_idx in self.graph.node_indices() {
             let in_degree = self.graph.neighbors_directed(node_idx, Direction::Incoming).count();
             let out_degree = self.graph.neighbors_directed(node_idx, Direction::Outgoing).count();
-            if let Some(our_id) = self.from_petgraph_node_opt(node_idx) {
+            if let Some(our_id) = self.lookup_node_id(node_idx) {
                 cache.insert(our_id.as_usize(), (in_degree, out_degree));
             }
         }
@@ -110,7 +110,7 @@ where
     }
 
     /// Convert petgraph NodeIndex back to our NodeId
-    fn from_petgraph_node_opt(&self, node_idx: NodeIndex) -> Option<NodeId> {
+    fn lookup_node_id(&self, node_idx: NodeIndex) -> Option<NodeId> {
         self.node_id_map
             .iter()
             .find(|(_, &idx)| idx == node_idx)
@@ -118,7 +118,7 @@ where
     }
 
     /// Convert petgraph NodeIndex to our NodeId
-    fn from_petgraph_node(&mut self, node_idx: NodeIndex) -> NodeId {
+    fn intern_node_id(&mut self, node_idx: NodeIndex) -> NodeId {
         let our_id = self.next_node_id;
         self.next_node_id += 1;
         self.node_id_map.insert(our_id, node_idx);
@@ -131,7 +131,7 @@ where
     }
 
     /// Convert petgraph EdgeIndex to our EdgeId
-    fn from_petgraph_edge(&mut self, edge_idx: petgraph::graph::EdgeIndex) -> EdgeId {
+    fn intern_edge_id(&mut self, edge_idx: petgraph::graph::EdgeIndex) -> EdgeId {
         let our_id = self.next_edge_id;
         self.next_edge_id += 1;
         self.edge_id_map.insert(our_id, edge_idx);
@@ -158,7 +158,7 @@ where
 
     fn add_node(&mut self, node: N) -> FastContextResult<NodeId> {
         let node_idx = self.graph.add_node(node);
-        Ok(self.from_petgraph_node(node_idx))
+        Ok(self.intern_node_id(node_idx))
     }
 
     fn get_node(&self, node_id: NodeId) -> Option<&N> {
@@ -217,7 +217,7 @@ where
 
         let edge_idx = self.graph.add_edge(source_idx, target_idx, edge);
         self.mark_degree_cache_dirty();
-        Ok(self.from_petgraph_edge(edge_idx))
+        Ok(self.intern_edge_id(edge_idx))
     }
 
     fn get_edge(&self, edge_id: EdgeId) -> Option<&E> {
@@ -249,14 +249,13 @@ where
         let target_idx = self.to_petgraph_node(target)?;
         
         self.graph.find_edge(source_idx, target_idx)
-            .map(|edge_idx| {
+            .and_then(|edge_idx| {
                 // Find our edge ID that corresponds to this petgraph edge
                 self.edge_id_map
                     .iter()
                     .find(|(_, &pet_idx)| pet_idx == edge_idx)
                     .map(|(&our_id, _)| EdgeId::new(our_id))
             })
-            .flatten()
     }
 
     // === Traversal Operations ===

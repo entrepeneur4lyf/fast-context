@@ -9,7 +9,7 @@
 use pyo3::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Cache policy configuration
 #[cfg(feature = "python")]
@@ -45,6 +45,7 @@ pub struct PyCachePolicy {
 #[pymethods]
 impl PyCachePolicy {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (policy_type="conservative".to_string(), max_memory_mb=512, max_disk_gb=1.0, ttl_seconds=3600, enable_compression=true, enable_incremental=true, prediction_enabled=false, prefetch_patterns=Vec::new()))]
     pub fn new(
         policy_type: String,
@@ -176,6 +177,7 @@ pub struct PyPerformanceConfig {
 #[pymethods]
 impl PyPerformanceConfig {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (parallel_processing=true, worker_threads=4, chunk_size=1000, enable_rayon=true, memory_limit_mb=4096, enable_gc_optimization=true, io_timeout_ms=30000, enable_async_io=true))]
     pub fn new(
         parallel_processing: bool,
@@ -300,6 +302,7 @@ pub struct PyAdvancedAnalyzerConfig {
 #[pymethods]
 impl PyAdvancedAnalyzerConfig {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (project_root, languages, ignore_patterns, cache_policy=None, performance_config=None, enable_experimental_architecture=false, enable_ai_assistant_integration=false, enable_real_time_updates=false, enable_cross_language_analysis=true, max_file_size_mb=10, enable_syntax_validation=true, enable_semantic_analysis=true, custom_extractors=HashMap::new(), environment_variables=HashMap::new()))]
     pub fn new(
         project_root: String,
@@ -432,7 +435,7 @@ impl PyAdvancedAnalyzerConfig {
         }
         
         // Optimize worker threads
-        let optimal_threads = (cpu_cores / 2).max(1).min(8);
+        let optimal_threads = (cpu_cores / 2).clamp(1, 8);
         self.performance_config.worker_threads = optimal_threads;
         
         // Enable parallel processing for multi-core systems
@@ -507,7 +510,7 @@ impl PyAdvancedAnalyzerConfig {
 // Private helper methods
 #[cfg(feature = "python")]
 impl PyAdvancedAnalyzerConfig {
-    fn detect_languages(project_path: &PathBuf) -> PyResult<Vec<String>> {
+    fn detect_languages(project_path: &Path) -> PyResult<Vec<String>> {
         let mut languages = Vec::new();
         
         // Look for common language indicators
@@ -539,7 +542,7 @@ impl PyAdvancedAnalyzerConfig {
         Ok(languages)
     }
     
-    fn detect_ignore_patterns(project_path: &PathBuf) -> PyResult<Vec<String>> {
+    fn detect_ignore_patterns(project_path: &Path) -> PyResult<Vec<String>> {
         let mut patterns = vec![
             "node_modules/**".to_string(),
             "*.pyc".to_string(),
@@ -613,6 +616,13 @@ impl PyAdvancedAnalyzerConfig {
 pub struct PyConfigProfileManager {
     profiles: HashMap<String, PyAdvancedAnalyzerConfig>,
     current_profile: String,
+}
+
+#[cfg(feature = "python")]
+impl Default for PyConfigProfileManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(feature = "python")]
@@ -746,14 +756,13 @@ impl PyConfigProfileManager {
         
         for entry in std::fs::read_dir(dir_path)
             .map_err(|e| pyo3::exceptions::PyIOError::new_err(e.to_string()))?
+            .flatten()
         {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        if let Ok(config) = Self::load_profile_from_file(&path) {
-                            self.profiles.insert(stem.to_string(), config);
-                        }
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    if let Ok(config) = Self::load_profile_from_file(&path) {
+                        self.profiles.insert(stem.to_string(), config);
                     }
                 }
             }

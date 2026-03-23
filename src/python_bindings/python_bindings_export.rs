@@ -46,6 +46,7 @@ pub struct PyExportOptions {
 #[pymethods]
 impl PyExportOptions {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     #[pyo3(signature = (format, output_path=None, include_source=false, include_docs=false, minify=false, include_relationships=true, include_embeddings=false, embedding_format="numpy".to_string()))]
     pub fn new(
         format: String,
@@ -410,6 +411,13 @@ impl PyEmbeddingExporter {
 #[cfg(feature = "python")]
 #[pyclass]
 pub struct PyExportFactory;
+
+#[cfg(feature = "python")]
+impl Default for PyExportFactory {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 #[cfg(feature = "python")]
 #[pymethods]

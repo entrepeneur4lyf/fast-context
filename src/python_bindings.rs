@@ -1066,7 +1066,7 @@ pub fn analyze_project(
                         .any(|l| language.to_lowercase_string().contains(&l.to_lowercase()))
                     {
                         file_count += 1;
-                        detected_languages.insert(language.clone());
+                        detected_languages.insert(language);
 
                         // Count symbols by reading file content
                         if let Ok(content) = fs::read_to_string(entry.path()) {

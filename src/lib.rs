@@ -48,17 +48,15 @@ pub mod types;
 pub mod errors;      // Comprehensive error management system
 pub mod validation;  // Input validation and security
 
-// 🏗️ NEW MODULAR ARCHITECTURE - Proper separation of concerns
+// NEW MODULAR ARCHITECTURE - Proper separation of concerns
 #[cfg(feature = "nodejs")]
 pub mod analyzer;    // FastContextAnalyzer implementation
-#[cfg(any())]
-pub mod api;         // Temporarily excluded from the Node build until reconciled
 pub mod graph;       // Graph algorithms and data structures
 pub mod utils;
 mod test_display;       // Utility functions
 pub mod domains;     // Domain separation for architectural harmony
 
-// 📦 CORE MODULES - Well-organized functionality
+// CORE MODULES - Well-organized functionality
 pub mod analysis;    // Code analysis and graph construction
 pub mod cache;       // Intelligent caching system
 // error_tracking is now part of the errors module
@@ -69,7 +67,7 @@ pub mod symbols;     // Symbol extraction and management
 pub mod watcher;     // File system monitoring
 pub mod core;        // Shared Send + Sync CoreAnalyzer
 
-// 🐍 PYTHON BINDINGS - Optional Python integration
+// PYTHON BINDINGS - Optional Python integration
 #[cfg(feature = "python")]
 pub mod python_bindings;
 #[cfg(feature = "python")]
@@ -91,7 +89,7 @@ pub mod python_bindings_config;
 #[path = "python_bindings/python_bindings_cache.rs"]
 pub mod python_bindings_cache;
 
-// 🎯 RE-EXPORTS - Clean public API
+// RE-EXPORTS - Clean public API
 #[cfg(feature = "nodejs")]
 pub use analyzer::{FastContextAnalyzer, AnalyzerConfig, AnalysisResultJs, QueryResultJs};
 #[cfg(feature = "nodejs")]

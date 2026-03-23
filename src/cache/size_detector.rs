@@ -137,6 +137,20 @@ struct PerformanceEstimates {
     pub estimated_analysis_time_ms: u64,
 }
 
+#[derive(Debug)]
+struct ProjectProfileInput {
+    files: Vec<FileInfo>,
+    languages: HashMap<LanguageId, LanguageStats>,
+    primary_language: Option<LanguageId>,
+    total_lines: usize,
+    total_size_bytes: u64,
+    complexity_score: f64,
+    characteristics: ProjectCharacteristics,
+    estimates: PerformanceEstimates,
+    scan_root: PathBuf,
+    analysis_duration: std::time::Duration,
+}
+
 /// Codebase analyzer that detects project characteristics
 pub struct CodebaseAnalyzer {
     /// Files to ignore during analysis
@@ -393,18 +407,18 @@ impl CodebaseAnalyzer {
 
         // Phase 5: Build final profile
         let analysis_duration = start_time.elapsed();
-        self.build_project_profile(
+        self.build_project_profile(ProjectProfileInput {
             files,
             languages,
             primary_language,
             total_lines,
             total_size_bytes,
             complexity_score,
-            project_characteristics,
-            performance_estimates,
-            root_path,
+            characteristics: project_characteristics,
+            estimates: performance_estimates,
+            scan_root: root_path,
             analysis_duration,
-        )
+        })
     }
 
     /// Analyze language distribution and calculate statistics
@@ -503,17 +517,21 @@ impl CodebaseAnalyzer {
     /// Build final project profile
     fn build_project_profile(
         &self,
-        files: Vec<FileInfo>,
-        languages: HashMap<LanguageId, LanguageStats>,
-        primary_language: Option<LanguageId>,
-        total_lines: usize,
-        total_size_bytes: u64,
-        complexity_score: f64,
-        characteristics: ProjectCharacteristics,
-        estimates: PerformanceEstimates,
-        scan_root: PathBuf,
-        analysis_duration: std::time::Duration,
+        input: ProjectProfileInput,
     ) -> Result<ProjectProfile, AnalysisError> {
+        let ProjectProfileInput {
+            files,
+            languages,
+            primary_language,
+            total_lines,
+            total_size_bytes,
+            complexity_score,
+            characteristics,
+            estimates,
+            scan_root,
+            analysis_duration,
+        } = input;
+
         Ok(ProjectProfile {
             size: ProjectSize::from_file_count(files.len()),
             total_files: files.len(),

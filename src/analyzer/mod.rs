@@ -306,7 +306,7 @@ impl FastContextAnalyzer {
     pub fn find_symbols_in_file(&self, file_path: String) -> napi::Result<Vec<String>> {
         // Use secure path resolution within project boundaries
         let full_path = crate::validation::resolve_project_path(
-            &std::path::Path::new(&self.project_root), 
+            std::path::Path::new(&self.project_root),
             &file_path
         ).map_err(|e| napi::Error::from_reason(format!("Invalid file path '{}': {}", file_path, e)))?;
 

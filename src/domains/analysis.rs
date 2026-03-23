@@ -19,6 +19,7 @@ use std::cell::RefCell;
 use std::thread_local;
 
 thread_local! {
+    #[allow(clippy::missing_const_for_thread_local)]
     static ANALYSIS_DEPTH: RefCell<u32> = const { RefCell::new(0) };
 }
 
@@ -217,10 +218,10 @@ impl AnalysisEngine {
             match AdaptiveCacheManager::new(&self.config.project_root).await {
                 Ok(cache_manager) => {
                     self.cache_manager = Some(Arc::new(cache_manager));
-                    println!("✅ Cache manager initialized successfully");
+                    println!("Cache manager initialized successfully");
                 }
                 Err(e) => {
-                    eprintln!("⚠️ Warning: Failed to initialize cache manager: {}", e);
+                    eprintln!("Warning: Failed to initialize cache manager: {}", e);
                     // Continue without caching - don't fail the entire analysis
                 }
             }
@@ -264,9 +265,10 @@ impl AnalysisEngine {
         }
 
         // Initialize query engine if needed (simplified for architectural example)
-        if self.query_engine.is_none() && self.analysis_result.is_some() {
-            let analysis_result = self.analysis_result.as_ref().unwrap().clone();
-            self.query_engine = Some(CodeQueryEngine::new(analysis_result));
+        if self.query_engine.is_none() {
+            if let Some(analysis_result) = self.analysis_result.clone() {
+                self.query_engine = Some(CodeQueryEngine::new(analysis_result));
+            }
         }
 
         // Perform query (simplified for example)

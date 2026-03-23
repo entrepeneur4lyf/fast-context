@@ -614,7 +614,7 @@ mod tests {
     #[test]
     fn test_symbol_filtering() {
         // Test symbol filtering functionality by creating mock data with various symbol types
-        let mut symbols = vec![
+        let symbols = [
             Symbol {
                 name: "test_function".to_string(),
                 kind: SymbolKind::Function,
