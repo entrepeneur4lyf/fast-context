@@ -289,7 +289,6 @@ impl Drop for ScopedParserFactory {
     }
 }
 
-/// Thread-local parser factory pool for parallel processing
 thread_local! {
     static PARSER_POOL: std::cell::RefCell<ParserFactoryPool> = std::cell::RefCell::new(
         ParserFactoryPool::new(8) // Reasonable pool size for parallel processing

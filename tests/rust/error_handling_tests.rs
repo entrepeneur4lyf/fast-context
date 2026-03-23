@@ -206,7 +206,7 @@ fn test_query_with_invalid_inputs() {
 #[test]
 fn test_path_traversal_attempts() {
     let temp_dir = TempDir::new().unwrap();
-    let temp_path = temp_dir.path();
+    let _temp_path = temp_dir.path();
     
     // Test with path traversal attempts
     let malicious_paths = vec![

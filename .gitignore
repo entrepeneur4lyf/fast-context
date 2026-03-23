@@ -96,3 +96,11 @@ Thumbs.db
 *.bak
 *.tmp
 *.temp
+.gitnexus
+
+# Local agent metadata
+.claude/
+AGENTS.md
+
+# Archived docs
+docs/archive/
