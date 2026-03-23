@@ -12,28 +12,33 @@ use pyo3::prelude::*;
 use std::fs;
 
 #[cfg(feature = "python")]
+use crate::core::{CoreAnalyzer, CoreAnalyzerOptions};
+#[cfg(feature = "python")]
+use crate::python_bindings_cache::{
+    PyAnalysisCache, PyCacheEntry, PyCacheHealthMetrics, PyCacheStatistics, PyMultiLevelCache,
+};
+#[cfg(feature = "python")]
+use crate::python_bindings_config::{
+    PyAdvancedAnalyzerConfig, PyCachePolicy, PyConfigProfileManager, PyPerformanceConfig,
+};
+#[cfg(feature = "python")]
+use crate::python_bindings_graph::{
+    CentralityResult, ConnectedComponent, PathResult, PyRustworkxDiGraph, PyRustworkxGraph,
+};
+#[cfg(feature = "python")]
 use crate::python_bindings_util::extensions_for_language_str;
-#[cfg(feature = "python")]
-use crate::python_bindings_graph::{PyRustworkxGraph, PyRustworkxDiGraph, PathResult, CentralityResult, ConnectedComponent};
-#[cfg(feature = "python")]
-use crate::python_bindings_config::{PyAdvancedAnalyzerConfig, PyCachePolicy, PyPerformanceConfig, PyConfigProfileManager};
-#[cfg(feature = "python")]
-use crate::python_bindings_cache::{PyMultiLevelCache, PyAnalysisCache, PyCacheEntry, PyCacheStatistics, PyCacheHealthMetrics};
 #[cfg(feature = "python")]
 use pyo3_asyncio::tokio::future_into_py;
 #[cfg(feature = "python")]
-use walkdir::WalkDir;
-#[cfg(feature = "python")]
 use std::collections::HashMap;
-#[cfg(feature = "python")]
-use std::sync::{Arc, Mutex};
 #[cfg(feature = "python")]
 use std::sync::atomic::AtomicBool;
 #[cfg(feature = "python")]
-use crate::core::CoreAnalyzer;
+use std::sync::{Arc, Mutex};
+#[cfg(feature = "python")]
+use walkdir::WalkDir;
 
 #[cfg(feature = "python")]
-
 
 /// Simple analysis result for Python
 #[cfg(feature = "python")]
@@ -75,10 +80,10 @@ pub struct EnhancedAnalysisResult {
 
     #[pyo3(get)]
     pub relationships: Vec<PyDependency>,
-    
+
     #[pyo3(get)]
     pub symbols: Vec<PySymbol>,
-    
+
     #[pyo3(get)]
     pub files_analyzed: Vec<String>,
 }
@@ -90,16 +95,16 @@ pub struct EnhancedAnalysisResult {
 pub struct PyLocation {
     #[pyo3(get)]
     pub file_path: String,
-    
+
     #[pyo3(get)]
     pub start_line: usize,
-    
+
     #[pyo3(get)]
     pub start_column: usize,
-    
+
     #[pyo3(get)]
     pub end_line: usize,
-    
+
     #[pyo3(get)]
     pub end_column: usize,
 }
@@ -111,10 +116,10 @@ pub struct PyLocation {
 pub struct PyScope {
     #[pyo3(get)]
     pub name: String,
-    
+
     #[pyo3(get)]
     pub kind: String,
-    
+
     #[pyo3(get)]
     pub location: PyLocation,
 }
@@ -126,25 +131,25 @@ pub struct PyScope {
 pub struct PySymbol {
     #[pyo3(get)]
     pub name: String,
-    
+
     #[pyo3(get)]
     pub kind: String,
-    
+
     #[pyo3(get)]
     pub location: PyLocation,
-    
+
     #[pyo3(get)]
     pub scope_chain: Vec<PyScope>,
-    
+
     #[pyo3(get)]
     pub language: String,
-    
+
     #[pyo3(get)]
     pub documentation: Option<String>,
-    
+
     #[pyo3(get)]
     pub modifiers: Vec<String>,
-    
+
     #[pyo3(get)]
     pub signature: Option<String>,
 }
@@ -156,28 +161,28 @@ pub struct PySymbol {
 pub struct PyDependency {
     #[pyo3(get)]
     pub from_symbol: String,
-    
+
     #[pyo3(get)]
     pub to_symbol: String,
-    
+
     #[pyo3(get)]
     pub relationship_type: String,
-    
+
     #[pyo3(get)]
     pub location: PyLocation,
-    
+
     #[pyo3(get)]
     pub file_path: String,
-    
+
     #[pyo3(get)]
     pub language: String,
-    
+
     #[pyo3(get)]
     pub context: Option<String>,
-    
+
     #[pyo3(get)]
     pub strength: f32,
-    
+
     #[pyo3(get)]
     pub is_conditional: bool,
 }
@@ -297,6 +302,8 @@ pub struct FastContextAnalyzer {
     project_root: String,
     languages: Vec<String>,
     ignore_patterns: Vec<String>,
+    max_files: i32,
+    parallel_processing: bool,
     #[allow(dead_code)]
     enable_watching: bool,
     watcher: Option<Arc<Mutex<crate::watcher::CodebaseWatcher>>>,
@@ -317,12 +324,23 @@ impl FastContextAnalyzer {
             project_root: self.project_root.clone(),
             languages: self.languages.clone(),
             ignore_patterns: self.ignore_patterns.clone(),
+            max_files: self.max_files,
+            parallel_processing: self.parallel_processing,
             enable_watching: self.enable_watching,
             watcher: self.watcher.as_ref().map(|w| w.clone()),
             core: self.core.clone(),
             last_analysis: self.last_analysis.clone(),
             symbol_cache: self.symbol_cache.clone(),
             dirty: self.dirty.clone(),
+        }
+    }
+
+    fn analyzer_options(config: &AnalyzerConfig) -> CoreAnalyzerOptions {
+        CoreAnalyzerOptions {
+            max_files: usize::try_from(config.max_files)
+                .ok()
+                .filter(|max_files| *max_files > 0),
+            parallel_processing: config.parallel_processing,
         }
     }
 }
@@ -340,16 +358,21 @@ impl FastContextAnalyzer {
             ));
         }
 
+        let analyzer_options = Self::analyzer_options(&config);
+
         Ok(Self {
             project_root: config.project_root.clone(),
             languages: config.languages.clone(),
             ignore_patterns: config.ignore_patterns.clone(),
+            max_files: config.max_files,
+            parallel_processing: config.parallel_processing,
             enable_watching: config.enable_watching,
             watcher: None,
-            core: Arc::new(CoreAnalyzer::new(
+            core: Arc::new(CoreAnalyzer::with_options(
                 config.project_root,
                 Some(config.languages),
                 Some(config.ignore_patterns),
+                analyzer_options,
             )),
             last_analysis: Arc::new(Mutex::new(None)),
             symbol_cache: Arc::new(Mutex::new(HashMap::new())),
@@ -365,12 +388,11 @@ impl FastContextAnalyzer {
             ignore_patterns: self.ignore_patterns.clone(),
             enable_caching: true, // Default for existing analyzer
             enable_watching: self.enable_watching,
-            max_files: 10000, // Default
-            parallel_processing: true, // Default
+            max_files: self.max_files,
+            parallel_processing: self.parallel_processing,
         }
     }
 
-  
     /// Analyze the codebase asynchronously (releases GIL) and update cache/state
     pub fn analyze_async(&self, py: Python) -> PyResult<PyObject> {
         let core = self.core.clone();
@@ -380,9 +402,11 @@ impl FastContextAnalyzer {
             // Use a blocking section for CPU/IO heavy work to avoid starving Tokio
             let res = tokio::task::spawn_blocking(move || core.analyze())
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to join background analysis task: {e}")
-            ))?;
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to join background analysis task: {e}"
+                    ))
+                })?;
             match res {
                 Ok(val) => {
                     // Update cache/state
@@ -403,7 +427,8 @@ impl FastContextAnalyzer {
         if self.watcher.is_some() {
             return Ok(());
         }
-        let mut watched_extensions: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut watched_extensions: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         for lang in &self.languages {
             if let Some(exts) = extensions_for_language_str(lang) {
                 for e in exts {
@@ -431,8 +456,12 @@ impl FastContextAnalyzer {
         std::thread::spawn(move || {
             while let Ok(_batch) = rx.blocking_recv() {
                 dirty.store(true, std::sync::atomic::Ordering::SeqCst);
-                if let Ok(mut sc) = symbol_cache.lock() { sc.clear(); }
-                if let Ok(mut la) = last_analysis.lock() { *la = None; }
+                if let Ok(mut sc) = symbol_cache.lock() {
+                    sc.clear();
+                }
+                if let Ok(mut la) = last_analysis.lock() {
+                    *la = None;
+                }
             }
         });
         self.watcher = Some(std::sync::Arc::new(std::sync::Mutex::new(watcher)));
@@ -442,10 +471,14 @@ impl FastContextAnalyzer {
     /// Stop file watching
     pub fn stop_watching(&mut self) -> PyResult<()> {
         self.watcher = None; // drop watcher
-        // clear caches and mark dirty to force fresh analysis next call
+                             // clear caches and mark dirty to force fresh analysis next call
         self.dirty.store(true, std::sync::atomic::Ordering::SeqCst);
-        if let Ok(mut sc) = self.symbol_cache.lock() { sc.clear(); }
-        if let Ok(mut la) = self.last_analysis.lock() { *la = None; }
+        if let Ok(mut sc) = self.symbol_cache.lock() {
+            sc.clear();
+        }
+        if let Ok(mut la) = self.last_analysis.lock() {
+            *la = None;
+        }
         Ok(())
     }
 
@@ -458,13 +491,18 @@ impl FastContextAnalyzer {
             if !dirty.load(std::sync::atomic::Ordering::SeqCst) {
                 return Ok(false);
             }
-            let res = tokio::task::spawn_blocking(move || core.analyze()).await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to join background analysis task: {e}")
-            ))?;
+            let res = tokio::task::spawn_blocking(move || core.analyze())
+                .await
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to join background analysis task: {e}"
+                    ))
+                })?;
             match res {
                 Ok(val) => {
-                    if let Ok(mut guard) = last_analysis.lock() { *guard = Some(val); }
+                    if let Ok(mut guard) = last_analysis.lock() {
+                        *guard = Some(val);
+                    }
                     dirty.store(false, std::sync::atomic::Ordering::SeqCst);
                     Ok(true)
                 }
@@ -475,7 +513,11 @@ impl FastContextAnalyzer {
     }
 
     /// Find symbols by kind in the codebase (async)
-    pub fn find_symbols_by_kind_async(&self, py: Python, symbol_kind: String) -> PyResult<PyObject> {
+    pub fn find_symbols_by_kind_async(
+        &self,
+        py: Python,
+        symbol_kind: String,
+    ) -> PyResult<PyObject> {
         let core = self.core.clone();
         let cache_key = format!("kind:{}:{}", symbol_kind, self.languages.join(","));
         let symbol_cache = self.symbol_cache.clone();
@@ -490,9 +532,11 @@ impl FastContextAnalyzer {
             }
             let res = tokio::task::spawn_blocking(move || core.find_symbols_by_kind(symbol_kind))
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to join background analysis task: {e}")
-            ))?;
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to join background analysis task: {e}"
+                    ))
+                })?;
             match res {
                 Ok(val) => {
                     if let Ok(mut sc) = symbol_cache.lock() {
@@ -527,12 +571,16 @@ impl FastContextAnalyzer {
             }
             let res = tokio::task::spawn_blocking(move || core.find_symbols_in_file(full_path))
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to join background analysis task: {e}")
-            ))?;
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to join background analysis task: {e}"
+                    ))
+                })?;
             match res {
                 Ok(val) => {
-                    if let Ok(mut sc) = symbol_cache.lock() { sc.insert(key, val.clone()); }
+                    if let Ok(mut sc) = symbol_cache.lock() {
+                        sc.insert(key, val.clone());
+                    }
                     Ok(val)
                 }
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
@@ -543,10 +591,10 @@ impl FastContextAnalyzer {
 
     /// Find dependencies of a symbol across the project (async, simple cache)
     pub fn find_dependencies_async(&self, py: Python, symbol_name: String) -> PyResult<PyObject> {
-        let root = self.project_root.clone();
         let key = format!("deps:{}", symbol_name);
         let symbol_cache = self.symbol_cache.clone();
         let dirty = self.dirty.clone();
+        let core = self.core.clone();
         let awaitable = future_into_py(py, async move {
             if !dirty.load(std::sync::atomic::Ordering::SeqCst) {
                 if let Ok(sc) = symbol_cache.lock() {
@@ -555,17 +603,18 @@ impl FastContextAnalyzer {
                     }
                 }
             }
-            let res = tokio::task::spawn_blocking(move || {
-                let core = crate::core::CoreAnalyzer::new(root, None, None);
-                core.find_dependencies(symbol_name)
-            })
+            let res = tokio::task::spawn_blocking(move || core.find_dependencies(symbol_name))
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to join background analysis task: {e}")
-            ))?;
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to join background analysis task: {e}"
+                    ))
+                })?;
             match res {
                 Ok(val) => {
-                    if let Ok(mut sc) = symbol_cache.lock() { sc.insert(key, val.clone()); }
+                    if let Ok(mut sc) = symbol_cache.lock() {
+                        sc.insert(key, val.clone());
+                    }
                     Ok(val)
                 }
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
@@ -576,10 +625,10 @@ impl FastContextAnalyzer {
 
     /// Find complex symbols over threshold (async, simple cache)
     pub fn find_complex_symbols_async(&self, py: Python, threshold: u32) -> PyResult<PyObject> {
-        let root = self.project_root.clone();
         let key = format!("complex:{}", threshold);
         let symbol_cache = self.symbol_cache.clone();
         let dirty = self.dirty.clone();
+        let core = self.core.clone();
         let awaitable = future_into_py(py, async move {
             if !dirty.load(std::sync::atomic::Ordering::SeqCst) {
                 if let Ok(sc) = symbol_cache.lock() {
@@ -588,17 +637,18 @@ impl FastContextAnalyzer {
                     }
                 }
             }
-            let res = tokio::task::spawn_blocking(move || {
-                let core = crate::core::CoreAnalyzer::new(root, None, None);
-                core.find_complex_symbols(threshold)
-            })
+            let res = tokio::task::spawn_blocking(move || core.find_complex_symbols(threshold))
                 .await
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(
-                format!("Failed to join background analysis task: {e}")
-            ))?;
+                .map_err(|e| {
+                    pyo3::exceptions::PyRuntimeError::new_err(format!(
+                        "Failed to join background analysis task: {e}"
+                    ))
+                })?;
             match res {
                 Ok(val) => {
-                    if let Ok(mut sc) = symbol_cache.lock() { sc.insert(key, val.clone()); }
+                    if let Ok(mut sc) = symbol_cache.lock() {
+                        sc.insert(key, val.clone());
+                    }
                     Ok(val)
                 }
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
@@ -609,18 +659,13 @@ impl FastContextAnalyzer {
 
     /// Extract symbols from a specific file with full metadata
     pub fn extract_symbols_from_file(&self, file_path: &str) -> PyResult<PyEnhancedAnalysisResult> {
-        let analyzer = CoreAnalyzer::new(
-            self.project_root.clone(),
-            Some(self.languages.clone()),
-            Some(self.ignore_patterns.clone()),
-        );
-        
         // Use existing methods to extract symbols with full metadata
-        match analyzer.find_symbols_in_file(file_path.to_string()) {
+        match self.core.find_symbols_in_file(file_path.to_string()) {
             Ok(symbol_names) => {
                 // Create basic symbols from names (in real implementation, this would use full symbol extraction)
-                let symbols: Vec<PySymbol> = symbol_names.into_iter().map(|name| {
-                    PySymbol {
+                let symbols: Vec<PySymbol> = symbol_names
+                    .into_iter()
+                    .map(|name| PySymbol {
                         name: name.clone(),
                         kind: "Unknown".to_string(),
                         location: PyLocation {
@@ -635,9 +680,9 @@ impl FastContextAnalyzer {
                         documentation: None,
                         modifiers: Vec::new(),
                         signature: None,
-                    }
-                }).collect();
-                
+                    })
+                    .collect();
+
                 Ok(PyEnhancedAnalysisResult {
                     file_path: file_path.to_string(),
                     symbols,
@@ -647,24 +692,22 @@ impl FastContextAnalyzer {
                     analysis_duration_ms: 0,
                 })
             }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to analyze file: {}", e))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to analyze file: {}",
+                e
+            ))),
         }
     }
 
     /// Get symbol relationships and call graph  
     pub fn get_symbol_relationships(&self, symbol_name: &str) -> PyResult<Vec<PyDependency>> {
-        let analyzer = CoreAnalyzer::new(
-            self.project_root.clone(),
-            Some(self.languages.clone()),
-            Some(self.ignore_patterns.clone()),
-        );
-        
         // Use existing find_dependencies method
-        match analyzer.find_dependencies(symbol_name.to_string()) {
+        match self.core.find_dependencies(symbol_name.to_string()) {
             Ok(dependencies) => {
                 // Convert dependency strings to PyDependency objects
-                let py_deps: Vec<PyDependency> = dependencies.into_iter().map(|dep| {
-                    PyDependency {
+                let py_deps: Vec<PyDependency> = dependencies
+                    .into_iter()
+                    .map(|dep| PyDependency {
                         from_symbol: symbol_name.to_string(),
                         to_symbol: dep,
                         relationship_type: "Calls".to_string(),
@@ -680,25 +723,26 @@ impl FastContextAnalyzer {
                         context: None,
                         strength: 1.0,
                         is_conditional: false,
-                    }
-                }).collect();
+                    })
+                    .collect();
                 Ok(py_deps)
             }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to get symbol relationships: {}", e))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to get symbol relationships: {}",
+                e
+            ))),
         }
     }
 
     /// Search for symbols by name pattern across all files
-    pub fn search_symbols(&self, _pattern: &str, _language: Option<String>) -> PyResult<Vec<PySymbol>> {
-        let analyzer = CoreAnalyzer::new(
-            self.project_root.clone(),
-            Some(self.languages.clone()),
-            Some(self.ignore_patterns.clone()),
-        );
-        
+    pub fn search_symbols(
+        &self,
+        _pattern: &str,
+        _language: Option<String>,
+    ) -> PyResult<Vec<PySymbol>> {
         // Search across the known relationship graph, which is the stable data
         // currently exposed by the Python analysis result.
-        match analyzer.analyze() {
+        match self.core.analyze() {
             Ok(result) => {
                 let pattern_lower = _pattern.to_lowercase();
                 let language_filter = _language.as_ref().map(|lang| lang.to_lowercase());
@@ -732,25 +776,28 @@ impl FastContextAnalyzer {
 
                 Ok(filtered_symbols)
             }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to search symbols: {}", e))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to search symbols: {}",
+                e
+            ))),
         }
     }
 
     /// Get symbol documentation and metadata
-    pub fn get_symbol_documentation(&self, _symbol_name: &str, _file_path: &str) -> PyResult<Option<String>> {
-        let analyzer = CoreAnalyzer::new(
-            self.project_root.clone(),
-            Some(self.languages.clone()),
-            Some(self.ignore_patterns.clone()),
-        );
-        
+    pub fn get_symbol_documentation(
+        &self,
+        _symbol_name: &str,
+        _file_path: &str,
+    ) -> PyResult<Option<String>> {
         // Use relationship metadata as a lightweight documentation source until
         // the richer Python symbol model is reconciled with the Rust core.
-        match analyzer.analyze() {
+        match self.core.analyze() {
             Ok(result) => {
                 for rel in result.relationships {
-                    let symbol_matches = rel.from_symbol == _symbol_name || rel.to_symbol == _symbol_name;
-                    let file_matches = rel.file_path == _file_path || rel.location.file_path == _file_path;
+                    let symbol_matches =
+                        rel.from_symbol == _symbol_name || rel.to_symbol == _symbol_name;
+                    let file_matches =
+                        rel.file_path == _file_path || rel.location.file_path == _file_path;
                     if symbol_matches && file_matches {
                         if let Some(context) = rel.context.clone() {
                             return Ok(Some(context));
@@ -769,24 +816,21 @@ impl FastContextAnalyzer {
                 }
                 Ok(None)
             }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to get symbol documentation: {}", e))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to get symbol documentation: {}",
+                e
+            ))),
         }
     }
 
     /// Analyze cross-language dependencies
     pub fn analyze_cross_language_dependencies(&self) -> PyResult<Vec<PyDependency>> {
-        let analyzer = CoreAnalyzer::new(
-            self.project_root.clone(),
-            Some(self.languages.clone()),
-            Some(self.ignore_patterns.clone()),
-        );
-        
         // Cross-language detection is based on the relationship language that is
         // already available from the Python analysis result.
-        match analyzer.analyze() {
+        match self.core.analyze() {
             Ok(result) => {
                 let mut cross_lang_deps: Vec<PyDependency> = Vec::new();
-                
+
                 for dep in result.relationships {
                     let context = dep.context.clone().unwrap_or_default().to_lowercase();
                     if context.contains("cross-language")
@@ -796,114 +840,121 @@ impl FastContextAnalyzer {
                         cross_lang_deps.push(dep);
                     }
                 }
-                
+
                 Ok(cross_lang_deps)
             }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to analyze cross-language dependencies: {}", e))),
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to analyze cross-language dependencies: {}",
+                e
+            ))),
         }
     }
 
     /// Export symbol relationships as a graph
     pub fn export_relationship_graph(&self, format: &str) -> PyResult<String> {
-        let analyzer = CoreAnalyzer::new(
-            self.project_root.clone(),
-            Some(self.languages.clone()),
-            Some(self.ignore_patterns.clone()),
-        );
-        
-        match analyzer.analyze() {
-            Ok(result) => {
-                match format {
-                    "dot" | "graphviz" => {
-                        let mut dot_output = String::from("digraph G {\n  node [shape=box];\n");
-                        let mut seen_nodes = std::collections::HashSet::new();
-                        
-                        for dep in &result.relationships {
-                            for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
-                                if seen_nodes.insert(symbol_name.clone()) {
-                                    let escaped_name = symbol_name.replace("\"", "\\\"");
-                                    dot_output.push_str(&format!(
-                                        "  \"{}\" [label=\"{}\"];\n",
-                                        escaped_name, escaped_name
-                                    ));
-                                }
-                            }
-                        }
-                        
-                        for dep in &result.relationships {
-                            let from_escaped = dep.from_symbol.replace("\"", "\\\"");
-                            let to_escaped = dep.to_symbol.replace("\"", "\\\"");
-                            dot_output.push_str(&format!("  \"{}\" -> \"{}\" [label=\"{}\"];\n", 
-                                from_escaped, to_escaped, dep.relationship_type));
-                        }
-                        
-                        dot_output.push_str("}\n");
-                        Ok(dot_output)
-                    },
-                    "json" => {
-                        let mut nodes = Vec::new();
-                        let mut edges = Vec::new();
-                        let mut node_ids: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-                        
-                        for dep in &result.relationships {
-                            for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
-                                if !node_ids.contains_key(symbol_name) {
-                                    let id = node_ids.len();
-                                    node_ids.insert(symbol_name.clone(), id);
-                                    nodes.push(serde_json::json!({
-                                        "id": id,
-                                        "name": symbol_name,
-                                        "type": "Unknown",
-                                        "language": dep.language,
-                                        "file": dep.file_path
-                                    }));
-                                }
-                            }
-                        }
+        match self.core.analyze() {
+            Ok(result) => match format {
+                "dot" | "graphviz" => {
+                    let mut dot_output = String::from("digraph G {\n  node [shape=box];\n");
+                    let mut seen_nodes = std::collections::HashSet::new();
 
-                        for dep in &result.relationships {
-                            if let (Some(src), Some(tgt)) = (
-                                node_ids.get(&dep.from_symbol),
-                                node_ids.get(&dep.to_symbol),
-                            ) {
-                                edges.push(serde_json::json!({
-                                    "source": src,
-                                    "target": tgt,
-                                    "type": dep.relationship_type,
-                                    "strength": dep.strength
+                    for dep in &result.relationships {
+                        for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
+                            if seen_nodes.insert(symbol_name.clone()) {
+                                let escaped_name = symbol_name.replace("\"", "\\\"");
+                                dot_output.push_str(&format!(
+                                    "  \"{}\" [label=\"{}\"];\n",
+                                    escaped_name, escaped_name
+                                ));
+                            }
+                        }
+                    }
+
+                    for dep in &result.relationships {
+                        let from_escaped = dep.from_symbol.replace("\"", "\\\"");
+                        let to_escaped = dep.to_symbol.replace("\"", "\\\"");
+                        dot_output.push_str(&format!(
+                            "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
+                            from_escaped, to_escaped, dep.relationship_type
+                        ));
+                    }
+
+                    dot_output.push_str("}\n");
+                    Ok(dot_output)
+                }
+                "json" => {
+                    let mut nodes = Vec::new();
+                    let mut edges = Vec::new();
+                    let mut node_ids: std::collections::HashMap<String, usize> =
+                        std::collections::HashMap::new();
+
+                    for dep in &result.relationships {
+                        for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
+                            if !node_ids.contains_key(symbol_name) {
+                                let id = node_ids.len();
+                                node_ids.insert(symbol_name.clone(), id);
+                                nodes.push(serde_json::json!({
+                                    "id": id,
+                                    "name": symbol_name,
+                                    "type": "Unknown",
+                                    "language": dep.language,
+                                    "file": dep.file_path
                                 }));
                             }
                         }
-                        
-                        let graph = serde_json::json!({"nodes": nodes, "edges": edges});
-                        Ok(serde_json::to_string(&graph).unwrap_or_else(|_| "{\"nodes\": [], \"edges\": []}".to_string()))
-                    },
-                    "mermaid" => {
-                        let mut mermaid_output = String::from("graph TD\n");
-                        let mut seen_nodes = std::collections::HashSet::new();
+                    }
 
-                        for dep in &result.relationships {
-                            for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
-                                if seen_nodes.insert(symbol_name.clone()) {
-                                    let safe_name = symbol_name.replace(" ", "_").replace("-", "_");
-                                    mermaid_output.push_str(&format!("  {}[\"{}\"]\n", safe_name, symbol_name));
-                                }
+                    for dep in &result.relationships {
+                        if let (Some(src), Some(tgt)) =
+                            (node_ids.get(&dep.from_symbol), node_ids.get(&dep.to_symbol))
+                        {
+                            edges.push(serde_json::json!({
+                                "source": src,
+                                "target": tgt,
+                                "type": dep.relationship_type,
+                                "strength": dep.strength
+                            }));
+                        }
+                    }
+
+                    let graph = serde_json::json!({"nodes": nodes, "edges": edges});
+                    Ok(serde_json::to_string(&graph)
+                        .unwrap_or_else(|_| "{\"nodes\": [], \"edges\": []}".to_string()))
+                }
+                "mermaid" => {
+                    let mut mermaid_output = String::from("graph TD\n");
+                    let mut seen_nodes = std::collections::HashSet::new();
+
+                    for dep in &result.relationships {
+                        for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
+                            if seen_nodes.insert(symbol_name.clone()) {
+                                let safe_name = symbol_name.replace(" ", "_").replace("-", "_");
+                                mermaid_output
+                                    .push_str(&format!("  {}[\"{}\"]\n", safe_name, symbol_name));
                             }
                         }
+                    }
 
-                        for dep in &result.relationships {
-                            let from_safe = dep.from_symbol.replace(" ", "_").replace("-", "_");
-                            let to_safe = dep.to_symbol.replace(" ", "_").replace("-", "_");
-                            mermaid_output.push_str(&format!("  {} -->|{}| {}\n", 
-                                from_safe, dep.relationship_type, to_safe));
-                        }
-                        
-                        Ok(mermaid_output)
-                    },
-                    _ => Err(pyo3::exceptions::PyValueError::new_err(format!("Unsupported export format: {}", format))),
+                    for dep in &result.relationships {
+                        let from_safe = dep.from_symbol.replace(" ", "_").replace("-", "_");
+                        let to_safe = dep.to_symbol.replace(" ", "_").replace("-", "_");
+                        mermaid_output.push_str(&format!(
+                            "  {} -->|{}| {}\n",
+                            from_safe, dep.relationship_type, to_safe
+                        ));
+                    }
+
+                    Ok(mermaid_output)
                 }
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!("Failed to export relationship graph: {}", e))),
+                _ => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Unsupported export format: {}",
+                    format
+                ))),
+            },
+            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
+                "Failed to export relationship graph: {}",
+                e
+            ))),
         }
     }
 
@@ -911,7 +962,13 @@ impl FastContextAnalyzer {
 
     /// Create export options for JSON export
     #[pyo3(signature = (_format, output_path=None, include_source=false, include_docs=false))]
-    pub fn create_export_options(&self, _format: &str, output_path: Option<String>, include_source: bool, include_docs: bool) -> PyResult<crate::python_bindings_export::PyExportOptions> {
+    pub fn create_export_options(
+        &self,
+        _format: &str,
+        output_path: Option<String>,
+        include_source: bool,
+        include_docs: bool,
+    ) -> PyResult<crate::python_bindings_export::PyExportOptions> {
         Ok(crate::python_bindings_export::PyExportOptions::new(
             "json".to_string(),
             output_path,
@@ -925,7 +982,9 @@ impl FastContextAnalyzer {
     }
 
     /// Create LSP export options
-    pub fn create_lsp_export_options(&self) -> PyResult<crate::python_bindings_export::PyExportOptions> {
+    pub fn create_lsp_export_options(
+        &self,
+    ) -> PyResult<crate::python_bindings_export::PyExportOptions> {
         Ok(crate::python_bindings_export::PyExportOptions::new(
             "lsp".to_string(),
             None,
@@ -939,7 +998,10 @@ impl FastContextAnalyzer {
     }
 
     /// Create embedding export options
-    pub fn create_embedding_export_options(&self, embedding_format: String) -> PyResult<crate::python_bindings_export::PyExportOptions> {
+    pub fn create_embedding_export_options(
+        &self,
+        embedding_format: String,
+    ) -> PyResult<crate::python_bindings_export::PyExportOptions> {
         Ok(crate::python_bindings_export::PyExportOptions::new(
             "embeddings".to_string(),
             None,
@@ -953,7 +1015,12 @@ impl FastContextAnalyzer {
     }
 
     /// Export analysis results to JSON format
-    pub fn export_json(&self, _py: Python, analysis: &AnalysisResult, output_path: Option<String>) -> PyResult<String> {
+    pub fn export_json(
+        &self,
+        _py: Python,
+        analysis: &AnalysisResult,
+        output_path: Option<String>,
+    ) -> PyResult<String> {
         let options = self.create_export_options("json", output_path, true, false)?;
         let exporter = crate::python_bindings_export::PyJsonExporter::new(options);
         exporter.export_analysis(analysis)
@@ -967,49 +1034,88 @@ impl FastContextAnalyzer {
     }
 
     /// Export analysis results as embeddings
-    pub fn export_embeddings(&self, _py: Python, analysis: &AnalysisResult, embedding_format: String) -> PyResult<String> {
+    pub fn export_embeddings(
+        &self,
+        _py: Python,
+        analysis: &AnalysisResult,
+        embedding_format: String,
+    ) -> PyResult<String> {
         let options = self.create_embedding_export_options(embedding_format)?;
         let exporter = crate::python_bindings_export::PyEmbeddingExporter::new(options);
         exporter.export_embeddings(analysis)
     }
 
     /// Get query engine for advanced code intelligence
-    pub fn get_query_engine(&self, _py: Python, analysis: &AnalysisResult) -> PyResult<crate::python_bindings_query::PyCodeQueryEngine> {
-        Ok(crate::python_bindings_query::PyCodeQueryEngine::new(analysis.clone()))
+    pub fn get_query_engine(
+        &self,
+        _py: Python,
+        analysis: &AnalysisResult,
+    ) -> PyResult<crate::python_bindings_query::PyCodeQueryEngine> {
+        Ok(crate::python_bindings_query::PyCodeQueryEngine::new(
+            analysis.clone(),
+        ))
     }
 
     /// Query symbols by pattern
-    pub fn query_symbols_by_pattern(&self, py: Python, analysis: &AnalysisResult, pattern: String) -> PyResult<Vec<PySymbol>> {
+    pub fn query_symbols_by_pattern(
+        &self,
+        py: Python,
+        analysis: &AnalysisResult,
+        pattern: String,
+    ) -> PyResult<Vec<PySymbol>> {
         let query_engine = self.get_query_engine(py, analysis)?;
         query_engine.find_symbols_by_pattern(pattern)
     }
 
     /// Find architectural patterns
-    pub fn find_architectural_patterns(&self, py: Python, analysis: &AnalysisResult) -> PyResult<Vec<String>> {
+    pub fn find_architectural_patterns(
+        &self,
+        py: Python,
+        analysis: &AnalysisResult,
+    ) -> PyResult<Vec<String>> {
         let query_engine = self.get_query_engine(py, analysis)?;
         query_engine.find_architectural_patterns()
     }
 
     /// Get context for a specific symbol
-    pub fn get_symbol_context(&self, py: Python, analysis: &AnalysisResult, symbol_name: String) -> PyResult<crate::python_bindings_query::PyContextInfo> {
+    pub fn get_symbol_context(
+        &self,
+        py: Python,
+        analysis: &AnalysisResult,
+        symbol_name: String,
+    ) -> PyResult<crate::python_bindings_query::PyContextInfo> {
         let query_engine = self.get_query_engine(py, analysis)?;
         query_engine.get_context_for_symbol(symbol_name)
     }
 
     /// Detect code smells
-    pub fn detect_code_smells(&self, py: Python, analysis: &AnalysisResult) -> PyResult<Vec<crate::python_bindings_query::PyCodeSmell>> {
+    pub fn detect_code_smells(
+        &self,
+        py: Python,
+        analysis: &AnalysisResult,
+    ) -> PyResult<Vec<crate::python_bindings_query::PyCodeSmell>> {
         let query_engine = self.get_query_engine(py, analysis)?;
         query_engine.detect_code_smells()
     }
 
     /// Find complex symbols
-    pub fn find_complex_symbols(&self, py: Python, analysis: &AnalysisResult, threshold: f64) -> PyResult<Vec<PySymbol>> {
+    pub fn find_complex_symbols(
+        &self,
+        py: Python,
+        analysis: &AnalysisResult,
+        threshold: f64,
+    ) -> PyResult<Vec<PySymbol>> {
         let query_engine = self.get_query_engine(py, analysis)?;
         query_engine.find_complex_symbols(threshold)
     }
 
     /// Analyze dependencies for a symbol
-    pub fn analyze_symbol_dependencies(&self, py: Python, analysis: &AnalysisResult, symbol_name: String) -> PyResult<crate::python_bindings_query::PyDependencyAnalysis> {
+    pub fn analyze_symbol_dependencies(
+        &self,
+        py: Python,
+        analysis: &AnalysisResult,
+        symbol_name: String,
+    ) -> PyResult<crate::python_bindings_query::PyDependencyAnalysis> {
         let query_engine = self.get_query_engine(py, analysis)?;
         query_engine.analyze_symbol_dependencies(symbol_name)
     }
@@ -1070,7 +1176,8 @@ pub fn analyze_project(
 
                         // Count symbols by reading file content
                         if let Ok(content) = fs::read_to_string(entry.path()) {
-                            symbol_count += count_symbols_in_content(&content, &language.to_lowercase_string());
+                            symbol_count +=
+                                count_symbols_in_content(&content, &language.to_lowercase_string());
                         }
                     }
                 }
@@ -1081,11 +1188,13 @@ pub fn analyze_project(
     let duration = start_time.elapsed();
 
     // Extract actual relationships using the CoreAnalyzer
-    let core = CoreAnalyzer::new(project_root.clone(), Some(supported_languages.clone()), Some(ignore_patterns.clone()));
+    let core = CoreAnalyzer::new(
+        project_root.clone(),
+        Some(supported_languages.clone()),
+        Some(ignore_patterns.clone()),
+    );
     let relationships = match core.analyze() {
-        Ok(analysis_result) => {
-            analysis_result.relationships
-        }
+        Ok(analysis_result) => analysis_result.relationships,
         Err(_) => {
             // If analysis fails, return empty relationships vector
             Vec::new()
@@ -1095,7 +1204,10 @@ pub fn analyze_project(
     Ok(AnalysisResult {
         file_count,
         symbol_count,
-        languages: detected_languages.into_iter().map(|lang| lang.to_lowercase_string()).collect(),
+        languages: detected_languages
+            .into_iter()
+            .map(|lang| lang.to_lowercase_string())
+            .collect(),
         duration_ms: duration.as_millis() as u32,
         relationships,
     })
@@ -1207,7 +1319,7 @@ fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_supported_languages, m)?)?;
     m.add_function(wrap_pyfunction!(detect_language, m)?)?;
     m.add_function(wrap_pyfunction!(get_version, m)?)?;
-    
+
     // Add graph classes directly to main module
     if let Err(e) = m.add_class::<PyRustworkxGraph>() {
         eprintln!("Failed to add PyRustworkxGraph: {}", e);
@@ -1224,7 +1336,7 @@ fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
     if let Err(e) = m.add_class::<ConnectedComponent>() {
         eprintln!("Failed to add ConnectedComponent: {}", e);
     }
-    
+
     // Export & Intelligence System classes
     if let Err(e) = m.add_class::<crate::python_bindings_export::PyExportOptions>() {
         eprintln!("Failed to add PyExportOptions: {}", e);
@@ -1253,7 +1365,7 @@ fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
     if let Err(e) = m.add_class::<crate::python_bindings_export::PyLspSymbolInformation>() {
         eprintln!("Failed to add PyLspSymbolInformation: {}", e);
     }
-    
+
     // Query engine classes
     if let Err(e) = m.add_class::<crate::python_bindings_query::PyCodeQueryEngine>() {
         eprintln!("Failed to add PyCodeQueryEngine: {}", e);
@@ -1267,7 +1379,7 @@ fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
     if let Err(e) = m.add_class::<crate::python_bindings_query::PyDependencyAnalysis>() {
         eprintln!("Failed to add PyDependencyAnalysis: {}", e);
     }
-    
+
     // Advanced Configuration System classes
     if let Err(e) = m.add_class::<PyCachePolicy>() {
         eprintln!("Failed to add PyCachePolicy: {}", e);
@@ -1281,7 +1393,7 @@ fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
     if let Err(e) = m.add_class::<PyConfigProfileManager>() {
         eprintln!("Failed to add PyConfigProfileManager: {}", e);
     }
-    
+
     // Intelligent Caching System classes
     if let Err(e) = m.add_class::<PyCacheEntry>() {
         eprintln!("Failed to add PyCacheEntry: {}", e);
@@ -1298,7 +1410,7 @@ fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
     if let Err(e) = m.add_class::<PyCacheHealthMetrics>() {
         eprintln!("Failed to add PyCacheHealthMetrics: {}", e);
     }
-    
+
     Ok(())
 }
 
@@ -1406,19 +1518,23 @@ impl AnalyzerConfig {
     ) -> Self {
         Self {
             project_root,
-            languages: languages.unwrap_or_else(|| vec![
-                "rust".to_string(),
-                "python".to_string(),
-                "javascript".to_string(),
-                "typescript".to_string(),
-            ]),
-            ignore_patterns: ignore_patterns.unwrap_or_else(|| vec![
-                "node_modules/**".to_string(),
-                "target/**".to_string(),
-                ".git/**".to_string(),
-                "__pycache__/**".to_string(),
-                "*.pyc".to_string(),
-            ]),
+            languages: languages.unwrap_or_else(|| {
+                vec![
+                    "rust".to_string(),
+                    "python".to_string(),
+                    "javascript".to_string(),
+                    "typescript".to_string(),
+                ]
+            }),
+            ignore_patterns: ignore_patterns.unwrap_or_else(|| {
+                vec![
+                    "node_modules/**".to_string(),
+                    "target/**".to_string(),
+                    ".git/**".to_string(),
+                    "__pycache__/**".to_string(),
+                    "*.pyc".to_string(),
+                ]
+            }),
             enable_caching,
             enable_watching,
             max_files,

@@ -2,7 +2,7 @@
 //! Tests the Node.js API layer that delegates to CoreAnalyzer
 
 #[cfg(feature = "nodejs")]
-use fast_context::analyzer::{FastContextAnalyzer, AnalyzerConfig};
+use fast_context::analyzer::{AnalyzerConfig, FastContextAnalyzer};
 use fast_context::core::CoreAnalyzer;
 use std::fs;
 
@@ -72,7 +72,9 @@ mod nodejs_api_tests {
 
         // Create test files
         let rust_file = temp_path.join("test.rs");
-        fs::write(&rust_file, r#"
+        fs::write(
+            &rust_file,
+            r#"
             fn main() {
                 println!("Hello, world!");
             }
@@ -86,10 +88,14 @@ mod nodejs_api_tests {
                     Self { field: 0 }
                 }
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let js_file = temp_path.join("test.js");
-        fs::write(&js_file, r#"
+        fs::write(
+            &js_file,
+            r#"
             function greet(name) {
                 return `Hello, ${name}!`;
             }
@@ -103,7 +109,9 @@ mod nodejs_api_tests {
                     return this.name;
                 }
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let config = AnalyzerConfig {
             project_root: temp_path.to_string_lossy().to_string(),
@@ -168,12 +176,82 @@ mod nodejs_api_tests {
 
     #[cfg(feature = "nodejs")]
     #[test]
+    fn test_nodejs_analyze_project_respects_max_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        create_large_test_project(temp_path);
+
+        let config = AnalyzerConfig {
+            project_root: temp_path.to_string_lossy().to_string(),
+            languages: None,
+            ignore_patterns: None,
+            enable_caching: Some(true),
+            cache_policy: Some("balanced".to_string()),
+            enable_watching: Some(false),
+            max_files: Some(3),
+            parallel_processing: Some(true),
+            enable_experimental_architecture: Some(false),
+        };
+        let analyzer = FastContextAnalyzer::new(config).unwrap();
+
+        let result = analyzer.analyze().unwrap();
+        assert_eq!(result.file_count, 3);
+    }
+
+    #[cfg(feature = "nodejs")]
+    #[test]
+    fn test_nodejs_analyze_project_respects_serial_mode() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        create_test_project(temp_path);
+
+        let parallel = FastContextAnalyzer::new(AnalyzerConfig {
+            project_root: temp_path.to_string_lossy().to_string(),
+            languages: None,
+            ignore_patterns: None,
+            enable_caching: Some(true),
+            cache_policy: Some("balanced".to_string()),
+            enable_watching: Some(false),
+            max_files: Some(1000),
+            parallel_processing: Some(true),
+            enable_experimental_architecture: Some(false),
+        })
+        .unwrap()
+        .analyze()
+        .unwrap();
+
+        let serial = FastContextAnalyzer::new(AnalyzerConfig {
+            project_root: temp_path.to_string_lossy().to_string(),
+            languages: None,
+            ignore_patterns: None,
+            enable_caching: Some(true),
+            cache_policy: Some("balanced".to_string()),
+            enable_watching: Some(false),
+            max_files: Some(1000),
+            parallel_processing: Some(false),
+            enable_experimental_architecture: Some(false),
+        })
+        .unwrap()
+        .analyze()
+        .unwrap();
+
+        assert_eq!(parallel.file_count, serial.file_count);
+        assert_eq!(parallel.symbol_count, serial.symbol_count);
+        assert_eq!(parallel.relationship_count, serial.relationship_count);
+    }
+
+    #[cfg(feature = "nodejs")]
+    #[test]
     fn test_nodejs_get_file_dependencies() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
         let rust_file = temp_path.join("main.rs");
-        fs::write(&rust_file, r#"
+        fs::write(
+            &rust_file,
+            r#"
             use std::collections::HashMap;
             use serde::{Serialize, Deserialize};
             
@@ -184,7 +262,9 @@ mod nodejs_api_tests {
                 let map = HashMap::new();
                 println!("Hello, world!");
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let config = AnalyzerConfig {
             project_root: temp_path.to_string_lossy().to_string(),
@@ -266,7 +346,11 @@ mod nodejs_api_tests {
         for invalid_path in invalid_paths {
             let result = analyzer.find_symbols_in_file(invalid_path.clone());
             // Should handle invalid paths gracefully
-            assert!(result.is_err(), "Should fail for invalid path: {}", invalid_path);
+            assert!(
+                result.is_err(),
+                "Should fail for invalid path: {}",
+                invalid_path
+            );
         }
     }
 
@@ -298,7 +382,11 @@ mod nodejs_api_tests {
 
         assert!(result.is_ok());
         // Should complete within reasonable time
-        assert!(duration.as_secs() < 5, "Analysis took too long: {:?}", duration);
+        assert!(
+            duration.as_secs() < 5,
+            "Analysis took too long: {:?}",
+            duration
+        );
 
         let analysis_result = result.unwrap();
         assert!(analysis_result.file_count >= 20);
@@ -328,7 +416,9 @@ mod nodejs_api_tests {
         let temp_path = temp_dir.path();
 
         let test_file = temp_path.join("test.rs");
-        fs::write(&test_file, r#"
+        fs::write(
+            &test_file,
+            r#"
             fn function1() -> i32 { 42 }
             fn function2() -> String { "test".to_string() }
             
@@ -340,7 +430,9 @@ mod nodejs_api_tests {
                 Variant1,
                 Variant2(i32),
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(test_file.to_string_lossy().to_string());
@@ -354,14 +446,20 @@ mod nodejs_api_tests {
 
     fn create_test_project(base_path: &std::path::Path) {
         // Create main.rs
-        fs::write(base_path.join("main.rs"), r#"
+        fs::write(
+            base_path.join("main.rs"),
+            r#"
             fn main() {
                 println!("Hello, world!");
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         // Create lib.rs
-        fs::write(base_path.join("lib.rs"), r#"
+        fs::write(
+            base_path.join("lib.rs"),
+            r#"
             pub fn library_function() -> i32 {
                 42
             }
@@ -369,10 +467,14 @@ mod nodejs_api_tests {
             pub struct LibraryStruct {
                 pub field: String,
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         // Create utils.rs
-        fs::write(base_path.join("utils.rs"), r#"
+        fs::write(
+            base_path.join("utils.rs"),
+            r#"
             pub fn helper_function() -> String {
                 "helper".to_string()
             }
@@ -381,10 +483,14 @@ mod nodejs_api_tests {
                 Option1,
                 Option2,
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
 
         // Create a JavaScript file
-        fs::write(base_path.join("script.js"), r#"
+        fs::write(
+            base_path.join("script.js"),
+            r#"
             function jsFunction() {
                 return "JavaScript";
             }
@@ -394,7 +500,9 @@ mod nodejs_api_tests {
                     this.value = 42;
                 }
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
     }
 
     #[allow(dead_code)]
@@ -406,7 +514,10 @@ mod nodejs_api_tests {
 
             for j in 0..4 {
                 let file_path = dir.join(format!("file_{}.rs", j));
-                fs::write(&file_path, format!(r#"
+                fs::write(
+                    &file_path,
+                    format!(
+                        r#"
                     pub fn function_{}_{}() -> i32 {{
                         {}
                     }}
@@ -420,7 +531,18 @@ mod nodejs_api_tests {
                             Self {{ field: {} }}
                         }}
                     }}
-                "#, i, j, i * j, i, j, i, j, i + j)).unwrap();
+                "#,
+                        i,
+                        j,
+                        i * j,
+                        i,
+                        j,
+                        i,
+                        j,
+                        i + j
+                    ),
+                )
+                .unwrap();
             }
         }
     }
