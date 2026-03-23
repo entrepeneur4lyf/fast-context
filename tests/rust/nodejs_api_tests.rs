@@ -244,6 +244,37 @@ mod nodejs_api_tests {
 
     #[cfg(feature = "nodejs")]
     #[test]
+    fn test_nodejs_analyze_reports_skipped_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        fs::write(temp_path.join("main.rs"), "fn main() {}").unwrap();
+        fs::write(temp_path.join("oversized.rs"), "a".repeat(11 * 1024 * 1024)).unwrap();
+
+        let analyzer = FastContextAnalyzer::new(AnalyzerConfig {
+            project_root: temp_path.to_string_lossy().to_string(),
+            languages: None,
+            ignore_patterns: None,
+            enable_caching: Some(true),
+            cache_policy: Some("balanced".to_string()),
+            enable_watching: Some(false),
+            max_files: Some(1000),
+            parallel_processing: Some(true),
+            enable_experimental_architecture: Some(false),
+        })
+        .unwrap();
+
+        let result = analyzer.analyze().unwrap();
+        assert_eq!(result.file_count, 1);
+        assert_eq!(result.skipped_file_count, 1);
+        assert_eq!(result.skipped_files.len(), 1);
+        assert_eq!(result.skipped_files[0].stage, "read");
+        assert!(result.skipped_files[0].file_path.ends_with("oversized.rs"));
+        assert!(result.skipped_files[0].reason.contains("File too large"));
+    }
+
+    #[cfg(feature = "nodejs")]
+    #[test]
     fn test_nodejs_get_file_dependencies() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();

@@ -33,6 +33,14 @@ pub struct CoreAnalysisSummary {
     pub languages: Vec<String>,
     pub duration_ms: u32,
     pub relationships: Vec<crate::symbols::Dependency>,
+    pub skipped_files: Vec<SkippedFileDiagnostic>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SkippedFileDiagnostic {
+    pub file_path: String,
+    pub stage: String,
+    pub reason: String,
 }
 
 /// Internal analysis result for unified processing
@@ -42,6 +50,7 @@ struct InternalAnalysisResult {
     symbol_count: u32,
     languages: Vec<String>,
     relationships: Vec<crate::symbols::Dependency>,
+    skipped_files: Vec<SkippedFileDiagnostic>,
 }
 
 /// Result from analyzing a single file
@@ -51,6 +60,13 @@ struct FileAnalysisResult {
     symbol_count: u32,
     language: String,
     relationships: Vec<crate::symbols::Dependency>,
+}
+
+#[derive(Debug, Clone)]
+enum FileAnalysisOutcome {
+    Analyzed(FileAnalysisResult),
+    Skipped(SkippedFileDiagnostic),
+    Ignored,
 }
 
 impl CoreAnalyzer {
@@ -159,11 +175,15 @@ impl CoreAnalyzer {
         }
     }
 
-    fn analyze_file(file_path: &std::path::Path) -> Option<FileAnalysisResult> {
+    fn analyze_file(file_path: &std::path::Path) -> FileAnalysisOutcome {
         use crate::symbols::dependency_extractor::DependencyExtractorFactory;
         use crate::symbols::{Symbol, SymbolExtractorFactory};
 
         let path_str = file_path.to_string_lossy().into_owned();
+        let Some(detected_language) = crate::utils::detect_language_id(&path_str) else {
+            return FileAnalysisOutcome::Ignored;
+        };
+
         let content = match file_path.metadata() {
             Ok(metadata) if metadata.len() > 1024 * 1024 => {
                 match crate::validation::StreamingTextReader::new(
@@ -173,18 +193,42 @@ impl CoreAnalyzer {
                 ) {
                     Ok(mut reader) => {
                         let mut content = String::new();
-                        while let Ok(Some(line)) = reader.read_next_line() {
-                            content.push_str(&line);
-                            content.push('\n');
+                        loop {
+                            match reader.read_next_line() {
+                                Ok(Some(line)) => {
+                                    content.push_str(&line);
+                                    content.push('\n');
+                                }
+                                Ok(None) => break,
+                                Err(err) => {
+                                    return FileAnalysisOutcome::Skipped(SkippedFileDiagnostic {
+                                        file_path: path_str.clone(),
+                                        stage: "read".to_string(),
+                                        reason: err.to_string(),
+                                    });
+                                }
+                            }
                         }
                         content
                     }
-                    Err(_) => return None,
+                    Err(err) => {
+                        return FileAnalysisOutcome::Skipped(SkippedFileDiagnostic {
+                            file_path: path_str.clone(),
+                            stage: "read".to_string(),
+                            reason: err.to_string(),
+                        });
+                    }
                 }
             }
             _ => match crate::validation::secure_read_file(file_path) {
                 Ok(content) => content,
-                Err(_) => return None,
+                Err(err) => {
+                    return FileAnalysisOutcome::Skipped(SkippedFileDiagnostic {
+                        file_path: path_str.clone(),
+                        stage: "read".to_string(),
+                        reason: err.to_string(),
+                    });
+                }
             },
         };
 
@@ -192,27 +236,33 @@ impl CoreAnalyzer {
         let extractor_factory = SymbolExtractorFactory::new();
         let dep_factory = DependencyExtractorFactory::new();
 
-        scoped_factory.parse_file(&content, &path_str).map(|parse| {
-            let syms: Vec<Symbol> = extractor_factory.extract_symbols(
-                &parse.tree,
-                &parse.source,
-                &path_str,
-                parse.language,
-            );
-            let deps = dep_factory.extract_dependencies(
-                &parse.tree,
-                &parse.source,
-                syms.clone(),
-                &path_str,
-                parse.language,
-            );
+        let Some(parse) = scoped_factory.parse_file(&content, &path_str) else {
+            return FileAnalysisOutcome::Skipped(SkippedFileDiagnostic {
+                file_path: path_str,
+                stage: "parse".to_string(),
+                reason: format!("Failed to parse {} source file", detected_language),
+            });
+        };
 
-            FileAnalysisResult {
-                file_count: 1,
-                symbol_count: syms.len() as u32,
-                language: parse.language.to_string(),
-                relationships: deps,
-            }
+        let syms: Vec<Symbol> = extractor_factory.extract_symbols(
+            &parse.tree,
+            &parse.source,
+            &path_str,
+            parse.language,
+        );
+        let deps = dep_factory.extract_dependencies(
+            &parse.tree,
+            &parse.source,
+            syms.clone(),
+            &path_str,
+            parse.language,
+        );
+
+        FileAnalysisOutcome::Analyzed(FileAnalysisResult {
+            file_count: 1,
+            symbol_count: syms.len() as u32,
+            language: parse.language.to_string(),
+            relationships: deps,
         })
     }
 
@@ -230,15 +280,15 @@ impl CoreAnalyzer {
             .map(|entry| entry.path().to_path_buf())
             .collect();
 
-        let results: Vec<_> = if self.options.parallel_processing {
+        let outcomes: Vec<_> = if self.options.parallel_processing {
             file_paths
                 .par_iter()
-                .filter_map(|file_path| Self::analyze_file(file_path.as_path()))
+                .map(|file_path| Self::analyze_file(file_path.as_path()))
                 .collect()
         } else {
             file_paths
                 .iter()
-                .filter_map(|file_path| Self::analyze_file(file_path.as_path()))
+                .map(|file_path| Self::analyze_file(file_path.as_path()))
                 .collect()
         };
 
@@ -247,12 +297,19 @@ impl CoreAnalyzer {
         let mut symbol_count: u32 = 0;
         let mut languages: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut relationships: Vec<crate::symbols::Dependency> = Vec::new();
+        let mut skipped_files: Vec<SkippedFileDiagnostic> = Vec::new();
 
-        for result in results {
-            file_count += result.file_count;
-            symbol_count += result.symbol_count;
-            languages.insert(result.language);
-            relationships.extend(result.relationships);
+        for outcome in outcomes {
+            match outcome {
+                FileAnalysisOutcome::Analyzed(result) => {
+                    file_count += result.file_count;
+                    symbol_count += result.symbol_count;
+                    languages.insert(result.language);
+                    relationships.extend(result.relationships);
+                }
+                FileAnalysisOutcome::Skipped(diagnostic) => skipped_files.push(diagnostic),
+                FileAnalysisOutcome::Ignored => {}
+            }
         }
 
         Ok(InternalAnalysisResult {
@@ -260,6 +317,7 @@ impl CoreAnalyzer {
             symbol_count,
             languages: languages.into_iter().collect(),
             relationships,
+            skipped_files,
         })
     }
 
@@ -310,6 +368,11 @@ impl CoreAnalyzer {
                 .into_iter()
                 .map(crate::python_bindings::PyDependency::from)
                 .collect(),
+            skipped_files: internal_result
+                .skipped_files
+                .into_iter()
+                .map(crate::python_bindings::PySkippedFile::from)
+                .collect(),
         })
     }
 
@@ -323,6 +386,7 @@ impl CoreAnalyzer {
             languages: internal_result.languages,
             duration_ms: 0,
             relationships: internal_result.relationships,
+            skipped_files: internal_result.skipped_files,
         })
     }
 

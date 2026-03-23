@@ -59,6 +59,9 @@ pub struct AnalysisResult {
 
     #[pyo3(get)]
     pub relationships: Vec<PyDependency>,
+
+    #[pyo3(get)]
+    pub skipped_files: Vec<PySkippedFile>,
 }
 
 /// Enhanced analysis result with full symbol information
@@ -80,6 +83,9 @@ pub struct EnhancedAnalysisResult {
 
     #[pyo3(get)]
     pub relationships: Vec<PyDependency>,
+
+    #[pyo3(get)]
+    pub skipped_files: Vec<PySkippedFile>,
 
     #[pyo3(get)]
     pub symbols: Vec<PySymbol>,
@@ -187,6 +193,21 @@ pub struct PyDependency {
     pub is_conditional: bool,
 }
 
+/// Python wrapper for skipped file diagnostics
+#[cfg(feature = "python")]
+#[pyclass]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct PySkippedFile {
+    #[pyo3(get)]
+    pub file_path: String,
+
+    #[pyo3(get)]
+    pub stage: String,
+
+    #[pyo3(get)]
+    pub reason: String,
+}
+
 /// Enhanced analysis result for single file analysis
 #[cfg(feature = "python")]
 #[pyclass]
@@ -264,6 +285,17 @@ impl From<crate::symbols::Dependency> for PyDependency {
             context: dep.context,
             strength: dep.strength,
             is_conditional: dep.is_conditional,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<crate::core::SkippedFileDiagnostic> for PySkippedFile {
+    fn from(diagnostic: crate::core::SkippedFileDiagnostic) -> Self {
+        Self {
+            file_path: diagnostic.file_path,
+            stage: diagnostic.stage,
+            reason: diagnostic.reason,
         }
     }
 }
@@ -1205,11 +1237,11 @@ pub fn analyze_project(
         Some(supported_languages.clone()),
         Some(ignore_patterns.clone()),
     );
-    let relationships = match core.analyze() {
-        Ok(analysis_result) => analysis_result.relationships,
+    let (relationships, skipped_files) = match core.analyze() {
+        Ok(analysis_result) => (analysis_result.relationships, analysis_result.skipped_files),
         Err(_) => {
             // If analysis fails, return empty relationships vector
-            Vec::new()
+            (Vec::new(), Vec::new())
         }
     };
 
@@ -1222,6 +1254,7 @@ pub fn analyze_project(
             .collect(),
         duration_ms: duration.as_millis() as u32,
         relationships,
+        skipped_files,
     })
 }
 
@@ -1311,6 +1344,7 @@ fn fast_context(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core data classes
     m.add_class::<AnalysisResult>()?;
     m.add_class::<PyDependency>()?;
+    m.add_class::<PySkippedFile>()?;
 
     // Modern thread-safe class-based API
     m.add_class::<AnalyzerConfig>()?;

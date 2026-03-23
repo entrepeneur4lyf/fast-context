@@ -137,6 +137,24 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_analysis_reports_skipped_supported_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        fs::write(temp_path.join("main.rs"), "fn main() {}").unwrap();
+        fs::write(temp_path.join("oversized.rs"), "a".repeat(11 * 1024 * 1024)).unwrap();
+
+        let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
+        let result = analyzer.analyze().unwrap();
+
+        assert_eq!(result.file_count, 1);
+        assert_eq!(result.skipped_files.len(), 1);
+        assert_eq!(result.skipped_files[0].stage, "read");
+        assert!(result.skipped_files[0].file_path.ends_with("oversized.rs"));
+        assert!(result.skipped_files[0].reason.contains("File too large"));
+    }
+
+    #[test]
     fn test_symbol_extraction_across_languages() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();

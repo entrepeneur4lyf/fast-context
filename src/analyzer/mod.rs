@@ -5,7 +5,7 @@
 
 use crate::analysis::AnalysisResult;
 use crate::cache::AdaptiveCacheManager;
-use crate::core::{CoreAnalyzer, CoreAnalyzerOptions};
+use crate::core::{CoreAnalyzer, CoreAnalyzerOptions, SkippedFileDiagnostic};
 use crate::domains;
 use crate::parsers::LanguageId;
 use crate::query::{CodeQueryEngine, QueryResult};
@@ -78,6 +78,7 @@ pub struct FastContextAnalyzer {
 
     // Thread-safe shared state using Arc<RwLock<T>>
     analysis: Arc<RwLock<Option<AnalysisResult>>>,
+    skipped_files: Arc<RwLock<Vec<SkippedFileDiagnostic>>>,
     #[allow(dead_code)]
     query_engine: Arc<RwLock<Option<CodeQueryEngine>>>,
     #[allow(dead_code)]
@@ -144,6 +145,7 @@ impl FastContextAnalyzer {
             max_files: config.max_files,
             parallel_processing: config.parallel_processing.unwrap_or(true),
             analysis: Arc::new(RwLock::new(None)),
+            skipped_files: Arc::new(RwLock::new(Vec::new())),
             query_engine: Arc::new(RwLock::new(None)),
             cache_manager: Arc::new(RwLock::new(None)),
             watcher: Arc::new(RwLock::new(None)),
@@ -171,6 +173,13 @@ impl FastContextAnalyzer {
             languages: summary.languages.clone(),
             duration_ms: duration.as_millis() as u32,
             memory_usage_mb: None,
+            skipped_file_count: summary.skipped_files.len() as u32,
+            skipped_files: summary
+                .skipped_files
+                .iter()
+                .cloned()
+                .map(SkippedFileInfoJs::from)
+                .collect(),
         };
 
         // Store analysis result in thread-safe manner
@@ -203,6 +212,9 @@ impl FastContextAnalyzer {
                 languages,
                 graph: petgraph::Graph::new(),
             });
+        }
+        if let Ok(mut skipped_files) = self.skipped_files.write() {
+            *skipped_files = summary.skipped_files.clone();
         }
 
         Ok(js_result)
@@ -289,6 +301,18 @@ impl FastContextAnalyzer {
     pub fn get_analysis(&self) -> Option<AnalysisResultJs> {
         // Access analysis result in thread-safe manner
         if let Ok(analysis_guard) = self.analysis.read() {
+            let skipped_files = self
+                .skipped_files
+                .read()
+                .map(|diagnostics| {
+                    diagnostics
+                        .iter()
+                        .cloned()
+                        .map(SkippedFileInfoJs::from)
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
             analysis_guard.as_ref().map(|result| AnalysisResultJs {
                 file_count: result.file_count as u32,
                 symbol_count: result.symbol_count as u32,
@@ -296,6 +320,8 @@ impl FastContextAnalyzer {
                 languages: result.languages.iter().map(|l| format!("{l:?}")).collect(),
                 duration_ms: 0,
                 memory_usage_mb: None,
+                skipped_file_count: skipped_files.len() as u32,
+                skipped_files,
             })
         } else {
             None
@@ -461,6 +487,37 @@ pub struct AnalysisResultJs {
 
     /// Memory usage in MB (optional)
     pub memory_usage_mb: Option<f64>,
+
+    /// Total number of supported files skipped during analysis
+    pub skipped_file_count: u32,
+
+    /// Structured diagnostics for skipped files
+    pub skipped_files: Vec<SkippedFileInfoJs>,
+}
+
+/// Skipped file information for JavaScript
+#[napi(object)]
+#[derive(TS)]
+#[ts(export)]
+pub struct SkippedFileInfoJs {
+    /// File path that was skipped
+    pub file_path: String,
+
+    /// Analysis stage that skipped the file (read or parse)
+    pub stage: String,
+
+    /// Human-readable reason the file was skipped
+    pub reason: String,
+}
+
+impl From<SkippedFileDiagnostic> for SkippedFileInfoJs {
+    fn from(diagnostic: SkippedFileDiagnostic) -> Self {
+        Self {
+            file_path: diagnostic.file_path,
+            stage: diagnostic.stage,
+            reason: diagnostic.reason,
+        }
+    }
 }
 
 /// Query result for Node.js
