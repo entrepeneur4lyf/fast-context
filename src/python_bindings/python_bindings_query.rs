@@ -4,7 +4,7 @@
 
 #![allow(non_local_definitions)]
 
-use crate::python_bindings::{AnalysisResult, PySymbol, PyLocation};
+use crate::python_bindings::{AnalysisResult, PyLocation, PySymbol};
 use pyo3::prelude::*;
 use std::collections::HashMap;
 
@@ -20,20 +20,20 @@ pub struct PyCodeQueryEngine {
 impl PyCodeQueryEngine {
     #[new]
     pub fn new(analysis_result: AnalysisResult) -> Self {
-        Self {
-            analysis_result,
-        }
+        Self { analysis_result }
     }
-    
+
     /// Find symbols by name pattern (supports regex)
     pub fn find_symbols_by_pattern(&self, pattern: String) -> PyResult<Vec<PySymbol>> {
-        let regex = regex::Regex::new(&pattern)
-            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                format!("Invalid regex pattern for symbol search '{}': {}", pattern, e)
-            ))?;
-        
+        let regex = regex::Regex::new(&pattern).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
+                "Invalid regex pattern for symbol search '{}': {}",
+                pattern, e
+            ))
+        })?;
+
         let mut results = Vec::new();
-        
+
         // Search through relationships for symbol matches
         for rel in &self.analysis_result.relationships {
             if regex.is_match(&rel.from_symbol) {
@@ -56,37 +56,37 @@ impl PyCodeQueryEngine {
                 results.push(symbol);
             }
         }
-        
+
         Ok(results)
     }
-    
+
     /// Find architectural patterns in the codebase
     pub fn find_architectural_patterns(&self) -> PyResult<Vec<String>> {
         let mut patterns = Vec::new();
-        
+
         // Simple pattern detection based on relationship counts
         let relationship_counts = self.analysis_result.relationships.len();
-        
+
         if relationship_counts > 100 {
             patterns.push("Large System Architecture".to_string());
         }
-        
+
         if relationship_counts > 50 {
             patterns.push("Moderate Complexity System".to_string());
         }
-        
+
         if !patterns.is_empty() {
             patterns.push("Object-Oriented Design Pattern".to_string());
         }
-        
+
         Ok(patterns)
     }
-    
+
     /// Get context information for a specific symbol
     pub fn get_context_for_symbol(&self, symbol_name: String) -> PyResult<PyContextInfo> {
         let related_symbols = Vec::new();
         let usage_patterns = Vec::new();
-        
+
         Ok(PyContextInfo {
             symbol_name: symbol_name.clone(),
             description: format!("Context for symbol: {}", symbol_name),
@@ -96,11 +96,11 @@ impl PyCodeQueryEngine {
             line_number: 0,
         })
     }
-    
+
     /// Detect code smells in the codebase
     pub fn detect_code_smells(&self) -> PyResult<Vec<PyCodeSmell>> {
         let mut smells = Vec::new();
-        
+
         // Simple code smell detection
         if self.analysis_result.relationships.len() > 200 {
             smells.push(PyCodeSmell {
@@ -111,18 +111,18 @@ impl PyCodeQueryEngine {
                 line_number: 0,
             });
         }
-        
+
         Ok(smells)
     }
-    
+
     /// Find complex symbols based on relationship count
     pub fn find_complex_symbols(&self, threshold: f64) -> PyResult<Vec<PySymbol>> {
         let mut symbol_counts = HashMap::new();
-        
+
         for rel in &self.analysis_result.relationships {
             *symbol_counts.entry(&rel.from_symbol).or_insert(0) += 1;
         }
-        
+
         let mut results = Vec::new();
         for (symbol_name, count) in symbol_counts {
             if count as f64 > threshold {
@@ -145,15 +145,18 @@ impl PyCodeQueryEngine {
                 results.push(symbol);
             }
         }
-        
+
         Ok(results)
     }
-    
+
     /// Analyze dependencies for a specific symbol
-    pub fn analyze_symbol_dependencies(&self, symbol_name: String) -> PyResult<PyDependencyAnalysis> {
+    pub fn analyze_symbol_dependencies(
+        &self,
+        symbol_name: String,
+    ) -> PyResult<PyDependencyAnalysis> {
         let mut dependencies = Vec::new();
         let mut dependents = Vec::new();
-        
+
         for rel in &self.analysis_result.relationships {
             if rel.from_symbol == symbol_name {
                 dependencies.push(rel.to_symbol.clone());
@@ -162,10 +165,10 @@ impl PyCodeQueryEngine {
                 dependents.push(rel.from_symbol.clone());
             }
         }
-        
+
         let dependency_count = dependencies.len() as u32;
         let dependent_count = dependents.len() as u32;
-        
+
         Ok(PyDependencyAnalysis {
             symbol_name: symbol_name.clone(),
             dependencies,

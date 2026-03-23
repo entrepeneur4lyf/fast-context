@@ -701,7 +701,10 @@ impl CodeQueryEngine {
                             // Enhanced factory method detection with return type analysis
                             if self.is_factory_method(node_idx) {
                                 let factory_type = self.classify_factory_method(node_idx);
-                                patterns.push(format!("Factory Method Pattern ({}) - {}", node.symbol.name, factory_type));
+                                patterns.push(format!(
+                                    "Factory Method Pattern ({}) - {}",
+                                    node.symbol.name, factory_type
+                                ));
                             }
                         }
                     }
@@ -754,30 +757,39 @@ impl CodeQueryEngine {
                 if node.symbol.kind == SymbolKind::Class || node.symbol.kind == SymbolKind::Struct {
                     // Primary detection: builder naming
                     let is_named_builder = name.contains("builder");
-                    
+
                     // Structural detection: fluent interface analysis
                     let builder_score = self.calculate_builder_score(node_idx);
-                    
+
                     // Method chaining detection
                     let has_method_chaining = self.has_method_chaining(node_idx);
-                    
+
                     // Configuration pattern detection
                     let has_config_methods = self.has_configuration_methods(node_idx);
-                    
+
                     // Final build/create method
                     let has_build_method = self.has_build_method(node_idx);
 
                     // Classify builder type based on analysis
                     if is_named_builder && builder_score >= 3 {
                         let builder_type = self.classify_builder_type(node_idx, builder_score);
-                        patterns.push(format!("Builder Pattern ({}) - {}", node.symbol.name, builder_type));
+                        patterns.push(format!(
+                            "Builder Pattern ({}) - {}",
+                            node.symbol.name, builder_type
+                        ));
                     } else if !is_named_builder && builder_score >= 4 {
                         // Structural builder without "builder" in name
                         let builder_type = self.classify_builder_type(node_idx, builder_score);
-                        patterns.push(format!("Builder Pattern ({}) - Structural {}", node.symbol.name, builder_type));
+                        patterns.push(format!(
+                            "Builder Pattern ({}) - Structural {}",
+                            node.symbol.name, builder_type
+                        ));
                     } else if has_method_chaining && has_build_method && has_config_methods {
                         // Fluent interface builder
-                        patterns.push(format!("Builder Pattern ({}) - Fluent Interface", node.symbol.name));
+                        patterns.push(format!(
+                            "Builder Pattern ({}) - Fluent Interface",
+                            node.symbol.name
+                        ));
                     }
                 }
             }
@@ -796,32 +808,42 @@ impl CodeQueryEngine {
 
                 // Primary detection: abstract factory naming
                 let is_abstract_factory = name.contains("abstract") && name.contains("factory")
-                    || name.contains("factory") && (name.contains("interface") || name.contains("trait"))
+                    || name.contains("factory")
+                        && (name.contains("interface") || name.contains("trait"))
                     || name.contains("abstract") && name.contains("creator");
 
                 // Structural detection: factory family analysis
                 let factory_score = self.calculate_abstract_factory_score(node_idx);
-                
+
                 // Interface family detection
                 let has_family_interfaces = self.has_factory_family_interfaces(node_idx);
-                
+
                 // Concrete factory implementations
                 let has_concrete_factories = self.has_concrete_factory_implementations(node_idx);
-                
+
                 // Product family consistency
                 let has_product_family = self.has_consistent_product_family(node_idx);
 
                 // Classify Abstract Factory type
                 if is_abstract_factory && factory_score >= 4 {
                     let factory_type = self.classify_abstract_factory_type(node_idx, factory_score);
-                    patterns.push(format!("Abstract Factory Pattern ({}) - {}", node.symbol.name, factory_type));
+                    patterns.push(format!(
+                        "Abstract Factory Pattern ({}) - {}",
+                        node.symbol.name, factory_type
+                    ));
                 } else if !is_abstract_factory && factory_score >= 5 {
                     // Structural abstract factory without explicit naming
                     let factory_type = self.classify_abstract_factory_type(node_idx, factory_score);
-                    patterns.push(format!("Abstract Factory Pattern ({}) - Structural {}", node.symbol.name, factory_type));
+                    patterns.push(format!(
+                        "Abstract Factory Pattern ({}) - Structural {}",
+                        node.symbol.name, factory_type
+                    ));
                 } else if has_family_interfaces && has_concrete_factories && has_product_family {
                     // Family-based abstract factory
-                    patterns.push(format!("Abstract Factory Pattern ({}) - Family-Based", node.symbol.name));
+                    patterns.push(format!(
+                        "Abstract Factory Pattern ({}) - Family-Based",
+                        node.symbol.name
+                    ));
                 }
             }
         }
@@ -1292,7 +1314,6 @@ impl CodeQueryEngine {
         false
     }
 
-    
     /// Check if a class has a build method
     fn has_build_method(&self, node_idx: NodeIndex) -> bool {
         for edge in self
@@ -1495,22 +1516,22 @@ impl CodeQueryEngine {
             if let Some(signature) = &node.symbol.signature {
                 // Must be static or class method
                 let is_static = signature.contains("static") || signature.contains("classmethod");
-                
+
                 // Should return an object type (not void/unit)
                 let returns_object = self.returns_object_type(node_idx);
-                
+
                 // Should have configuration parameters
                 let has_config_params = self.has_configuration_parameters(node_idx);
-                
+
                 // Name should indicate creation
                 let name = &node.symbol.name.to_lowercase();
-                let factory_name_indicators = name.contains("create") 
-                    || name.contains("make") 
+                let factory_name_indicators = name.contains("create")
+                    || name.contains("make")
                     || name.contains("build")
                     || name.contains("factory")
                     || name.contains("instantiate")
                     || name.contains("new");
-                
+
                 is_static && returns_object && (factory_name_indicators || has_config_params)
             } else {
                 false
@@ -1523,10 +1544,10 @@ impl CodeQueryEngine {
     /// Classify factory method type based on signature and usage patterns
     fn classify_factory_method(&self, node_idx: NodeIndex) -> String {
         let mut classification = "Standard".to_string();
-        
+
         if let Some(node) = self.analysis.graph.node_weight(node_idx) {
             let name = &node.symbol.name.to_lowercase();
-            
+
             // Classify based on naming patterns
             if name.contains("builder") {
                 classification = "Builder".to_string();
@@ -1539,18 +1560,18 @@ impl CodeQueryEngine {
             } else if name.contains("parse") {
                 classification = "Parser Factory".to_string();
             }
-            
+
             // Enhance classification based on parameters
             if self.has_configuration_parameters(node_idx) {
                 classification = format!("{} (Configurable)", classification);
             }
-            
+
             // Check if it's part of an Abstract Factory pattern
             if self.is_part_of_abstract_factory(node_idx) {
                 classification = format!("{} (Abstract Factory)", classification);
             }
         }
-        
+
         classification
     }
 
@@ -1560,20 +1581,21 @@ impl CodeQueryEngine {
             if let Some(signature) = &node.symbol.signature {
                 // Look for return type annotations in various languages
                 let return_indicators = [
-                    "->", ":", "returns", "=>",  // Common return type syntax
+                    "->", ":", "returns", "=>", // Common return type syntax
                 ];
-                
+
                 for indicator in return_indicators {
                     if signature.contains(indicator) {
                         // Check that it's not returning void/unit
                         let return_part = signature.split(indicator).nth(1).unwrap_or("");
                         let return_type = return_part.trim().to_lowercase();
-                        
+
                         // Exclude void/unit types
-                        if !return_type.contains("void") 
-                            && !return_type.contains("unit") 
+                        if !return_type.contains("void")
+                            && !return_type.contains("unit")
                             && !return_type.contains("none")
-                            && !return_type.is_empty() {
+                            && !return_type.is_empty()
+                        {
                             return true;
                         }
                     }
@@ -1589,13 +1611,13 @@ impl CodeQueryEngine {
             if let Some(signature) = &node.symbol.signature {
                 // Look for parameter patterns that suggest configuration
                 let config_indicators = ["config", "options", "settings", "params", "args"];
-                
+
                 for indicator in config_indicators {
                     if signature.to_lowercase().contains(indicator) {
                         return true;
                     }
                 }
-                
+
                 // Check for multiple parameters (suggests configuration)
                 let param_count = signature.matches(',').count();
                 param_count > 1
@@ -1610,19 +1632,29 @@ impl CodeQueryEngine {
     /// Check if method is part of an Abstract Factory pattern
     fn is_part_of_abstract_factory(&self, node_idx: NodeIndex) -> bool {
         // Look for abstract factory interface relationships
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Incoming) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Incoming)
+        {
             if let Some(source_node) = self.analysis.graph.node_weight(edge.source()) {
                 let source_name = source_node.symbol.name.to_lowercase();
-                
+
                 // Check if parent is an abstract factory
-                if source_name.contains("factory") 
-                    || source_name.contains("creator") 
-                    || source_name.contains("builder") {
-                    
+                if source_name.contains("factory")
+                    || source_name.contains("creator")
+                    || source_name.contains("builder")
+                {
                     // Check if parent has multiple factory methods
                     let mut factory_method_count = 0;
-                    for child_edge in self.analysis.graph.edges_directed(edge.source(), petgraph::Outgoing) {
-                        if let Some(child_node) = self.analysis.graph.node_weight(child_edge.target()) {
+                    for child_edge in self
+                        .analysis
+                        .graph
+                        .edges_directed(edge.source(), petgraph::Outgoing)
+                    {
+                        if let Some(child_node) =
+                            self.analysis.graph.node_weight(child_edge.target())
+                        {
                             if child_node.symbol.kind == SymbolKind::Method {
                                 let child_name = child_node.symbol.name.to_lowercase();
                                 if child_name.contains("create") || child_name.contains("make") {
@@ -1631,7 +1663,7 @@ impl CodeQueryEngine {
                             }
                         }
                     }
-                    
+
                     return factory_method_count >= 2;
                 }
             }
@@ -1642,25 +1674,25 @@ impl CodeQueryEngine {
     /// Calculate comprehensive builder pattern score
     fn calculate_builder_score(&self, node_idx: NodeIndex) -> u32 {
         let mut score = 0;
-        
+
         // Check for fluent interface methods
         let fluent_count = self.count_fluent_methods(node_idx);
         score += fluent_count * 2;
-        
+
         // Check for configuration methods (set_*, with_*, add_*)
         let config_count = self.count_configuration_methods(node_idx);
         score += config_count;
-        
+
         // Check for build/create method
         if self.has_build_method(node_idx) {
             score += 3;
         }
-        
+
         // Check for method chaining capability
         if self.has_method_chaining(node_idx) {
             score += 2;
         }
-        
+
         // Check for builder naming patterns
         if let Some(node) = self.analysis.graph.node_weight(node_idx) {
             let name = node.symbol.name.to_lowercase();
@@ -1671,21 +1703,25 @@ impl CodeQueryEngine {
                 score += 1;
             }
         }
-        
+
         score
     }
 
     /// Count fluent interface methods (returning self/this)
     fn count_fluent_methods(&self, node_idx: NodeIndex) -> u32 {
         let mut count = 0;
-        
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     if let Some(signature) = &target_node.symbol.signature {
                         // Enhanced self-return detection across languages
-                        if signature.contains("-> Self") 
-                            || signature.contains("return self") 
+                        if signature.contains("-> Self")
+                            || signature.contains("return self")
                             || signature.contains("return this")
                             || signature.contains("return *this")
                             || signature.contains("*this")
@@ -1697,7 +1733,7 @@ impl CodeQueryEngine {
                             count += 1;
                         }
                     }
-                    
+
                     // Check method naming for fluent patterns
                     let method_name = target_node.symbol.name.to_lowercase();
                     if method_name.starts_with("set_")
@@ -1711,19 +1747,23 @@ impl CodeQueryEngine {
                 }
             }
         }
-        
+
         count
     }
 
     /// Count configuration methods
     fn count_configuration_methods(&self, node_idx: NodeIndex) -> u32 {
         let mut count = 0;
-        
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let method_name = target_node.symbol.name.to_lowercase();
-                    
+
                     // Configuration method patterns
                     if method_name.starts_with("set_")
                         || method_name.starts_with("with_")
@@ -1737,21 +1777,25 @@ impl CodeQueryEngine {
                 }
             }
         }
-        
+
         count
     }
 
     /// Check for method chaining capability
     fn has_method_chaining(&self, node_idx: NodeIndex) -> bool {
         let mut chainable_methods = 0;
-        
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     if let Some(signature) = &target_node.symbol.signature {
                         // Check for return types that enable chaining
-                        if signature.contains("-> Self") 
-                            || signature.contains("return self") 
+                        if signature.contains("-> Self")
+                            || signature.contains("return self")
                             || signature.contains("return this")
                             || signature.contains("&self")
                             || signature.contains("&mut self")
@@ -1762,7 +1806,7 @@ impl CodeQueryEngine {
                 }
             }
         }
-        
+
         chainable_methods >= 2 // Need at least 2 chainable methods
     }
 
@@ -1775,7 +1819,7 @@ impl CodeQueryEngine {
     fn classify_builder_type(&self, node_idx: NodeIndex, score: u32) -> String {
         let fluent_count = self.count_fluent_methods(node_idx);
         let config_count = self.count_configuration_methods(node_idx);
-        
+
         if score >= 8 && fluent_count >= 3 {
             "Comprehensive Builder".to_string()
         } else if score >= 6 && config_count >= 3 {
@@ -1792,48 +1836,50 @@ impl CodeQueryEngine {
     /// Calculate comprehensive Abstract Factory pattern score
     fn calculate_abstract_factory_score(&self, node_idx: NodeIndex) -> u32 {
         let mut score = 0;
-        
+
         // Check for abstract factory naming
         if let Some(node) = self.analysis.graph.node_weight(node_idx) {
             let name = node.symbol.name.to_lowercase();
             if name.contains("abstract") && name.contains("factory") {
                 score += 4;
-            } else if name.contains("factory") && (name.contains("interface") || name.contains("trait")) {
+            } else if name.contains("factory")
+                && (name.contains("interface") || name.contains("trait"))
+            {
                 score += 3;
             } else if name.contains("factory") {
                 score += 2;
             }
         }
-        
+
         // Check for factory family interfaces
         let interface_count = self.count_factory_interfaces(node_idx);
         score += interface_count * 2;
-        
+
         // Check for concrete factory implementations
         let concrete_count = self.count_concrete_factory_implementations(node_idx);
         score += concrete_count;
-        
+
         // Check for product family consistency
         if self.has_consistent_product_family(node_idx) {
             score += 3;
         }
-        
+
         // Check for factory method patterns
         let factory_method_count = self.count_factory_methods(node_idx);
         score += factory_method_count;
-        
+
         // Check for interface/trait characteristics
         if self.is_interface_or_trait(node_idx) {
             score += 2;
         }
-        
+
         score
     }
 
     /// Count factory interfaces in the hierarchy
     fn count_factory_interfaces(&self, node_idx: NodeIndex) -> u32 {
         let mut count = 0;
-        
+
         // Check if this node itself is an interface
         if self.is_interface_or_trait(node_idx) {
             if let Some(node) = self.analysis.graph.node_weight(node_idx) {
@@ -1843,9 +1889,13 @@ impl CodeQueryEngine {
                 }
             }
         }
-        
+
         // Check related interfaces
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if self.is_interface_or_trait(edge.target()) {
                     let target_name = target_node.symbol.name.to_lowercase();
@@ -1855,25 +1905,30 @@ impl CodeQueryEngine {
                 }
             }
         }
-        
+
         count
     }
 
     /// Count concrete factory implementations
     fn count_concrete_factory_implementations(&self, node_idx: NodeIndex) -> u32 {
         let mut count = 0;
-        
+
         // Look for implementations/inheritors
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Incoming) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Incoming)
+        {
             if let Some(source_node) = self.analysis.graph.node_weight(edge.source()) {
                 let source_name = source_node.symbol.name.to_lowercase();
                 if (source_name.contains("factory") || source_name.contains("creator"))
-                    && !source_name.contains("abstract") {
+                    && !source_name.contains("abstract")
+                {
                     count += 1;
                 }
             }
         }
-        
+
         count
     }
 
@@ -1890,22 +1945,31 @@ impl CodeQueryEngine {
     /// Check for consistent product family
     fn has_consistent_product_family(&self, node_idx: NodeIndex) -> bool {
         let mut product_types = std::collections::HashSet::new();
-        
+
         // Analyze factory methods to identify product types
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let method_name = target_node.symbol.name.to_lowercase();
-                    if method_name.starts_with("create") || method_name.starts_with("make") || method_name.starts_with("build") {
+                    if method_name.starts_with("create")
+                        || method_name.starts_with("make")
+                        || method_name.starts_with("build")
+                    {
                         // Extract product type from method name
-                        if let Some(product_type) = self.extract_product_type_from_method(&method_name) {
+                        if let Some(product_type) =
+                            self.extract_product_type_from_method(&method_name)
+                        {
                             product_types.insert(product_type);
                         }
                     }
                 }
             }
         }
-        
+
         // Check if we have multiple related product types
         product_types.len() >= 2
     }
@@ -1932,9 +1996,9 @@ impl CodeQueryEngine {
                 SymbolKind::Trait => true,
                 _ => {
                     // Check modifiers for interface-like characteristics
-                    node.symbol.modifiers.iter().any(|m| 
+                    node.symbol.modifiers.iter().any(|m| {
                         m.contains("abstract") || m.contains("interface") || m.contains("trait")
-                    )
+                    })
                 }
             }
         } else {
@@ -1945,21 +2009,26 @@ impl CodeQueryEngine {
     /// Count factory methods
     fn count_factory_methods(&self, node_idx: NodeIndex) -> u32 {
         let mut count = 0;
-        
-        for edge in self.analysis.graph.edges_directed(node_idx, petgraph::Outgoing) {
+
+        for edge in self
+            .analysis
+            .graph
+            .edges_directed(node_idx, petgraph::Outgoing)
+        {
             if let Some(target_node) = self.analysis.graph.node_weight(edge.target()) {
                 if target_node.symbol.kind == SymbolKind::Method {
                     let method_name = target_node.symbol.name.to_lowercase();
-                    if method_name.starts_with("create") 
-                        || method_name.starts_with("make") 
+                    if method_name.starts_with("create")
+                        || method_name.starts_with("make")
                         || method_name.starts_with("build")
-                        || method_name.starts_with("factory") {
+                        || method_name.starts_with("factory")
+                    {
                         count += 1;
                     }
                 }
             }
         }
-        
+
         count
     }
 
@@ -1968,7 +2037,7 @@ impl CodeQueryEngine {
         let interface_count = self.count_factory_interfaces(node_idx);
         let concrete_count = self.count_concrete_factory_implementations(node_idx);
         let method_count = self.count_factory_methods(node_idx);
-        
+
         if score >= 8 && interface_count >= 2 && concrete_count >= 2 {
             "Comprehensive Abstract Factory".to_string()
         } else if score >= 6 && method_count >= 3 {

@@ -5,7 +5,7 @@ edition = "2021"
 description = "Intelligent codebase analysis engine for coding assistants with graph-powered code comprehension"
 license = "Apache-2.0"
 authors = ["Shawn McAllister x.com/entrepeneur4lyf"]
-repository = "https://github.com/entrepeneur4lyf/rustworkx-nodejs"
+repository = "https://github.com/entrepeneur4lyf/fast-context"
 keywords = ["codebase-analysis", "tree-sitter", "code-intelligence", "graph", "ai-assistant"]
 
 [lib]
@@ -14,7 +14,7 @@ crate-type = ["cdylib", "lib"]
 [features]
 default = []
 nodejs = ["napi", "napi-derive"]
-python = ["pyo3", "pyo3-asyncio/tokio-runtime"]
+python = ["pyo3", "pyo3-async-runtimes/tokio-runtime"]
 full = ["nodejs", "python"]
 # Optional features for enhanced functionality
 mcp = ["python"]
@@ -83,18 +83,16 @@ tree-sitter-cpp = "0.23.4"
 # Fast-context specific dependencies
 notify = "6.1"
 walkdir = "2.4"
-lru = "0.12"
+lru = "0.16.3"
 dashmap = "5.5"
 tokio = { version = "1.0", features = ["full"] }
 sha2 = "0.10"
-bincode = "1.3"
 dirs = "5.0"
 encoding_rs = "0.8"
 
 # Python bindings (optional)
-pyo3 = { version = "0.20.3", features = ["extension-module"], optional = true }
-pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"], optional = true }
-pyo3-asyncio-macros = "0.20.0"
+pyo3 = { version = "0.24.2", features = ["extension-module"], optional = true }
+pyo3-async-runtimes = { version = "0.24.0", features = ["tokio-runtime"], optional = true }
 globset = "0.4"
 
 [dev-dependencies]

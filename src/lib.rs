@@ -44,58 +44,61 @@
 
 // All imports moved to respective modules for better organization
 
+pub mod errors; // Comprehensive error management system
 pub mod types;
-pub mod errors;      // Comprehensive error management system
-pub mod validation;  // Input validation and security
+pub mod validation; // Input validation and security
 
 // NEW MODULAR ARCHITECTURE - Proper separation of concerns
 #[cfg(feature = "nodejs")]
-pub mod analyzer;    // FastContextAnalyzer implementation
-pub mod graph;       // Graph algorithms and data structures
-pub mod utils;
-mod test_display;       // Utility functions
-pub mod domains;     // Domain separation for architectural harmony
+pub mod analyzer; // FastContextAnalyzer implementation
+pub mod domains;
+pub mod graph; // Graph algorithms and data structures
+mod test_display; // Utility functions
+pub mod utils; // Domain separation for architectural harmony
 
 // CORE MODULES - Well-organized functionality
-pub mod analysis;    // Code analysis and graph construction
-pub mod cache;       // Intelligent caching system
-// error_tracking is now part of the errors module
-pub mod export;      // Export & serialization system
-pub mod parsers;     // Tree-sitter language parsers
-pub mod query;       // Query interface for AI assistants
-pub mod symbols;     // Symbol extraction and management
-pub mod watcher;     // File system monitoring
-pub mod core;        // Shared Send + Sync CoreAnalyzer
+pub mod analysis; // Code analysis and graph construction
+pub mod cache; // Intelligent caching system
+               // error_tracking is now part of the errors module
+pub mod core;
+pub mod export; // Export & serialization system
+pub mod parsers; // Tree-sitter language parsers
+pub mod query; // Query interface for AI assistants
+pub mod symbols; // Symbol extraction and management
+pub mod watcher; // File system monitoring // Shared Send + Sync CoreAnalyzer
 
 // PYTHON BINDINGS - Optional Python integration
 #[cfg(feature = "python")]
 pub mod python_bindings;
 #[cfg(feature = "python")]
-#[path = "python_bindings/python_bindings_util.rs"]
-pub mod python_bindings_util;
-#[cfg(feature = "python")]
-#[path = "python_bindings/python_bindings_graph.rs"]
-pub mod python_bindings_graph;
-#[cfg(feature = "python")]
-#[path = "python_bindings/python_bindings_export.rs"]
-pub mod python_bindings_export;
-#[cfg(feature = "python")]
-#[path = "python_bindings/python_bindings_query.rs"]
-pub mod python_bindings_query;
+#[path = "python_bindings/python_bindings_cache.rs"]
+pub mod python_bindings_cache;
 #[cfg(feature = "python")]
 #[path = "python_bindings/python_bindings_config.rs"]
 pub mod python_bindings_config;
 #[cfg(feature = "python")]
-#[path = "python_bindings/python_bindings_cache.rs"]
-pub mod python_bindings_cache;
+#[path = "python_bindings/python_bindings_export.rs"]
+pub mod python_bindings_export;
+#[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_graph.rs"]
+pub mod python_bindings_graph;
+#[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_query.rs"]
+pub mod python_bindings_query;
+#[cfg(feature = "python")]
+#[path = "python_bindings/python_bindings_util.rs"]
+pub mod python_bindings_util;
 
 // RE-EXPORTS - Clean public API
 #[cfg(feature = "nodejs")]
-pub use analyzer::{FastContextAnalyzer, AnalyzerConfig, AnalysisResultJs, QueryResultJs};
+pub use analyzer::{AnalysisResultJs, AnalyzerConfig, FastContextAnalyzer, QueryResultJs};
 #[cfg(feature = "nodejs")]
-pub use graph::{RustworkxGraph, RustworkxDiGraph};
+pub use graph::{RustworkxDiGraph, RustworkxGraph};
 #[cfg(feature = "nodejs")]
-pub use utils::{get_version, get_supported_languages, detect_language, check_configuration, should_ignore_file_default};
+pub use utils::{
+    check_configuration, detect_language, get_supported_languages, get_version,
+    should_ignore_file_default,
+};
 
 // Additional re-exports for testing and advanced usage
 pub use core::CoreAnalyzer;

@@ -9,7 +9,7 @@ import os
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, asdict, fields
 import jsonschema
 
 
@@ -20,6 +20,8 @@ class AnalysisConfig:
     max_memory_mb: int = 512
     parallel_processing: bool = True
     worker_threads: int = 4
+    timeout_seconds: int = 30
+    enable_caching: bool = True
     exclude_patterns: List[str] = field(default_factory=lambda: [
         "*.min.js",
         "*.min.css",
@@ -36,6 +38,9 @@ class AnalysisConfig:
 @dataclass
 class GraphConfig:
     """Configuration for graph operations"""
+    enabled: bool = True
+    algorithm: str = "dependency"
+    max_depth: int = 10
     cache_size: int = 1000
     enable_advanced_algorithms: bool = True
     max_graph_nodes: int = 10000
@@ -81,6 +86,8 @@ CONFIG_SCHEMA = {
                 "max_memory_mb": {"type": "integer", "minimum": 1},
                 "parallel_processing": {"type": "boolean"},
                 "worker_threads": {"type": "integer", "minimum": 1},
+                "timeout_seconds": {"type": "integer", "minimum": 1},
+                "enable_caching": {"type": "boolean"},
                 "exclude_patterns": {
                     "type": "array",
                     "items": {"type": "string"}
@@ -90,6 +97,9 @@ CONFIG_SCHEMA = {
         "graph": {
             "type": "object",
             "properties": {
+                "enabled": {"type": "boolean"},
+                "algorithm": {"type": "string"},
+                "max_depth": {"type": "integer", "minimum": 1},
                 "cache_size": {"type": "integer", "minimum": 0},
                 "enable_advanced_algorithms": {"type": "boolean"},
                 "max_graph_nodes": {"type": "integer", "minimum": 1},
@@ -190,11 +200,19 @@ class ConfigManager:
     
     def _dict_to_config(self, data: Dict[str, Any]) -> FastContextConfig:
         """Convert dictionary to configuration objects"""
+        def filter_fields(section_cls, section_data: Dict[str, Any]) -> Dict[str, Any]:
+            valid_fields = {field_info.name for field_info in fields(section_cls)}
+            return {
+                key: value
+                for key, value in section_data.items()
+                if key in valid_fields
+            }
+
         # Extract section data with defaults
-        analysis_data = data.get('analysis', {})
-        graph_data = data.get('graph', {})
-        mcp_data = data.get('mcp', {})
-        logging_data = data.get('logging', {})
+        analysis_data = filter_fields(AnalysisConfig, data.get('analysis', {}))
+        graph_data = filter_fields(GraphConfig, data.get('graph', {}))
+        mcp_data = filter_fields(MCPConfig, data.get('mcp', {}))
+        logging_data = filter_fields(LoggingConfig, data.get('logging', {}))
         
         # Create configuration objects
         analysis_config = AnalysisConfig(**analysis_data)
@@ -212,6 +230,17 @@ class ConfigManager:
     def save_config(self, config: FastContextConfig, config_path: Union[str, Path], 
                    format: Optional[str] = None) -> None:
         """Save configuration to file"""
+        def prune_none(value):
+            if isinstance(value, dict):
+                return {
+                    key: prune_none(item)
+                    for key, item in value.items()
+                    if item is not None
+                }
+            if isinstance(value, list):
+                return [prune_none(item) for item in value]
+            return value
+
         config_path = Path(config_path)
         
         # Determine format from file extension if not specified
@@ -229,7 +258,7 @@ class ConfigManager:
         config_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Convert configuration to dictionary
-        config_dict = asdict(config)
+        config_dict = prune_none(asdict(config))
         
         # Save to file
         try:
@@ -276,6 +305,11 @@ class ConfigManager:
     def create_default_config(self, config_path: Union[str, Path], 
                             format: str = 'toml') -> None:
         """Create a default configuration file"""
+        config_path = Path(config_path)
+        if format not in {'toml', 'yaml', 'json'}:
+            raise ValueError(f"Unsupported format: {format}")
+        if config_path.exists() and config_path.stat().st_size > 0:
+            raise FileExistsError(f"Configuration file already exists: {config_path}")
         default_config = FastContextConfig()
         self.save_config(default_config, config_path, format)
     

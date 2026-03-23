@@ -28,7 +28,7 @@ use crate::python_bindings_graph::{
 #[cfg(feature = "python")]
 use crate::python_bindings_util::extensions_for_language_str;
 #[cfg(feature = "python")]
-use pyo3_asyncio::tokio::future_into_py;
+use pyo3_async_runtimes::tokio::future_into_py;
 #[cfg(feature = "python")]
 use std::collections::HashMap;
 #[cfg(feature = "python")]
@@ -394,7 +394,7 @@ impl FastContextAnalyzer {
     }
 
     /// Analyze the codebase asynchronously (releases GIL) and update cache/state
-    pub fn analyze_async(&self, py: Python) -> PyResult<PyObject> {
+    pub fn analyze_async<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let core = self.core.clone();
         let last_analysis = self.last_analysis.clone();
         let dirty = self.dirty.clone();
@@ -419,7 +419,7 @@ impl FastContextAnalyzer {
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         })?;
-        Ok(awaitable.into_py(py))
+        Ok(awaitable)
     }
 
     /// Start file watching (marks caches dirty on changes)
@@ -483,7 +483,7 @@ impl FastContextAnalyzer {
     }
 
     /// Re-analyze only if caches are dirty (returns True if ran)
-    pub fn reanalyze_if_dirty_async(&self, py: Python) -> PyResult<PyObject> {
+    pub fn reanalyze_if_dirty_async<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let dirty = self.dirty.clone();
         let core = self.core.clone();
         let last_analysis = self.last_analysis.clone();
@@ -509,15 +509,15 @@ impl FastContextAnalyzer {
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         })?;
-        Ok(awaitable.into_py(py))
+        Ok(awaitable)
     }
 
     /// Find symbols by kind in the codebase (async)
-    pub fn find_symbols_by_kind_async(
+    pub fn find_symbols_by_kind_async<'py>(
         &self,
-        py: Python,
+        py: Python<'py>,
         symbol_kind: String,
-    ) -> PyResult<PyObject> {
+    ) -> PyResult<Bound<'py, PyAny>> {
         let core = self.core.clone();
         let cache_key = format!("kind:{}:{}", symbol_kind, self.languages.join(","));
         let symbol_cache = self.symbol_cache.clone();
@@ -547,11 +547,15 @@ impl FastContextAnalyzer {
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         })?;
-        Ok(awaitable.into_py(py))
+        Ok(awaitable)
     }
 
     /// Find symbols in a specific file relative to project root (async, with per-file cache)
-    pub fn find_symbols_in_file_async(&self, py: Python, file_path: String) -> PyResult<PyObject> {
+    pub fn find_symbols_in_file_async<'py>(
+        &self,
+        py: Python<'py>,
+        file_path: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let full_path = if std::path::Path::new(&file_path).is_absolute() {
             file_path
         } else {
@@ -586,11 +590,15 @@ impl FastContextAnalyzer {
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         })?;
-        Ok(awaitable.into_py(py))
+        Ok(awaitable)
     }
 
     /// Find dependencies of a symbol across the project (async, simple cache)
-    pub fn find_dependencies_async(&self, py: Python, symbol_name: String) -> PyResult<PyObject> {
+    pub fn find_dependencies_async<'py>(
+        &self,
+        py: Python<'py>,
+        symbol_name: String,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let key = format!("deps:{}", symbol_name);
         let symbol_cache = self.symbol_cache.clone();
         let dirty = self.dirty.clone();
@@ -620,11 +628,15 @@ impl FastContextAnalyzer {
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         })?;
-        Ok(awaitable.into_py(py))
+        Ok(awaitable)
     }
 
     /// Find complex symbols over threshold (async, simple cache)
-    pub fn find_complex_symbols_async(&self, py: Python, threshold: u32) -> PyResult<PyObject> {
+    pub fn find_complex_symbols_async<'py>(
+        &self,
+        py: Python<'py>,
+        threshold: u32,
+    ) -> PyResult<Bound<'py, PyAny>> {
         let key = format!("complex:{}", threshold);
         let symbol_cache = self.symbol_cache.clone();
         let dirty = self.dirty.clone();
@@ -654,7 +666,7 @@ impl FastContextAnalyzer {
                 Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string())),
             }
         })?;
-        Ok(awaitable.into_py(py))
+        Ok(awaitable)
     }
 
     /// Extract symbols from a specific file with full metadata
@@ -1295,7 +1307,7 @@ pub fn get_version() -> String {
 /// Python module definition
 #[cfg(feature = "python")]
 #[pymodule]
-fn fast_context(_py: Python, m: &PyModule) -> PyResult<()> {
+fn fast_context(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Core data classes
     m.add_class::<AnalysisResult>()?;
     m.add_class::<PyDependency>()?;

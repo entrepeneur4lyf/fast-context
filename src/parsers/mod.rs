@@ -3,11 +3,10 @@
 //! Multi-language parser factory supporting 20+ programming languages via Tree-sitter.
 //! Provides unified AST parsing interface for consistent symbol extraction across languages.
 
-use serde::{Deserialize, Serialize};
 use lru::LruCache;
+use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 use tree_sitter::{Language, Parser, Tree};
-
 
 /// Supported programming languages for analysis
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -132,7 +131,8 @@ impl LanguageId {
             Self::Markdown => "markdown",
             Self::JSDoc => "jsdoc",
             Self::Regex => "regex",
-        }.to_string()
+        }
+        .to_string()
     }
 
     /// Detect language from file extension
@@ -211,7 +211,7 @@ impl ParserFactoryPool {
         for _ in 0..max_size.min(4) {
             factories.push(ParserFactory::with_capacity(10));
         }
-        
+
         Self {
             factories: std::sync::Mutex::new(factories),
             max_size,
@@ -227,7 +227,9 @@ impl ParserFactoryPool {
                 return ParserFactory::with_capacity(10);
             }
         };
-        factories.pop().unwrap_or_else(|| ParserFactory::with_capacity(10))
+        factories
+            .pop()
+            .unwrap_or_else(|| ParserFactory::with_capacity(10))
     }
 
     /// Return a parser factory to the pool
@@ -260,9 +262,7 @@ impl Default for ScopedParserFactory {
 impl ScopedParserFactory {
     /// Get a parser factory from the thread-local pool
     pub fn new() -> Self {
-        let factory = PARSER_POOL.with(|pool| {
-            pool.borrow_mut().get_factory()
-        });
+        let factory = PARSER_POOL.with(|pool| pool.borrow_mut().get_factory());
         Self {
             factory: Some(factory),
         }
@@ -270,12 +270,17 @@ impl ScopedParserFactory {
 
     /// Get a mutable reference to the parser factory
     pub fn get_mut(&mut self) -> &mut ParserFactory {
-        self.factory.as_mut().expect("ScopedParserFactory should always contain a factory")
+        self.factory
+            .as_mut()
+            .expect("ScopedParserFactory should always contain a factory")
     }
 
     /// Parse a file using the pooled factory
     pub fn parse_file(&mut self, content: &str, file_path: &str) -> Option<ParseResult> {
-        self.factory.as_mut().expect("ScopedParserFactory should always contain a factory").parse_file(content, file_path)
+        self.factory
+            .as_mut()
+            .expect("ScopedParserFactory should always contain a factory")
+            .parse_file(content, file_path)
     }
 }
 
@@ -323,7 +328,7 @@ impl ParserFactory {
                 eprintln!("Warning: Invalid parser cache size {}: {}", max_parsers, e);
                 10 // Default to reasonable value
             });
-        
+
         let cache_capacity = NonZeroUsize::new(validated_size)
             .unwrap_or_else(|| NonZeroUsize::new(1).expect("Cache capacity should be at least 1"));
         Self {

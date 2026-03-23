@@ -8,8 +8,8 @@
 //! - Constants and variables
 
 use crate::parsers::LanguageId;
-use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use crate::symbols::extractors::common::ExtractorUtils;
+use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
 /// Rust symbol extractor
@@ -127,17 +127,17 @@ impl RustExtractor {
 
             // Enhanced struct analysis with generics and traits
             let mut modifiers = self.extract_item_modifiers(node, source);
-            
+
             // Extract generic parameters and lifetimes
             if let Some(type_params) = node.child_by_field_name("type_parameters") {
                 let generics = self.extract_generic_parameters(&type_params, source);
                 modifiers.extend(generics);
             }
-            
+
             // Extract trait implementations
             let traits = self.extract_trait_bounds(node, source);
             modifiers.extend(traits);
-            
+
             // Enhanced signature with generics and traits
             let signature = self.extract_struct_signature(node, source);
 
@@ -332,7 +332,7 @@ impl RustExtractor {
     /// Extract generic parameters and lifetimes from type parameters
     fn extract_generic_parameters(&self, node: &Node, source: &str) -> Vec<String> {
         let mut generics = Vec::new();
-        
+
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             match child.kind() {
@@ -361,7 +361,9 @@ impl RustExtractor {
                             let mut bound_cursor = child.walk();
                             for bound_child in child.children(&mut bound_cursor) {
                                 if bound_child.kind() == "type_bound" {
-                                    if let Some(bound_node) = bound_child.child_by_field_name("type") {
+                                    if let Some(bound_node) =
+                                        bound_child.child_by_field_name("type")
+                                    {
                                         let bound_name = self.get_node_text(&bound_node, source);
                                         if !bound_name.is_empty() {
                                             bounds.push(bound_name);
@@ -370,7 +372,11 @@ impl RustExtractor {
                                 }
                             }
                             if !bounds.is_empty() {
-                                generics.push(format!("generic:{}:{}", type_name, bounds.join("+")));
+                                generics.push(format!(
+                                    "generic:{}:{}",
+                                    type_name,
+                                    bounds.join("+")
+                                ));
                             } else {
                                 generics.push(format!("generic:{}", type_name));
                             }
@@ -380,14 +386,14 @@ impl RustExtractor {
                 _ => {}
             }
         }
-        
+
         generics
     }
 
     /// Extract trait bounds and implementations
     fn extract_trait_bounds(&self, node: &Node, source: &str) -> Vec<String> {
         let mut traits = Vec::new();
-        
+
         // Check for trait implementations in the same node (e.g., impl Trait for Struct)
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -400,19 +406,19 @@ impl RustExtractor {
                 }
             }
         }
-        
+
         traits
     }
 
     /// Extract enhanced struct signature with generics and traits
     fn extract_struct_signature(&self, node: &Node, source: &str) -> String {
         let mut signature = String::new();
-        
+
         // Get struct name
         if let Some(name_node) = node.child_by_field_name("name") {
             signature.push_str(&self.get_node_text(&name_node, source));
         }
-        
+
         // Add generic parameters
         if let Some(type_params) = node.child_by_field_name("type_parameters") {
             let generics_text = self.get_node_text(&type_params, source);
@@ -420,7 +426,7 @@ impl RustExtractor {
                 signature.push_str(&generics_text);
             }
         }
-        
+
         // Add where clause if present
         if let Some(where_clause) = node.child_by_field_name("where_clause") {
             let where_text = self.get_node_text(&where_clause, source);
@@ -429,7 +435,7 @@ impl RustExtractor {
                 signature.push_str(&where_text);
             }
         }
-        
+
         signature
     }
 }

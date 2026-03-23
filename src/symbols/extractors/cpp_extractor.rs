@@ -11,8 +11,6 @@ use crate::parsers::LanguageId;
 use crate::symbols::{Location, Scope, Symbol, SymbolExtractor, SymbolKind};
 use tree_sitter::{Node, Tree};
 
-
-
 /// C++ Symbol Extractor
 /// Extracts classes, functions, variables, namespaces, and includes from C++ code
 pub struct CppExtractor;
@@ -514,7 +512,12 @@ impl CppExtractor {
     }
 
     /// Extract enhanced class signature with templates and inheritance
-    fn extract_class_signature(&self, node: &Node, source: &str, base_classes: &[String]) -> String {
+    fn extract_class_signature(
+        &self,
+        node: &Node,
+        source: &str,
+        base_classes: &[String],
+    ) -> String {
         let mut signature = String::from("class ");
 
         // Get class name

@@ -76,11 +76,11 @@
   "author": "Shawn McAllister x.com/entrepeneur4lyf",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/entrepeneur4lyf/rustworkx-nodejs.git"
+    "url": "git+https://github.com/entrepeneur4lyf/fast-context.git"
   },
-  "homepage": "https://github.com/entrepeneur4lyf/rustworkx-nodejs#readme",
+  "homepage": "https://github.com/entrepeneur4lyf/fast-context#readme",
   "bugs": {
-    "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs/issues"
+    "url": "https://github.com/entrepeneur4lyf/fast-context/issues"
   },
   "optionalDependencies": {
     "fast-context-darwin-arm64": "0.1.0",

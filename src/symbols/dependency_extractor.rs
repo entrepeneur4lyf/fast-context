@@ -37,7 +37,12 @@ impl ExtractionContext {
         Self::with_source(file_path, language, symbols, None)
     }
 
-    pub fn with_source(file_path: String, language: LanguageId, symbols: Vec<Symbol>, source: Option<String>) -> Self {
+    pub fn with_source(
+        file_path: String,
+        language: LanguageId,
+        symbols: Vec<Symbol>,
+        source: Option<String>,
+    ) -> Self {
         let mut symbol_map = HashMap::new();
 
         // Build symbol lookup map
@@ -563,7 +568,7 @@ pub trait DependencyExtractor: Send + Sync {
     fn get_node_text(&self, node: &Node, source: &str) -> String {
         let start = node.start_byte();
         let end = node.end_byte();
-        
+
         // Ensure byte range is within source bounds
         if start <= end && end <= source.len() {
             // Use direct slice access with bounds checking
@@ -571,7 +576,7 @@ pub trait DependencyExtractor: Send + Sync {
                 return slice.to_string();
             }
         }
-        
+
         // Return empty string if bounds are invalid
         String::new()
     }

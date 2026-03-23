@@ -14,7 +14,7 @@ use tree_sitter::{Node, Tree};
 fn safe_node_text(node: &Node, source: &str) -> String {
     let start = node.start_byte();
     let end = node.end_byte();
-    
+
     // Ensure byte range is within source bounds
     if start <= end && end <= source.len() {
         // Use direct slice access with bounds checking
@@ -22,7 +22,7 @@ fn safe_node_text(node: &Node, source: &str) -> String {
             return slice.to_string();
         }
     }
-    
+
     // Return empty string if bounds are invalid
     String::new()
 }
@@ -337,8 +337,7 @@ impl ObjectiveCExtractor {
                 for struct_child in child.children(&mut struct_cursor) {
                     if struct_child.kind() == "struct_declarator" {
                         // Extract the property name from the struct_declarator
-                        let declarator_text =
-                            safe_node_text(&struct_child, source);
+                        let declarator_text = safe_node_text(&struct_child, source);
                         // Remove pointer asterisk and get just the name
                         let name = declarator_text.trim_start_matches('*').trim();
 

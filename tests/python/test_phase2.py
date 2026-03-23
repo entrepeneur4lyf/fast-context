@@ -3,10 +3,12 @@ import asyncio
 import tempfile
 import os
 import sys
+import pytest
 sys.path.insert(0, '/home/shawn/workspace/0-projects/rustworkx-nodejs/python')
 
 import fast_context
 
+@pytest.mark.asyncio
 async def test_phase2():
     """Test Phase 2: Core Analysis Engine Integration"""
     

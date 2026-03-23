@@ -6,8 +6,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use sysinfo::System;
+use tokio::sync::RwLock;
 
 /// Core error types used across all domains
 #[derive(Debug, thiserror::Error)]
@@ -155,7 +155,7 @@ impl Histogram {
                 self.count -= 1;
             }
         }
-        
+
         self.values.push_back(value);
         self.sum += value;
         self.count += 1;
@@ -164,15 +164,21 @@ impl Histogram {
     }
 
     pub fn average(&self) -> f64 {
-        if self.count == 0 { 0.0 } else { self.sum / self.count as f64 }
+        if self.count == 0 {
+            0.0
+        } else {
+            self.sum / self.count as f64
+        }
     }
 
     pub fn percentile(&self, p: f64) -> Option<f64> {
-        if self.values.is_empty() { return None; }
-        
+        if self.values.is_empty() {
+            return None;
+        }
+
         let mut sorted: Vec<f64> = self.values.iter().cloned().collect();
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        
+
         let index = (p / 100.0 * (sorted.len() - 1) as f64) as usize;
         Some(sorted[index.min(sorted.len() - 1)])
     }
@@ -280,10 +286,10 @@ impl Metrics {
     pub async fn update_system_metrics(&self) {
         let mut sys = System::new_all();
         sys.refresh_all();
-        
+
         let current_pid = std::process::id();
         let process = sys.process(sysinfo::Pid::from_u32(current_pid));
-        
+
         let metrics = SystemMetrics {
             cpu_usage_percent: sys.global_cpu_info().cpu_usage().into(),
             memory_usage_mb: sys.used_memory(),
@@ -293,7 +299,7 @@ impl Metrics {
             process_memory_mb: process.map_or(0, |p| p.memory()),
             thread_count: 0, // Thread count not available in current sysinfo version
         };
-        
+
         let mut system_metrics = self.system_metrics.write().await;
         *system_metrics = Some(metrics);
     }
@@ -313,25 +319,27 @@ impl Metrics {
     /// Check if metric exceeds thresholds, returns severity level
     pub async fn check_threshold(&self, metric_name: &str, value: f64) -> Option<&'static str> {
         let thresholds = self.performance_thresholds.read().await;
-        thresholds.get(metric_name).and_then(|&(warning, critical)| {
-            if value >= critical {
-                Some("critical")
-            } else if value >= warning {
-                Some("warning")
-            } else {
-                None
-            }
-        })
+        thresholds
+            .get(metric_name)
+            .and_then(|&(warning, critical)| {
+                if value >= critical {
+                    Some("critical")
+                } else if value >= warning {
+                    Some("warning")
+                } else {
+                    None
+                }
+            })
     }
 
     /// Get comprehensive performance report
     pub async fn get_performance_report(&self) -> HashMap<String, serde_json::Value> {
         let mut report = HashMap::new();
-        
+
         // Counter metrics
         let counters = self.counters.read().await;
         report.insert("counters".to_string(), serde_json::json!(counters.clone()));
-        
+
         // Timer statistics
         let timers = self.timers.read().await;
         let mut timer_stats = HashMap::new();
@@ -341,22 +349,25 @@ impl Metrics {
                 let avg = sum as f64 / times.len() as f64;
                 let min = times.iter().min().copied().unwrap_or(0);
                 let max = times.iter().max().copied().unwrap_or(0);
-                timer_stats.insert(name.clone(), serde_json::json!({
-                    "count": times.len(),
-                    "average_ms": avg,
-                    "min_ms": min,
-                    "max_ms": max,
-                    "total_ms": sum
-                }));
+                timer_stats.insert(
+                    name.clone(),
+                    serde_json::json!({
+                        "count": times.len(),
+                        "average_ms": avg,
+                        "min_ms": min,
+                        "max_ms": max,
+                        "total_ms": sum
+                    }),
+                );
             }
         }
         report.insert("timers".to_string(), serde_json::json!(timer_stats));
-        
+
         // System metrics
         if let Some(sys_metrics) = self.get_system_metrics().await {
             report.insert("system".to_string(), serde_json::json!(sys_metrics));
         }
-        
+
         report
     }
 }

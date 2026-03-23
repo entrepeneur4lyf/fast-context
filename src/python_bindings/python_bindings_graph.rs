@@ -13,13 +13,9 @@ use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "python")]
 use petgraph::{
-    graph::{UnGraph, DiGraph, NodeIndex},
+    algo::{dijkstra, is_cyclic_directed, kosaraju_scc, toposort},
+    graph::{DiGraph, NodeIndex, UnGraph},
     visit::{EdgeRef, Walker},
-    algo::{
-        dijkstra,
-        kosaraju_scc,
-        is_cyclic_directed, toposort,
-    },
 };
 
 /// Python wrapper for petgraph undirected graph
@@ -122,13 +118,13 @@ impl PyRustworkxGraph {
     }
 
     /// Add a node to the graph with optional weight
-    /// 
+    ///
     /// # Arguments
     /// * `weight` - Optional string label for the node (defaults to "node_{index}")
-    /// 
+    ///
     /// # Returns
     /// * `usize` - The index of the newly added node
-    /// 
+    ///
     /// # Examples
     /// ```python
     /// graph = PyRustworkxGraph()
@@ -148,15 +144,15 @@ impl PyRustworkxGraph {
     }
 
     /// Add an edge between two nodes with optional weight
-    /// 
+    ///
     /// # Arguments
     /// * `source` - Index of the source node
     /// * `target` - Index of the target node  
     /// * `weight` - Optional weight for the edge (defaults to 1.0)
-    /// 
+    ///
     /// # Returns
     /// * `Option<usize>` - Some(edge_index) if successful, None if nodes don't exist
-    /// 
+    ///
     /// # Examples
     /// ```python
     /// graph = PyRustworkxGraph()
@@ -169,7 +165,7 @@ impl PyRustworkxGraph {
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
         let weight = weight.unwrap_or(1.0);
-        
+
         if graph.node_weight(source_idx).is_some() && graph.node_weight(target_idx).is_some() {
             Some(graph.add_edge(source_idx, target_idx, weight).index())
         } else {
@@ -181,7 +177,8 @@ impl PyRustworkxGraph {
         let mut graph = self.graph.lock().unwrap();
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
-        graph.find_edge(source_idx, target_idx)
+        graph
+            .find_edge(source_idx, target_idx)
             .map(|edge| graph.remove_edge(edge).is_some())
             .unwrap_or(false)
     }
@@ -217,14 +214,18 @@ impl PyRustworkxGraph {
     pub fn set_node_weight(&mut self, node_index: usize, weight: String) -> bool {
         let mut graph = self.graph.lock().unwrap();
         let node_idx = NodeIndex::new(node_index);
-        graph.node_weight_mut(node_idx).map(|w| *w = weight).is_some()
+        graph
+            .node_weight_mut(node_idx)
+            .map(|w| *w = weight)
+            .is_some()
     }
 
     pub fn get_edge_weight(&self, source: usize, target: usize) -> Option<f64> {
         let graph = self.graph.lock().unwrap();
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
-        graph.find_edge(source_idx, target_idx)
+        graph
+            .find_edge(source_idx, target_idx)
             .and_then(|edge| graph.edge_weight(edge).copied())
     }
 
@@ -232,7 +233,8 @@ impl PyRustworkxGraph {
         let mut graph = self.graph.lock().unwrap();
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
-        graph.find_edge(source_idx, target_idx)
+        graph
+            .find_edge(source_idx, target_idx)
             .map(|edge| {
                 *graph.edge_weight_mut(edge).unwrap() = weight;
                 true
@@ -249,7 +251,8 @@ impl PyRustworkxGraph {
     pub fn edges(&self, node_index: usize) -> Vec<(usize, usize)> {
         let graph = self.graph.lock().unwrap();
         let node_idx = NodeIndex::new(node_index);
-        graph.edges(node_idx)
+        graph
+            .edges(node_idx)
             .map(|edge| (edge.source().index(), edge.target().index()))
             .collect()
     }
@@ -262,14 +265,14 @@ impl PyRustworkxGraph {
     }
 
     /// Find the shortest path between two nodes using Dijkstra's algorithm
-    /// 
+    ///
     /// # Arguments
     /// * `source` - Index of the source node
     /// * `target` - Index of the target node
-    /// 
+    ///
     /// # Returns
     /// * `Option<PathResult>` - Some(PathResult) with path and cost if path exists, None otherwise
-    /// 
+    ///
     /// # Examples
     /// ```python
     /// graph = PyRustworkxGraph()
@@ -282,13 +285,13 @@ impl PyRustworkxGraph {
         let graph = self.graph.lock().unwrap();
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
-        
+
         if graph.node_weight(source_idx).is_none() || graph.node_weight(target_idx).is_none() {
             return None;
         }
-        
-let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
-        
+
+        let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
+
         if let Some(&cost) = costs.get(&target_idx) {
             Some(PathResult {
                 path: vec![source, target],
@@ -302,19 +305,19 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
     pub fn floyd_warshall_all_pairs(&self) -> Vec<Vec<Option<f64>>> {
         let graph = self.graph.lock().unwrap();
         let node_count = graph.node_count();
-        
+
         if node_count == 0 {
             return Vec::new();
         }
-        
+
         // Initialize distance matrix with optimal Floyd-Warshall algorithm
         let mut distances = vec![vec![f64::INFINITY; node_count]; node_count];
-        
+
         // Set diagonal to 0 and direct edges to their weights
         for (i, row) in distances.iter_mut().enumerate().take(node_count) {
             row[i] = 0.0;
             let source_idx = NodeIndex::new(i);
-            
+
             // Set direct edge weights
             for edge in graph.edges_directed(source_idx, petgraph::Direction::Outgoing) {
                 let target_idx = edge.target().index();
@@ -322,7 +325,7 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
                 row[target_idx] = weight.min(row[target_idx]);
             }
         }
-        
+
         // Floyd-Warshall algorithm: O(n³) optimal implementation
         for k in 0..node_count {
             for i in 0..node_count {
@@ -333,7 +336,7 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
                 }
             }
         }
-        
+
         // Convert to the expected format with Option<f64>
         let mut result = vec![vec![None; node_count]; node_count];
         for (i, row) in distances.iter().enumerate().take(node_count) {
@@ -343,18 +346,18 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
                 }
             }
         }
-        
+
         result
     }
 
     pub fn connected_components(&self) -> Vec<ConnectedComponent> {
         let graph = self.graph.lock().unwrap();
-        
+
         // Use a simple BFS-based approach for connected components
         let mut visited = std::collections::HashSet::new();
         let mut components = Vec::new();
         let node_count = graph.node_count();
-        
+
         for node_idx in 0..node_count {
             let node = NodeIndex::new(node_idx);
             if !visited.contains(&node) && graph.node_weight(node).is_some() {
@@ -362,7 +365,7 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
                 let mut queue = std::collections::VecDeque::new();
                 queue.push_back(node);
                 visited.insert(node);
-                
+
                 while let Some(current) = queue.pop_front() {
                     component.push(current.index());
                     for neighbor in graph.neighbors(current) {
@@ -372,7 +375,7 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
                         }
                     }
                 }
-                
+
                 let size = component.len();
                 components.push(ConnectedComponent {
                     nodes: component,
@@ -380,18 +383,18 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
                 });
             }
         }
-        
+
         components
     }
 
     pub fn bfs_tree(&self, start: usize) -> Vec<usize> {
         let graph = self.graph.lock().unwrap();
         let start_idx = NodeIndex::new(start);
-        
+
         if graph.node_weight(start_idx).is_none() {
             return Vec::new();
         }
-        
+
         petgraph::visit::Bfs::new(&*graph, start_idx)
             .iter(&*graph)
             .map(|n| n.index())
@@ -401,11 +404,11 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
     pub fn dfs_tree(&self, start: usize) -> Vec<usize> {
         let graph = self.graph.lock().unwrap();
         let start_idx = NodeIndex::new(start);
-        
+
         if graph.node_weight(start_idx).is_none() {
             return Vec::new();
         }
-        
+
         petgraph::visit::Dfs::new(&*graph, start_idx)
             .iter(&*graph)
             .map(|n| n.index())
@@ -416,7 +419,7 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
         let graph = self.graph.lock().unwrap();
         let nodes = graph.node_count();
         let edges = graph.edge_count();
-        
+
         if nodes <= 1 {
             0.0
         } else {
@@ -431,7 +434,11 @@ let costs = dijkstra(&*graph, source_idx, Some(target_idx), |e| *e.weight());
 
     pub fn __str__(&self) -> String {
         let graph = self.graph.lock().unwrap();
-        format!("UnGraph(nodes={}, edges={})", graph.node_count(), graph.edge_count())
+        format!(
+            "UnGraph(nodes={}, edges={})",
+            graph.node_count(),
+            graph.edge_count()
+        )
     }
 
     pub fn __repr__(&self) -> String {
@@ -458,13 +465,13 @@ impl PyRustworkxDiGraph {
     }
 
     /// Add a node to the graph with optional weight
-    /// 
+    ///
     /// # Arguments
     /// * `weight` - Optional string label for the node (defaults to "node_{index}")
-    /// 
+    ///
     /// # Returns
     /// * `usize` - The index of the newly added node
-    /// 
+    ///
     /// # Examples
     /// ```python
     /// graph = PyRustworkxGraph()
@@ -484,15 +491,15 @@ impl PyRustworkxDiGraph {
     }
 
     /// Add an edge between two nodes with optional weight
-    /// 
+    ///
     /// # Arguments
     /// * `source` - Index of the source node
     /// * `target` - Index of the target node  
     /// * `weight` - Optional weight for the edge (defaults to 1.0)
-    /// 
+    ///
     /// # Returns
     /// * `Option<usize>` - Some(edge_index) if successful, None if nodes don't exist
-    /// 
+    ///
     /// # Examples
     /// ```python
     /// graph = PyRustworkxGraph()
@@ -505,7 +512,7 @@ impl PyRustworkxDiGraph {
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
         let weight = weight.unwrap_or(1.0);
-        
+
         if graph.node_weight(source_idx).is_some() && graph.node_weight(target_idx).is_some() {
             Some(graph.add_edge(source_idx, target_idx, weight).index())
         } else {
@@ -517,7 +524,8 @@ impl PyRustworkxDiGraph {
         let mut graph = self.graph.lock().unwrap();
         let source_idx = NodeIndex::new(source);
         let target_idx = NodeIndex::new(target);
-        graph.find_edge(source_idx, target_idx)
+        graph
+            .find_edge(source_idx, target_idx)
             .map(|edge| graph.remove_edge(edge).is_some())
             .unwrap_or(false)
     }
@@ -553,7 +561,8 @@ impl PyRustworkxDiGraph {
     pub fn predecessors(&self, node_index: usize) -> Vec<usize> {
         let graph = self.graph.lock().unwrap();
         let node_idx = NodeIndex::new(node_index);
-        graph.neighbors_directed(node_idx, petgraph::Direction::Incoming)
+        graph
+            .neighbors_directed(node_idx, petgraph::Direction::Incoming)
             .map(|n| n.index())
             .collect()
     }
@@ -561,7 +570,8 @@ impl PyRustworkxDiGraph {
     pub fn out_edges(&self, node_index: usize) -> Vec<(usize, usize)> {
         let graph = self.graph.lock().unwrap();
         let node_idx = NodeIndex::new(node_index);
-        graph.edges(node_idx)
+        graph
+            .edges(node_idx)
             .map(|edge| (edge.source().index(), edge.target().index()))
             .collect()
     }
@@ -569,7 +579,8 @@ impl PyRustworkxDiGraph {
     pub fn in_edges(&self, node_index: usize) -> Vec<(usize, usize)> {
         let graph = self.graph.lock().unwrap();
         let node_idx = NodeIndex::new(node_index);
-        graph.edges_directed(node_idx, petgraph::Direction::Incoming)
+        graph
+            .edges_directed(node_idx, petgraph::Direction::Incoming)
             .map(|edge| (edge.source().index(), edge.target().index()))
             .collect()
     }
@@ -594,12 +605,12 @@ impl PyRustworkxDiGraph {
 
     pub fn weakly_connected_components(&self) -> Vec<ConnectedComponent> {
         let graph = self.graph.lock().unwrap();
-        
+
         // For directed graphs, we need to ignore direction for weakly connected components
         let mut visited = std::collections::HashSet::new();
         let mut components = Vec::new();
         let node_count = graph.node_count();
-        
+
         for node_idx in 0..node_count {
             let node = NodeIndex::new(node_idx);
             if !visited.contains(&node) && graph.node_weight(node).is_some() {
@@ -607,10 +618,10 @@ impl PyRustworkxDiGraph {
                 let mut queue = std::collections::VecDeque::new();
                 queue.push_back(node);
                 visited.insert(node);
-                
+
                 while let Some(current) = queue.pop_front() {
                     component.push(current.index());
-                    
+
                     // Check both outgoing and incoming edges for weak connectivity
                     for neighbor in graph.neighbors(current) {
                         if !visited.contains(&neighbor) {
@@ -618,15 +629,16 @@ impl PyRustworkxDiGraph {
                             queue.push_back(neighbor);
                         }
                     }
-                    
-                    for neighbor in graph.neighbors_directed(current, petgraph::Direction::Incoming) {
+
+                    for neighbor in graph.neighbors_directed(current, petgraph::Direction::Incoming)
+                    {
                         if !visited.contains(&neighbor) {
                             visited.insert(neighbor);
                             queue.push_back(neighbor);
                         }
                     }
                 }
-                
+
                 let size = component.len();
                 components.push(ConnectedComponent {
                     nodes: component,
@@ -634,7 +646,7 @@ impl PyRustworkxDiGraph {
                 });
             }
         }
-        
+
         components
     }
 
@@ -658,7 +670,11 @@ impl PyRustworkxDiGraph {
 
     pub fn __str__(&self) -> String {
         let graph = self.graph.lock().unwrap();
-        format!("DiGraph(nodes={}, edges={})", graph.node_count(), graph.edge_count())
+        format!(
+            "DiGraph(nodes={}, edges={})",
+            graph.node_count(),
+            graph.edge_count()
+        )
     }
 
     pub fn __repr__(&self) -> String {

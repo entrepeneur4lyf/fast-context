@@ -391,19 +391,16 @@ impl CodebaseAnalyzer {
         }
 
         // Phase 2: Analyze language distribution and statistics
-        let (languages, total_lines, total_size_bytes, complexity_score) = 
+        let (languages, total_lines, total_size_bytes, complexity_score) =
             self.analyze_language_distribution(&files);
 
         // Phase 3: Determine project characteristics
-        let (primary_language, project_characteristics) = 
+        let (primary_language, project_characteristics) =
             self.determine_project_characteristics(&root_path, &files, &languages);
 
         // Phase 4: Calculate performance estimates
-        let performance_estimates = self.calculate_performance_estimates(
-            &files, 
-            &languages, 
-            complexity_score
-        );
+        let performance_estimates =
+            self.calculate_performance_estimates(&files, &languages, complexity_score);
 
         // Phase 5: Build final profile
         let analysis_duration = start_time.elapsed();
@@ -425,12 +422,7 @@ impl CodebaseAnalyzer {
     fn analyze_language_distribution(
         &self,
         files: &[FileInfo],
-    ) -> (
-        HashMap<LanguageId, LanguageStats>,
-        usize,
-        u64,
-        f64,
-    ) {
+    ) -> (HashMap<LanguageId, LanguageStats>, usize, u64, f64) {
         let mut languages: HashMap<LanguageId, LanguageStats> = HashMap::new();
         let mut total_lines = 0;
         let mut total_size_bytes = 0;

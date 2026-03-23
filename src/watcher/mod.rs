@@ -457,7 +457,8 @@ mod tests {
     #[tokio::test]
     #[ignore = "Timing-sensitive test that may fail in CI environments"]
     async fn test_file_watcher_integration() {
-        let temp_dir = TempDir::new().expect("Failed to create temporary directory for watcher test");
+        let temp_dir =
+            TempDir::new().expect("Failed to create temporary directory for watcher test");
         let test_file = temp_dir.path().join("test.rs");
 
         let config = WatcherConfig {
@@ -466,7 +467,8 @@ mod tests {
             ..Default::default()
         };
 
-        let watcher = CodebaseWatcher::new(config).expect("Failed to create codebase watcher for test");
+        let watcher =
+            CodebaseWatcher::new(config).expect("Failed to create codebase watcher for test");
         let mut receiver = watcher.subscribe();
 
         // Create a test file

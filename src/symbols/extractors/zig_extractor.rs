@@ -16,7 +16,7 @@ use tree_sitter::{Node, Tree};
 fn safe_node_text(node: &Node, source: &str) -> String {
     let start = node.start_byte();
     let end = node.end_byte();
-    
+
     // Ensure byte range is within source bounds
     if start <= end && end <= source.len() {
         // Use direct slice access with bounds checking
@@ -24,7 +24,7 @@ fn safe_node_text(node: &Node, source: &str) -> String {
             return slice.to_string();
         }
     }
-    
+
     // Return empty string if bounds are invalid
     String::new()
 }

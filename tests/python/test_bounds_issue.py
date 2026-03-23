@@ -7,6 +7,7 @@ import tempfile
 import os
 from pathlib import Path
 import sys
+import pytest
 
 # Add the project to Python path
 project_root = Path(__file__).parent
@@ -19,6 +20,7 @@ except Exception as e:
     print(f"❌ Failed to import FastContextAnalyzer: {e}")
     sys.exit(1)
 
+@pytest.mark.asyncio
 async def test_simple_analysis():
     """Test analysis with a simple Python file"""
     with tempfile.TemporaryDirectory() as temp_dir:

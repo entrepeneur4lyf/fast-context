@@ -1,4 +1,4 @@
-name: Release Build
+name: Release Build (Manual)
 
 env:
   DEBUG: napi:*
@@ -6,9 +6,6 @@ env:
   MACOSX_DEPLOYMENT_TARGET: '10.13'
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 concurrency:

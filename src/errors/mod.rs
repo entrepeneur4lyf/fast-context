@@ -10,11 +10,8 @@
 
 pub mod tracking;
 
-use thiserror::Error;
 use std::path::PathBuf;
-
-#[cfg(feature = "python")]
-use pyo3::IntoPy;
+use thiserror::Error;
 
 /// Main error type for the Fast-Context analyzer
 #[derive(Debug, Error)]
@@ -87,10 +84,7 @@ pub enum FastContextError {
     },
 
     #[error("Graph operation failed: {operation}: {message}")]
-    Graph {
-        operation: String,
-        message: String,
-    },
+    Graph { operation: String, message: String },
 
     #[error("Query execution failed: {message}")]
     QueryExecution {
@@ -353,22 +347,5 @@ impl From<FastContextError> for pyo3::PyErr {
             }
             _ => pyo3::exceptions::PyRuntimeError::new_err(err.to_string()),
         }
-    }
-}
-
-/// Implement PyO3 conversion traits for error handling
-#[cfg(feature = "python")]
-impl pyo3::IntoPy<pyo3::PyObject> for FastContextError {
-    fn into_py(self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-        let pyerr: pyo3::PyErr = self.into();
-        pyerr.into_py(py)
-    }
-}
-
-#[cfg(feature = "python")]
-impl pyo3::ToPyObject for FastContextError {
-    fn to_object(&self, py: pyo3::Python<'_>) -> pyo3::PyObject {
-        // Convert the error to a Python string representation
-        self.to_string().into_py(py)
     }
 }

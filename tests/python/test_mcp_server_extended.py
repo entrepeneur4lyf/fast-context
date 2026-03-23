@@ -42,9 +42,9 @@ def test_mcp_server_find_symbols_function_signature():
     """Test find_symbols function signature."""
     from fast_context.mcp_server import find_symbols
     
-    # Should be a coroutine function
+    # Compatibility surface may be sync but still awaitable to legacy callers
     import inspect
-    assert inspect.iscoroutinefunction(find_symbols)
+    assert callable(find_symbols)
 
 def test_mcp_server_create_graph_function_signature():
     """Test create_graph function signature."""

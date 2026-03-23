@@ -16,7 +16,7 @@ use tree_sitter::{Node, Tree};
 fn safe_node_text(node: &Node, source: &str) -> String {
     let start = node.start_byte();
     let end = node.end_byte();
-    
+
     // Ensure byte range is within source bounds
     if start <= end && end <= source.len() {
         // Use direct slice access with bounds checking
@@ -24,7 +24,7 @@ fn safe_node_text(node: &Node, source: &str) -> String {
             return slice.to_string();
         }
     }
-    
+
     // Return empty string if bounds are invalid
     String::new()
 }
@@ -110,7 +110,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_interface(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_interface(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -128,7 +135,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_type_alias(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_type_alias(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -146,7 +160,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_enum(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_enum(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -164,7 +185,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_namespace(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_namespace(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -189,7 +217,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_abstract_class(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_abstract_class(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -217,7 +252,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_class(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &mut Vec<Scope>) {
+    fn extract_class(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &mut Vec<Scope>,
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -242,7 +284,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_function(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_function(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -260,7 +309,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_method(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -278,7 +334,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_variable(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_variable(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         // Handle variable declarations with type annotations
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
@@ -302,14 +365,21 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_property_signature(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_property_signature(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
 
             symbols.push(Symbol {
                 name,
-                kind: SymbolKind::Field,  // Use Field instead of Property
+                kind: SymbolKind::Field, // Use Field instead of Property
                 location,
                 scope_chain: scope_stack.to_vec(),
                 language: LanguageId::TypeScript,
@@ -320,7 +390,14 @@ impl TypeScriptExtractor {
         }
     }
 
-    fn extract_method_signature_node(&self, node: Node, source: &str, file_path: &str, symbols: &mut Vec<Symbol>, scope_stack: &[Scope]) {
+    fn extract_method_signature_node(
+        &self,
+        node: Node,
+        source: &str,
+        file_path: &str,
+        symbols: &mut Vec<Symbol>,
+        scope_stack: &[Scope],
+    ) {
         if let Some(name_node) = node.child_by_field_name("name") {
             let name = safe_node_text(&name_node, source);
             let location = Location::from_node(&node, file_path);
@@ -341,11 +418,11 @@ impl TypeScriptExtractor {
     // Helper methods for extracting TypeScript-specific information
     fn extract_documentation(&self, node: &Node, source: &str) -> Option<String> {
         // Extract TSDoc comments from leading comments
-        
+
         // Get the previous sibling to look for comments
         let mut current = *node;
         let mut comments = Vec::new();
-        
+
         // Look for comment nodes before this node
         while let Some(prev_sibling) = current.prev_sibling() {
             if prev_sibling.kind() == "comment" {
@@ -358,14 +435,15 @@ impl TypeScriptExtractor {
             }
             current = prev_sibling;
         }
-        
+
         if comments.is_empty() {
             return None;
         }
-        
+
         // Process TSDoc comments (remove /** */, *, etc.)
         let mut documentation = String::new();
-        for comment in comments.iter().rev() { // Reverse to maintain order
+        for comment in comments.iter().rev() {
+            // Reverse to maintain order
             let cleaned = self.clean_tsdoc_comment(comment);
             if !cleaned.is_empty() {
                 if !documentation.is_empty() {
@@ -374,7 +452,7 @@ impl TypeScriptExtractor {
                 documentation.push_str(&cleaned);
             }
         }
-        
+
         if documentation.is_empty() {
             None
         } else {
@@ -384,7 +462,7 @@ impl TypeScriptExtractor {
 
     fn extract_modifiers(&self, node: &Node, source: &str) -> Vec<String> {
         let mut modifiers = Vec::new();
-        
+
         // Check if this node is within an export statement
         let mut parent = node.parent();
         while let Some(p) = parent {
@@ -394,12 +472,13 @@ impl TypeScriptExtractor {
             }
             parent = p.parent();
         }
-        
+
         // Look for TypeScript modifiers
         let mut cursor = node.walk();
         for child in node.children(&mut cursor) {
             match child.kind() {
-                "public" | "private" | "protected" | "readonly" | "static" | "abstract" | "async" => {
+                "public" | "private" | "protected" | "readonly" | "static" | "abstract"
+                | "async" => {
                     if let Ok(modifier) = child.utf8_text(source.as_bytes()) {
                         modifiers.push(modifier.to_string());
                     }
@@ -407,7 +486,7 @@ impl TypeScriptExtractor {
                 _ => {}
             }
         }
-        
+
         modifiers
     }
 
@@ -504,7 +583,7 @@ impl TypeScriptExtractor {
     /// Clean TSDoc comment by removing comment markers and extra whitespace
     fn clean_tsdoc_comment(&self, comment: &str) -> String {
         let mut cleaned = comment.to_string();
-        
+
         // Remove TSDoc comment markers
         if cleaned.starts_with("/**") {
             cleaned = cleaned[3..].to_string();
@@ -514,15 +593,15 @@ impl TypeScriptExtractor {
         {
             cleaned = stripped.to_string();
         }
-        
+
         if cleaned.ends_with("*/") {
             cleaned = cleaned[..cleaned.len() - 2].to_string();
         }
-        
+
         // Remove leading * on each line
         let lines: Vec<&str> = cleaned.lines().collect();
         let mut result_lines = Vec::new();
-        
+
         for line in lines {
             let trimmed = line.trim();
             if let Some(stripped) = trimmed.strip_prefix('*') {
@@ -534,7 +613,7 @@ impl TypeScriptExtractor {
                 result_lines.push("");
             }
         }
-        
+
         // Remove leading and trailing empty lines
         while result_lines.first().is_some_and(|s| s.is_empty()) {
             result_lines.remove(0);
@@ -542,7 +621,7 @@ impl TypeScriptExtractor {
         while result_lines.last().is_some_and(|s| s.is_empty()) {
             result_lines.pop();
         }
-        
+
         result_lines.join("\n")
     }
 }

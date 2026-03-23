@@ -1299,7 +1299,12 @@ impl CodeGraphBuilder {
         let mut resolved_symbols = HashMap::new();
 
         // Phase 1: Merge symbols with conflict resolution
-        self.merge_symbols(&other, &mut merge_result, &mut symbol_conflicts, &mut resolved_symbols)?;
+        self.merge_symbols(
+            &other,
+            &mut merge_result,
+            &mut symbol_conflicts,
+            &mut resolved_symbols,
+        )?;
 
         // Phase 2: Merge file symbol mappings
         self.merge_file_mappings(&other, &mut merge_result, &resolved_symbols);

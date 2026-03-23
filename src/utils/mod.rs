@@ -61,7 +61,6 @@ pub fn detect_language_id(file_path: &str) -> Option<LanguageId> {
     LanguageId::from_extension(ext)
 }
 
-
 /// Detect the programming language of a file based on its extension
 #[cfg(feature = "nodejs")]
 #[napi]
@@ -85,7 +84,7 @@ pub fn check_configuration(config: Option<AnalyzerConfig>) -> napi::Result<Strin
     // Validate project root
     if config.project_root.trim().is_empty() {
         return Err(napi::Error::from_reason(
-            "Configuration validation failed: project root cannot be empty"
+            "Configuration validation failed: project root cannot be empty",
         ));
     }
 
@@ -250,7 +249,10 @@ pub fn should_ignore_file(path: &str, ignore_patterns: &[String]) -> bool {
         {
             vec![normalized_pattern]
         } else {
-            vec![normalized_pattern.clone(), format!("**/{}", normalized_pattern)]
+            vec![
+                normalized_pattern.clone(),
+                format!("**/{}", normalized_pattern),
+            ]
         };
 
         for candidate in candidate_patterns {
@@ -297,12 +299,11 @@ pub fn format_file_size(size: u64) -> String {
     format!("{:.1} {}", size, UNITS[unit_index])
 }
 
-
 #[cfg(test)]
 mod tests {
-    use super::{should_ignore_file, detect_language_id};
     #[cfg(feature = "nodejs")]
     use super::detect_language;
+    use super::{detect_language_id, should_ignore_file};
 
     #[test]
     fn test_should_ignore_file_basic_globs() {
@@ -311,9 +312,15 @@ mod tests {
             "**/.git/**".to_string(),
             "**/target/**".to_string(),
         ];
-        assert!(should_ignore_file("project/node_modules/lodash/index.js", &patterns));
+        assert!(should_ignore_file(
+            "project/node_modules/lodash/index.js",
+            &patterns
+        ));
         assert!(should_ignore_file("project/.git/objects/abc", &patterns));
-        assert!(should_ignore_file("project/target/debug/fast-context", &patterns));
+        assert!(should_ignore_file(
+            "project/target/debug/fast-context",
+            &patterns
+        ));
         assert!(!should_ignore_file("src/main.rs", &patterns));
         assert!(!should_ignore_file("README.md", &patterns));
     }
@@ -345,9 +352,8 @@ mod tests {
 
             match expected {
                 Some(expected_lang) => {
-                    let detected_id = detected_id.unwrap_or_else(|| {
-                        panic!("ID detection failed for {}", file_path)
-                    });
+                    let detected_id = detected_id
+                        .unwrap_or_else(|| panic!("ID detection failed for {}", file_path));
                     #[cfg(feature = "nodejs")]
                     assert_eq!(
                         detected_string,
@@ -364,8 +370,16 @@ mod tests {
                 }
                 None => {
                     #[cfg(feature = "nodejs")]
-                    assert!(detected_string.is_none(), "Should not detect language for {}", file_path);
-                    assert!(detected_id.is_none(), "Should not detect language ID for {}", file_path);
+                    assert!(
+                        detected_string.is_none(),
+                        "Should not detect language for {}",
+                        file_path
+                    );
+                    assert!(
+                        detected_id.is_none(),
+                        "Should not detect language ID for {}",
+                        file_path
+                    );
                 }
             }
         }

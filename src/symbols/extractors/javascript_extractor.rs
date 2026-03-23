@@ -15,7 +15,7 @@ use tree_sitter::{Node, Tree};
 fn safe_node_text(node: &Node, source: &str) -> String {
     let start = node.start_byte();
     let end = node.end_byte();
-    
+
     // Ensure byte range is within source bounds
     if start <= end && end <= source.len() {
         // Use direct slice access with bounds checking
@@ -23,7 +23,7 @@ fn safe_node_text(node: &Node, source: &str) -> String {
             return slice.to_string();
         }
     }
-    
+
     // Return empty string if bounds are invalid
     String::new()
 }
@@ -132,7 +132,11 @@ impl JavaScriptExtractor {
                         "assignment_expression" => {
                             if let Some(left) = parent.child_by_field_name("left") {
                                 if left.kind() == "identifier" {
-                                    let name = format!("{}{}", safe_node_text(&left, source), safe_node_text(&node, source));
+                                    let name = format!(
+                                        "{}{}",
+                                        safe_node_text(&left, source),
+                                        safe_node_text(&node, source)
+                                    );
                                     let location = Location::from_node(&node, file_path);
 
                                     symbols.push(Symbol {

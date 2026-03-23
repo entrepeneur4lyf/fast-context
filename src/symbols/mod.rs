@@ -11,7 +11,7 @@ use tree_sitter::{Node, Tree};
 pub fn safe_node_text(node: &Node, source: &str) -> String {
     let start = node.start_byte();
     let end = node.end_byte();
-    
+
     // Ensure byte range is within source bounds
     if start <= end && end <= source.len() {
         // Use direct slice access with bounds checking
@@ -19,7 +19,7 @@ pub fn safe_node_text(node: &Node, source: &str) -> String {
             return slice.to_string();
         }
     }
-    
+
     // Return empty string if bounds are invalid
     String::new()
 }
@@ -523,7 +523,8 @@ enum Color {
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::Rust)
+        let parse_result = parser_factory
+            .parse(source, LanguageId::Rust)
             .expect("Failed to parse Rust test code");
 
         let extractor_factory = SymbolExtractorFactory::new();
@@ -537,11 +538,17 @@ enum Color {
         // Should find main function, Point struct, and Color enum
         assert!(symbols.len() >= 3);
 
-        let main_fn = symbols.iter().find(|s| s.name == "main").expect("Test assertion failed");
+        let main_fn = symbols
+            .iter()
+            .find(|s| s.name == "main")
+            .expect("Test assertion failed");
         assert_eq!(main_fn.kind, SymbolKind::Function);
         assert!(main_fn.is_global());
 
-        let point_struct = symbols.iter().find(|s| s.name == "Point").expect("Test assertion failed");
+        let point_struct = symbols
+            .iter()
+            .find(|s| s.name == "Point")
+            .expect("Test assertion failed");
         assert_eq!(point_struct.kind, SymbolKind::Struct);
     }
 
@@ -573,7 +580,9 @@ def main():
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::Python).expect("Test assertion failed");
+        let parse_result = parser_factory
+            .parse(source, LanguageId::Python)
+            .expect("Test assertion failed");
 
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
@@ -593,16 +602,25 @@ def main():
         assert!(os_import.is_some());
 
         // Check for constant
-        let max_size = symbols.iter().find(|s| s.name == "MAX_SIZE").expect("Test assertion failed");
+        let max_size = symbols
+            .iter()
+            .find(|s| s.name == "MAX_SIZE")
+            .expect("Test assertion failed");
         assert_eq!(max_size.kind, SymbolKind::Constant);
 
         // Check for class
-        let calc_class = symbols.iter().find(|s| s.name == "Calculator").expect("Test assertion failed");
+        let calc_class = symbols
+            .iter()
+            .find(|s| s.name == "Calculator")
+            .expect("Test assertion failed");
         assert_eq!(calc_class.kind, SymbolKind::Class);
         assert!(calc_class.documentation.is_some());
 
         // Check for function with docstring
-        let add_method = symbols.iter().find(|s| s.name == "add").expect("Test assertion failed");
+        let add_method = symbols
+            .iter()
+            .find(|s| s.name == "add")
+            .expect("Test assertion failed");
         assert_eq!(add_method.kind, SymbolKind::Function);
         assert!(add_method.documentation.is_some());
 
@@ -701,33 +719,51 @@ export { multiply as multiplyNumbers };
             .contains(&"namespace".to_string()));
 
         // Check for constant
-        let api_url = symbols.iter().find(|s| s.name == "API_URL").expect("Test assertion failed");
+        let api_url = symbols
+            .iter()
+            .find(|s| s.name == "API_URL")
+            .expect("Test assertion failed");
         assert_eq!(api_url.kind, SymbolKind::Constant);
 
         // Check for exported class with JSDoc
-        let calc_class = symbols.iter().find(|s| s.name == "Calculator").expect("Test assertion failed");
+        let calc_class = symbols
+            .iter()
+            .find(|s| s.name == "Calculator")
+            .expect("Test assertion failed");
         assert_eq!(calc_class.kind, SymbolKind::Class);
         // Note: JSDoc extraction may not be working yet with tree-sitter JavaScript
         // assert!(calc_class.documentation.is_some());
         assert!(calc_class.modifiers.contains(&"export".to_string()));
 
         // Check for method with JSDoc
-        let add_method = symbols.iter().find(|s| s.name == "add").expect("Test assertion failed");
+        let add_method = symbols
+            .iter()
+            .find(|s| s.name == "add")
+            .expect("Test assertion failed");
         assert_eq!(add_method.kind, SymbolKind::Method);
         // Note: JSDoc extraction may not be working yet with tree-sitter JavaScript
         // assert!(add_method.documentation.is_some());
 
         // Check for static method (detection may need refinement)
-        let _create_method = symbols.iter().find(|s| s.name == "create").expect("Test assertion failed");
+        let _create_method = symbols
+            .iter()
+            .find(|s| s.name == "create")
+            .expect("Test assertion failed");
         // assert!(create_method.modifiers.contains(&"static".to_string()));
 
         // Check for async function (detection may need refinement)
-        let process_data = symbols.iter().find(|s| s.name == "processData").expect("Test assertion failed");
+        let process_data = symbols
+            .iter()
+            .find(|s| s.name == "processData")
+            .expect("Test assertion failed");
         // assert!(process_data.modifiers.contains(&"async".to_string()));
         assert!(process_data.modifiers.contains(&"export".to_string()));
 
         // Check for arrow function (should be detected as either constant or function)
-        let _multiply = symbols.iter().find(|s| s.name == "multiply").expect("Test assertion failed");
+        let _multiply = symbols
+            .iter()
+            .find(|s| s.name == "multiply")
+            .expect("Test assertion failed");
         // Arrow function detection may need refinement with tree-sitter
         // assert!(multiply.modifiers.contains(&"arrow".to_string()));
     }
@@ -772,7 +808,10 @@ export class UserService {
             .iter()
             .find(|s| s.name == "User" && s.kind == SymbolKind::Interface);
         assert!(user_interface.is_some());
-        assert_eq!(user_interface.expect("Test assertion failed").language, LanguageId::TypeScript);
+        assert_eq!(
+            user_interface.expect("Test assertion failed").language,
+            LanguageId::TypeScript
+        );
 
         // Check for type alias
         let user_role_type = symbols
@@ -781,7 +820,10 @@ export class UserService {
         assert!(user_role_type.is_some());
 
         // Check for exported class
-        let user_service = symbols.iter().find(|s| s.name == "UserService").expect("Test assertion failed");
+        let user_service = symbols
+            .iter()
+            .find(|s| s.name == "UserService")
+            .expect("Test assertion failed");
         assert_eq!(user_service.kind, SymbolKind::Class);
         assert!(user_service.modifiers.contains(&"export".to_string()));
     }
@@ -835,7 +877,9 @@ enum Operation {
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::Java).expect("Test assertion failed");
+        let parse_result = parser_factory
+            .parse(source, LanguageId::Java)
+            .expect("Test assertion failed");
 
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
@@ -866,7 +910,10 @@ enum Operation {
             .iter()
             .find(|s| s.name == "com.example.demo" && s.kind == SymbolKind::Namespace);
         assert!(package.is_some(), "Package declaration not found");
-        assert!(package.expect("Test assertion failed").modifiers.contains(&"package".to_string()));
+        assert!(package
+            .expect("Test assertion failed")
+            .modifiers
+            .contains(&"package".to_string()));
 
         // Check for import
         let util_import = symbols
@@ -925,12 +972,18 @@ enum Operation {
             .iter()
             .find(|s| s.name == "Calculator" && s.modifiers.contains(&"constructor".to_string()));
         assert!(constructor.is_some(), "Constructor not found");
-        assert_eq!(constructor.expect("Test assertion failed").kind, SymbolKind::Method);
+        assert_eq!(
+            constructor.expect("Test assertion failed").kind,
+            SymbolKind::Method
+        );
 
         // Check for methods
         let add_method = symbols.iter().find(|s| s.name == "add");
         assert!(add_method.is_some(), "add method not found");
-        assert_eq!(add_method.expect("Test assertion failed").kind, SymbolKind::Method);
+        assert_eq!(
+            add_method.expect("Test assertion failed").kind,
+            SymbolKind::Method
+        );
 
         let create_method = symbols.iter().find(|s| s.name == "create");
         assert!(create_method.is_some(), "create method not found");
@@ -938,12 +991,18 @@ enum Operation {
         // Check for interface
         let interface = symbols.iter().find(|s| s.name == "MathOperations");
         assert!(interface.is_some(), "MathOperations interface not found");
-        assert_eq!(interface.expect("Test assertion failed").kind, SymbolKind::Interface);
+        assert_eq!(
+            interface.expect("Test assertion failed").kind,
+            SymbolKind::Interface
+        );
 
         // Check for enum
         let enum_symbol = symbols.iter().find(|s| s.name == "Operation");
         assert!(enum_symbol.is_some(), "Operation enum not found");
-        assert_eq!(enum_symbol.expect("Test assertion failed").kind, SymbolKind::Enum);
+        assert_eq!(
+            enum_symbol.expect("Test assertion failed").kind,
+            SymbolKind::Enum
+        );
     }
 
     #[test]
@@ -1003,7 +1062,9 @@ func Multiply(a, b float64) float64 {
         "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::Go).expect("Test assertion failed");
+        let parse_result = parser_factory
+            .parse(source, LanguageId::Go)
+            .expect("Test assertion failed");
 
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
@@ -1034,7 +1095,10 @@ func Multiply(a, b float64) float64 {
             .iter()
             .find(|s| s.name == "calculator" && s.kind == SymbolKind::Namespace);
         assert!(package.is_some(), "Package declaration not found");
-        assert!(package.expect("Test assertion failed").modifiers.contains(&"package".to_string()));
+        assert!(package
+            .expect("Test assertion failed")
+            .modifiers
+            .contains(&"package".to_string()));
 
         // Check for imports
         let fmt_import = symbols
@@ -1088,7 +1152,10 @@ func Multiply(a, b float64) float64 {
             .iter()
             .find(|s| s.name == "MaxValue" && s.kind == SymbolKind::Constant);
         assert!(max_value.is_some(), "MaxValue constant not found");
-        assert!(max_value.expect("Test assertion failed").modifiers.contains(&"const".to_string()));
+        assert!(max_value
+            .expect("Test assertion failed")
+            .modifiers
+            .contains(&"const".to_string()));
 
         // Check for variables
         let global_counter = symbols
@@ -1121,7 +1188,10 @@ func Multiply(a, b float64) float64 {
             .expect("Test assertion failed")
             .modifiers
             .contains(&"method".to_string()));
-        assert!(add_method.expect("Test assertion failed").signature.is_some());
+        assert!(add_method
+            .expect("Test assertion failed")
+            .signature
+            .is_some());
     }
 
     #[test]
@@ -1188,7 +1258,9 @@ namespace Calculator.Services
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::CSharp).expect("Test assertion failed");
+        let parse_result = parser_factory
+            .parse(source, LanguageId::CSharp)
+            .expect("Test assertion failed");
 
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
@@ -1350,7 +1422,9 @@ var globalVariable = 42
 "#;
 
         let mut parser_factory = ParserFactory::new();
-        let parse_result = parser_factory.parse(source, LanguageId::Swift).expect("Test assertion failed");
+        let parse_result = parser_factory
+            .parse(source, LanguageId::Swift)
+            .expect("Test assertion failed");
 
         let extractor_factory = SymbolExtractorFactory::new();
         let symbols = extractor_factory.extract_symbols(
@@ -1783,7 +1857,7 @@ impl PhpExtractor {
                 let function_name = safe_node_text(&child, source);
                 let mut modifiers = vec!["function".to_string()];
 
-                    // Check for visibility modifiers (public, private, protected, static)
+                // Check for visibility modifiers (public, private, protected, static)
                 let mut modifier_cursor = node.walk();
                 for modifier_child in node.children(&mut modifier_cursor) {
                     if modifier_child.kind() == "visibility_modifier"
@@ -2026,9 +2100,7 @@ impl PhpExtractor {
                             language: LanguageId::PHP,
                             documentation: None,
                             modifiers,
-                            signature: Some(
-                                safe_node_text(node, source),
-                            ),
+                            signature: Some(safe_node_text(node, source)),
                         };
                         symbols.push(symbol);
                     }
@@ -2061,9 +2133,7 @@ impl PhpExtractor {
                             language: LanguageId::PHP,
                             documentation: None,
                             modifiers: vec!["const".to_string()],
-                            signature: Some(
-                                safe_node_text(&child, source),
-                            ),
+                            signature: Some(safe_node_text(&child, source)),
                         };
                         symbols.push(symbol);
                     }
@@ -2164,9 +2234,7 @@ impl PhpExtractor {
                             language: LanguageId::PHP,
                             documentation: None,
                             modifiers: vec!["use".to_string()],
-                            signature: Some(
-                                safe_node_text(node, source),
-                            ),
+                            signature: Some(safe_node_text(node, source)),
                         };
                         symbols.push(symbol);
                         break; // Only process the first qualified_name

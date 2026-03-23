@@ -13,10 +13,10 @@ use crate::query::{CodeQueryEngine, QueryResult};
 use crate::symbols::SymbolExtractorFactory;
 use crate::watcher::CodebaseWatcher;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use tokio::runtime::Runtime;
 use std::cell::RefCell;
+use std::sync::Arc;
 use std::thread_local;
+use tokio::runtime::Runtime;
 
 thread_local! {
     #[allow(clippy::missing_const_for_thread_local)]
@@ -39,17 +39,17 @@ impl RecursionGuard {
             *d.borrow_mut() = current + 1;
             current + 1
         });
-        
+
         if depth > MAX_RECURSION_DEPTH {
             ANALYSIS_DEPTH.with(|d| *d.borrow_mut() = 0); // Reset on error
             return Err(AnalysisError::Project {
                 message: format!("Maximum recursion depth exceeded: {}", depth),
             });
         }
-        
+
         Ok(Self { depth })
     }
-    
+
     /// Get current depth
     pub fn depth(&self) -> u32 {
         self.depth
@@ -301,11 +301,12 @@ impl AnalysisEngine {
                     message: "No analysis result to export".to_string(),
                 })?;
 
-                use crate::export::JsonExporter;
+        use crate::export::JsonExporter;
 
         let exporter = JsonExporter::new(analysis_result.clone(), self.config.project_root.clone());
 
-        exporter.export_to_string(&options)
+        exporter
+            .export_to_string(&options)
             .map_err(|e| AnalysisError::Export {
                 format: "json".to_string(),
                 message: format!("Export failed: {}", e),
@@ -347,8 +348,8 @@ impl AnalysisEngine {
 
         // Guard against circular dependencies and infinite recursion
         let _guard = RecursionGuard::new()?;
-        
-                let core_analyzer = CoreAnalyzer::new(
+
+        let core_analyzer = CoreAnalyzer::new(
             self.config.project_root.clone(),
             Some(self.config.languages.clone()),
             Some(self.config.ignore_patterns.clone()),
@@ -360,7 +361,7 @@ impl AnalysisEngine {
             symbol_count: u32,
             languages: Vec<String>,
             #[allow(dead_code)]
-        duration_ms: u32,
+            duration_ms: u32,
             relationships: Vec<crate::symbols::Dependency>,
         }
 
@@ -368,11 +369,12 @@ impl AnalysisEngine {
         let unified_result = {
             #[cfg(not(feature = "python"))]
             {
-                let core_result = core_analyzer.analyze()
+                let core_result = core_analyzer
+                    .analyze()
                     .map_err(|e| AnalysisError::Project {
-                        message: format!("Core analysis failed: {}", e)
+                        message: format!("Core analysis failed: {}", e),
                     })?;
-                
+
                 UnifiedAnalysisResult {
                     file_count: core_result.file_count,
                     symbol_count: core_result.symbol_count,
@@ -385,46 +387,51 @@ impl AnalysisEngine {
             #[cfg(feature = "python")]
             {
                 // When Python feature is enabled, we get AnalysisResult with PyDependency
-                let py_result = core_analyzer.analyze()
+                let py_result = core_analyzer
+                    .analyze()
                     .map_err(|e| AnalysisError::Project {
-                        message: format!("Core analysis failed: {}", e)
+                        message: format!("Core analysis failed: {}", e),
                     })?;
-                
+
                 // Convert PyDependency relationships to Dependency relationships for graph building
                 use crate::symbols::{Dependency, DependencyType, Location};
-                let dependencies: Vec<Dependency> = py_result.relationships.into_iter().map(|py_dep| {
-                    Dependency {
-                        from_symbol: py_dep.from_symbol,
-                        to_symbol: py_dep.to_symbol,
-                        relationship_type: match py_dep.relationship_type.as_str() {
-                            "Calls" => DependencyType::Calls,
-                            "References" => DependencyType::References,
-                            "Imports" => DependencyType::Imports,
-                            "Inherits" => DependencyType::Inherits,
-                            "Implements" => DependencyType::Implements,
-                            "Assigns" => DependencyType::Assigns,
-                            "ControlFlow" => DependencyType::ControlFlow,
-                            "Uses" => DependencyType::Uses,
-                            "TypeOf" => DependencyType::TypeOf,
-                            "Declares" => DependencyType::Declares,
-                            "ModuleDependency" => DependencyType::ModuleDependency,
-                            _ => DependencyType::References, // Fallback
-                        },
-                        location: Location {
+                let dependencies: Vec<Dependency> = py_result
+                    .relationships
+                    .into_iter()
+                    .map(|py_dep| {
+                        Dependency {
+                            from_symbol: py_dep.from_symbol,
+                            to_symbol: py_dep.to_symbol,
+                            relationship_type: match py_dep.relationship_type.as_str() {
+                                "Calls" => DependencyType::Calls,
+                                "References" => DependencyType::References,
+                                "Imports" => DependencyType::Imports,
+                                "Inherits" => DependencyType::Inherits,
+                                "Implements" => DependencyType::Implements,
+                                "Assigns" => DependencyType::Assigns,
+                                "ControlFlow" => DependencyType::ControlFlow,
+                                "Uses" => DependencyType::Uses,
+                                "TypeOf" => DependencyType::TypeOf,
+                                "Declares" => DependencyType::Declares,
+                                "ModuleDependency" => DependencyType::ModuleDependency,
+                                _ => DependencyType::References, // Fallback
+                            },
+                            location: Location {
+                                file_path: "unknown".to_string(), // PyDependency doesn't have file_path
+                                start_line: 1, // Default location since PyDependency doesn't have it
+                                end_line: 1,
+                                start_column: 1,
+                                end_column: 1,
+                            },
                             file_path: "unknown".to_string(), // PyDependency doesn't have file_path
-                            start_line: 1, // Default location since PyDependency doesn't have it
-                            end_line: 1,
-                            start_column: 1,
-                            end_column: 1,
-                        },
-                        file_path: "unknown".to_string(), // PyDependency doesn't have file_path
-                        language: crate::parsers::LanguageId::TypeScript, // Default fallback
-                        context: None,
-                        strength: 1.0,
-                        is_conditional: false,
-                    }
-                }).collect();
-                
+                            language: crate::parsers::LanguageId::TypeScript, // Default fallback
+                            context: None,
+                            strength: 1.0,
+                            is_conditional: false,
+                        }
+                    })
+                    .collect();
+
                 UnifiedAnalysisResult {
                     file_count: py_result.file_count,
                     symbol_count: py_result.symbol_count,
@@ -436,42 +443,52 @@ impl AnalysisEngine {
         };
 
         // Convert core result to domain result format
-        let languages: Vec<LanguageId> = unified_result.languages.iter()
+        let languages: Vec<LanguageId> = unified_result
+            .languages
+            .iter()
             .filter_map(|s| LanguageId::from_string(s))
             .collect();
 
         // Build actual relationship graph from extracted dependencies
         let mut graph_builder = crate::analysis::CodeGraphBuilder::new();
-        
+
         // Add all symbols to the graph (need to extract them again since core_result doesn't have them)
         use crate::parsers::ParserFactory;
         use crate::symbols::SymbolExtractorFactory;
-        use walkdir::WalkDir;
         use std::fs;
-        
+        use walkdir::WalkDir;
+
         let mut parser_factory = ParserFactory::new();
         let extractor_factory = SymbolExtractorFactory::new();
-        
-        for entry in WalkDir::new(&self.config.project_root).into_iter().filter_map(|e| e.ok()) {
+
+        for entry in WalkDir::new(&self.config.project_root)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             if entry.file_type().is_file() {
                 let path_str = entry.path().to_string_lossy();
                 if crate::utils::should_ignore_file(&path_str, &self.config.ignore_patterns) {
                     continue;
                 }
-                
+
                 if let Ok(content) = fs::read_to_string(&*path_str) {
                     if let Some(parse) = parser_factory.parse_file(&content, &path_str) {
-                        let symbols = extractor_factory.extract_symbols(&parse.tree, &parse.source, &path_str, parse.language);
+                        let symbols = extractor_factory.extract_symbols(
+                            &parse.tree,
+                            &parse.source,
+                            &path_str,
+                            parse.language,
+                        );
                         graph_builder.add_file_symbols(symbols, &path_str);
                     }
                 }
             }
         }
-        
+
         // Add relationships from the extracted dependencies
         for dep in &unified_result.relationships {
-            use crate::analysis::{RelationshipKind, CodeRelationship};
-            
+            use crate::analysis::{CodeRelationship, RelationshipKind};
+
             let relationship_kind = match dep.relationship_type {
                 crate::symbols::DependencyType::Calls => RelationshipKind::Calls,
                 crate::symbols::DependencyType::Imports => RelationshipKind::Imports,
@@ -486,18 +503,18 @@ impl AnalysisEngine {
                 crate::symbols::DependencyType::ModuleDependency => RelationshipKind::Imports,
                 _ => RelationshipKind::DependsOn, // Fallback for other types
             };
-            
+
             let relationship = CodeRelationship {
                 kind: relationship_kind,
                 source_location: format!("{}:{}", dep.file_path, dep.location.start_line),
                 confidence: 0.8, // Default confidence
                 metadata: std::collections::HashMap::new(),
             };
-            
+
             // Try to add the relationship to the graph
             let _ = graph_builder.add_relationship(&dep.from_symbol, &dep.to_symbol, relationship);
         }
-        
+
         let graph = graph_builder.build();
 
         Ok(AnalysisResult {

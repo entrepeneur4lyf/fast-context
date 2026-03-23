@@ -13,8 +13,8 @@ use petgraph::visit::EdgeRef;
 use petgraph::Direction;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 
 /// Petgraph implementation for directed graphs
 #[derive(Debug)]
@@ -89,8 +89,14 @@ where
         let mut cache = self.degree_cache.lock().unwrap();
         cache.clear();
         for node_idx in self.graph.node_indices() {
-            let in_degree = self.graph.neighbors_directed(node_idx, Direction::Incoming).count();
-            let out_degree = self.graph.neighbors_directed(node_idx, Direction::Outgoing).count();
+            let in_degree = self
+                .graph
+                .neighbors_directed(node_idx, Direction::Incoming)
+                .count();
+            let out_degree = self
+                .graph
+                .neighbors_directed(node_idx, Direction::Outgoing)
+                .count();
             if let Some(our_id) = self.lookup_node_id(node_idx) {
                 cache.insert(our_id.as_usize(), (in_degree, out_degree));
             }
@@ -247,8 +253,9 @@ where
     fn find_edge(&self, source: NodeId, target: NodeId) -> Option<EdgeId> {
         let source_idx = self.to_petgraph_node(source)?;
         let target_idx = self.to_petgraph_node(target)?;
-        
-        self.graph.find_edge(source_idx, target_idx)
+
+        self.graph
+            .find_edge(source_idx, target_idx)
             .and_then(|edge_idx| {
                 // Find our edge ID that corresponds to this petgraph edge
                 self.edge_id_map
@@ -296,17 +303,20 @@ where
                     let target_idx = edge_ref.target();
                     let edge_idx = edge_ref.id();
 
-                    let source_id = self.node_id_map
+                    let source_id = self
+                        .node_id_map
                         .iter()
                         .find(|(_, &pet_idx)| pet_idx == source_idx)
                         .map(|(&our_id, _)| NodeId::new(our_id))?;
 
-                    let target_id = self.node_id_map
+                    let target_id = self
+                        .node_id_map
                         .iter()
                         .find(|(_, &pet_idx)| pet_idx == target_idx)
                         .map(|(&our_id, _)| NodeId::new(our_id))?;
 
-                    let edge_id = self.edge_id_map
+                    let edge_id = self
+                        .edge_id_map
                         .iter()
                         .find(|(_, &pet_idx)| pet_idx == edge_idx)
                         .map(|(&our_id, _)| EdgeId::new(our_id))?;
@@ -348,7 +358,8 @@ where
                 if !visited.contains(&node_idx) {
                     visited.insert(node_idx);
 
-                    if let Some(our_id) = self.node_id_map
+                    if let Some(our_id) = self
+                        .node_id_map
                         .iter()
                         .find(|(_, &pet_idx)| pet_idx == node_idx)
                         .map(|(&our_id, _)| our_id)
@@ -415,7 +426,12 @@ where
         }
     }
 
-    fn all_paths(&self, _source: NodeId, _target: NodeId, _max_length: Option<usize>) -> FastContextResult<Vec<PathResult>> {
+    fn all_paths(
+        &self,
+        _source: NodeId,
+        _target: NodeId,
+        _max_length: Option<usize>,
+    ) -> FastContextResult<Vec<PathResult>> {
         // Simplified implementation - would need DFS/BFS for all paths
         Ok(vec![])
     }
@@ -487,17 +503,17 @@ where
     fn graph_stats(&self) -> GraphStats {
         let node_count = self.graph.node_count();
         let edge_count = self.graph.edge_count();
-        
+
         // Use cached degrees for O(1) access instead of O(n²) recalculation
         let (total_degree, max_degree) = if node_count == 0 {
             (0, 0)
         } else {
             // Ensure degree cache is up to date
             self.update_degree_cache_if_needed();
-            
+
             let mut total = 0;
             let mut max = 0;
-            
+
             for node_id in self.node_id_map.keys() {
                 {
                     let cache = self.degree_cache.lock().unwrap();
@@ -508,24 +524,24 @@ where
                     }
                 }
             }
-            
+
             (total, max)
         };
-        
+
         let average_degree = if node_count > 0 {
             total_degree as f64 / node_count as f64
         } else {
             0.0
         };
-        
+
         let connected_components = algo::tarjan_scc(&self.graph).len();
-        
+
         let max_possible_edges = if node_count > 1 {
             node_count * (node_count - 1)
         } else {
             0
         };
-        
+
         let density = if max_possible_edges > 0 {
             edge_count as f64 / max_possible_edges as f64
         } else {
@@ -534,7 +550,7 @@ where
 
         // Check for cycles
         let has_cycles_flag = !self.find_cycles().is_empty();
-        
+
         GraphStats {
             node_count,
             edge_count,
@@ -546,8 +562,12 @@ where
         }
     }
 
-    fn find_nodes_by_predicate(&self, predicate: Box<dyn Fn(&N) -> bool + Send + Sync>) -> Vec<NodeId> {
-        self.graph.node_weights()
+    fn find_nodes_by_predicate(
+        &self,
+        predicate: Box<dyn Fn(&N) -> bool + Send + Sync>,
+    ) -> Vec<NodeId> {
+        self.graph
+            .node_weights()
             .enumerate()
             .filter(|(_, node_data)| predicate(node_data))
             .filter_map(|(idx, _)| {
@@ -559,8 +579,12 @@ where
             .collect()
     }
 
-    fn find_edges_by_predicate(&self, predicate: Box<dyn Fn(&E) -> bool + Send + Sync>) -> Vec<EdgeId> {
-        self.graph.edge_weights()
+    fn find_edges_by_predicate(
+        &self,
+        predicate: Box<dyn Fn(&E) -> bool + Send + Sync>,
+    ) -> Vec<EdgeId> {
+        self.graph
+            .edge_weights()
             .enumerate()
             .filter(|(_, edge_data)| predicate(edge_data))
             .filter_map(|(idx, _)| {
@@ -584,10 +608,10 @@ where
 
     fn subgraph(&self, nodes: &[NodeId]) -> FastContextResult<Box<dyn GraphOperations<N, E>>> {
         let mut new_graph = Self::with_capacity(nodes.len(), nodes.len() * 2);
-        
+
         // Create mapping of old node IDs to new node IDs
         let mut node_mapping = HashMap::new();
-        
+
         // Add nodes to new graph
         for &node_id in nodes {
             if let Some(node_data) = self.get_node(node_id) {
@@ -595,30 +619,29 @@ where
                 node_mapping.insert(node_id, new_node_id);
             }
         }
-        
+
         // Add edges that exist between the selected nodes
         for &source_id in nodes {
             for &target_id in nodes {
                 if let Some(edge_id) = self.find_edge(source_id, target_id) {
                     if let Some(edge_data) = self.get_edge(edge_id) {
-                        if let (Some(new_source), Some(new_target)) = (
-                            node_mapping.get(&source_id),
-                            node_mapping.get(&target_id),
-                        ) {
+                        if let (Some(new_source), Some(new_target)) =
+                            (node_mapping.get(&source_id), node_mapping.get(&target_id))
+                        {
                             let _ = new_graph.add_edge(*new_source, *new_target, edge_data.clone());
                         }
                     }
                 }
             }
         }
-        
+
         Ok(Box::new(new_graph))
     }
 
     fn merge(&mut self, other: &dyn GraphOperations<N, E>) -> FastContextResult<()> {
         // Create mapping from other graph's nodes to our nodes
         let mut node_mapping = HashMap::new();
-        
+
         // Add all nodes from other graph
         for other_node_id in other.node_ids() {
             if let Some(node_data) = other.get_node(other_node_id) {
@@ -626,22 +649,21 @@ where
                 node_mapping.insert(other_node_id, our_node_id);
             }
         }
-        
+
         // Add all edges from other graph
         for other_node_id in other.node_ids() {
             let outgoing_edges = other.edges(other_node_id, GraphDirection::Outgoing);
             for (source_id, edge_id, target_id) in outgoing_edges {
-                if let (Some(our_source), Some(our_target)) = (
-                    node_mapping.get(&source_id),
-                    node_mapping.get(&target_id),
-                ) {
+                if let (Some(our_source), Some(our_target)) =
+                    (node_mapping.get(&source_id), node_mapping.get(&target_id))
+                {
                     if let Some(edge_data) = other.get_edge(edge_id) {
                         let _ = self.add_edge(*our_source, *our_target, edge_data.clone());
                     }
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -649,14 +671,14 @@ where
 
     fn clone_graph(&self) -> Box<dyn GraphOperations<N, E>> {
         let mut new_graph = Self::with_capacity(self.graph.node_count(), self.graph.edge_count());
-        
+
         // Copy all nodes
         for node_id in self.node_ids() {
             if let Some(node_data) = self.get_node(node_id) {
                 let _ = new_graph.add_node(node_data.clone());
             }
         }
-        
+
         // Copy all edges
         for node_id in self.node_ids() {
             let outgoing_edges = self.edges(node_id, GraphDirection::Outgoing);
@@ -666,7 +688,7 @@ where
                 }
             }
         }
-        
+
         Box::new(new_graph)
     }
 
@@ -696,24 +718,24 @@ mod tests {
     #[test]
     fn test_petgraph_directed_basic() {
         let mut graph = PetGraphDirected::<String, i32>::new();
-        
+
         // Add nodes
         let node1 = graph.add_node("Node 1".to_string()).unwrap();
         let node2 = graph.add_node("Node 2".to_string()).unwrap();
-        
+
         // Add edge
         let edge = graph.add_edge(node1, node2, 42).unwrap();
-        
+
         // Verify
         assert_eq!(graph.node_ids().len(), 2);
         assert_eq!(graph.get_node(node1), Some(&"Node 1".to_string()));
         assert_eq!(graph.get_node(node2), Some(&"Node 2".to_string()));
         assert_eq!(graph.get_edge(edge), Some(&42));
-        
+
         // Test neighbors
         let neighbors = graph.neighbors(node1, GraphDirection::Outgoing);
         assert_eq!(neighbors, vec![node2]);
-        
+
         let incoming = graph.neighbors(node2, GraphDirection::Incoming);
         assert_eq!(incoming, vec![node1]);
     }
@@ -721,15 +743,15 @@ mod tests {
     #[test]
     fn test_graph_stats() {
         let mut graph = PetGraphDirected::<String, i32>::new();
-        
+
         let node1 = graph.add_node("A".to_string()).unwrap();
         let node2 = graph.add_node("B".to_string()).unwrap();
         let node3 = graph.add_node("C".to_string()).unwrap();
-        
+
         graph.add_edge(node1, node2, 1).unwrap();
         graph.add_edge(node2, node3, 1).unwrap();
         graph.add_edge(node3, node1, 1).unwrap(); // Creates a cycle
-        
+
         let stats = graph.graph_stats();
         assert_eq!(stats.node_count, 3);
         assert_eq!(stats.edge_count, 3);

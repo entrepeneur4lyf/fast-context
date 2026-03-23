@@ -18,6 +18,99 @@ import subprocess
 import argparse
 
 
+SERVER_CONFIG = {
+    "version": "1.0",
+    "servers": {
+        "fast-context": {
+            "name": "fast-context",
+            "command": "python",
+            "args": ["-m", "fast_context.mcp_server"],
+            "env": {
+                "PYTHONUNBUFFERED": "1",
+                "PYTHONPATH": str(Path(__file__).parent.parent),
+            },
+            "description": "Fast-Context MCP server",
+        }
+    },
+}
+
+
+def create_server_config(command: str, args=None, env=None):
+    """Create a normalized MCP server config dictionary."""
+    return {
+        "command": command,
+        "args": args or [],
+        "env": env or {},
+    }
+
+
+def validate_server_config(config):
+    """Validate a basic MCP server config shape."""
+    if not isinstance(config, dict):
+        return False
+    if not isinstance(config.get("command"), str) or not config["command"]:
+        return False
+    if not isinstance(config.get("args", []), list):
+        return False
+    if not isinstance(config.get("env", {}), dict):
+        return False
+    return True
+
+
+def list_available_servers():
+    """List configured server names."""
+    return list(SERVER_CONFIG["servers"].keys())
+
+
+def get_server_info(server_name):
+    """Get metadata for a configured server."""
+    server = SERVER_CONFIG["servers"].get(server_name)
+    if server is None:
+        return {}
+    return {
+        "name": server_name,
+        "command": server["command"],
+        "args": server["args"],
+        "env": server["env"],
+        "description": server.get("description", ""),
+    }
+
+
+def setup_fast_context_server():
+    """Run a basic setup check for the Fast-Context MCP server."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "fast_context.mcp_server", "--help"],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": "Fast-Context MCP server setup completed successfully",
+                "details": {
+                    "returncode": result.returncode,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                },
+            }
+        return {
+            "success": False,
+            "message": "Failed to setup Fast-Context MCP server",
+            "details": {
+                "returncode": result.returncode,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
+            },
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": "Error setting up Fast-Context MCP server",
+            "details": {"error": str(e)},
+        }
+
+
 def check_dependencies():
     """Check if required dependencies are installed."""
     required_packages = ["mcp", "fastmcp", "click", "uvicorn", "starlette"]

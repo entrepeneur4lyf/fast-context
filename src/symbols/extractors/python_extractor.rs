@@ -15,7 +15,7 @@ use tree_sitter::{Node, Tree};
 fn safe_node_text(node: &Node, source: &str) -> String {
     let start = node.start_byte();
     let end = node.end_byte();
-    
+
     // Ensure byte range is within source bounds
     if start <= end && end <= source.len() {
         // Use direct slice access with bounds checking
@@ -23,7 +23,7 @@ fn safe_node_text(node: &Node, source: &str) -> String {
             return slice.to_string();
         }
     }
-    
+
     // Return empty string if bounds are invalid
     String::new()
 }
@@ -169,12 +169,12 @@ impl PythonExtractor {
             .child_by_field_name("name")?
             .utf8_text(source.as_bytes())
             .ok()?;
-        
+
         let parameters = node.child_by_field_name("parameters")?;
         let params = parameters.utf8_text(source.as_bytes()).ok()?;
-        
+
         let mut signature = format!("def {func_name}{params}");
-        
+
         // Add return type annotation if present
         if let Some(return_type) = node.child_by_field_name("return_type") {
             if let Ok(return_annotation) = return_type.utf8_text(source.as_bytes()) {
@@ -182,7 +182,7 @@ impl PythonExtractor {
                 signature.push_str(return_annotation.trim());
             }
         }
-        
+
         Some(signature)
     }
 
@@ -292,7 +292,7 @@ impl PythonExtractor {
             if sibling.kind() == "decorator" {
                 if let Ok(decorator_text) = sibling.utf8_text(source.as_bytes()) {
                     let decorator = decorator_text.to_string();
-                    
+
                     // Identify common decorator patterns
                     if decorator.contains("@property") {
                         modifiers.push("property".to_string());
@@ -373,7 +373,7 @@ impl PythonExtractor {
                             if let Ok(parent_name) = arg_child.utf8_text(source.as_bytes()) {
                                 parent_count += 1;
                                 modifiers.push(format!("inherits:{}", parent_name));
-                                
+
                                 // Check for common base classes
                                 if parent_name == "Exception" || parent_name == "BaseException" {
                                     modifiers.push("exception_class".to_string());
@@ -387,7 +387,7 @@ impl PythonExtractor {
                     }
                 }
             }
-            
+
             if parent_count > 1 {
                 modifiers.push("multiple_inheritance".to_string());
             }
@@ -399,7 +399,7 @@ impl PythonExtractor {
             if sibling.kind() == "decorator" {
                 if let Ok(decorator_text) = sibling.utf8_text(source.as_bytes()) {
                     let decorator = decorator_text.to_string();
-                    
+
                     if decorator.contains("@dataclass") {
                         modifiers.push("dataclass".to_string());
                     } else if decorator.contains("@enum") {
@@ -444,8 +444,7 @@ impl PythonExtractor {
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
                     if child.kind() == "dotted_name" || child.kind() == "identifier" {
-                        let module_name =
-                            safe_node_text(&child, source);
+                        let module_name = safe_node_text(&child, source);
                         let location = Location::from_node(&child, file_path);
 
                         symbols.push(Symbol {
@@ -471,8 +470,7 @@ impl PythonExtractor {
                     match child.kind() {
                         "dotted_name" | "identifier" => {
                             if module_name.is_empty() {
-                                module_name =
-                                    safe_node_text(&child, source);
+                                module_name = safe_node_text(&child, source);
                             } else {
                                 imported_names.push((
                                     safe_node_text(&child, source),

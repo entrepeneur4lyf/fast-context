@@ -173,7 +173,12 @@ where
     fn shortest_path(&self, source: NodeId, target: NodeId) -> FastContextResult<PathResult>;
 
     /// Find all paths between two nodes (up to a maximum length)
-    fn all_paths(&self, source: NodeId, target: NodeId, max_length: Option<usize>) -> FastContextResult<Vec<PathResult>>;
+    fn all_paths(
+        &self,
+        source: NodeId,
+        target: NodeId,
+        max_length: Option<usize>,
+    ) -> FastContextResult<Vec<PathResult>>;
 
     /// Check if two nodes are connected
     fn is_connected(&self, source: NodeId, target: NodeId) -> bool;
@@ -196,10 +201,16 @@ where
     fn graph_stats(&self) -> GraphStats;
 
     /// Find nodes with specific properties (using a predicate)
-    fn find_nodes_by_predicate(&self, predicate: Box<dyn Fn(&N) -> bool + Send + Sync>) -> Vec<NodeId>;
+    fn find_nodes_by_predicate(
+        &self,
+        predicate: Box<dyn Fn(&N) -> bool + Send + Sync>,
+    ) -> Vec<NodeId>;
 
     /// Find edges with specific properties (using a predicate)
-    fn find_edges_by_predicate(&self, predicate: Box<dyn Fn(&E) -> bool + Send + Sync>) -> Vec<EdgeId>;
+    fn find_edges_by_predicate(
+        &self,
+        predicate: Box<dyn Fn(&E) -> bool + Send + Sync>,
+    ) -> Vec<EdgeId>;
 
     // === Graph Modification Operations ===
 
@@ -268,7 +279,9 @@ pub trait GraphFactory: Send + Sync {
 }
 
 /// Specialized graph operations for code analysis
-pub trait CodeGraphOperations: GraphOperations<crate::analysis::CodeNode, crate::analysis::CodeRelationship> {
+pub trait CodeGraphOperations:
+    GraphOperations<crate::analysis::CodeNode, crate::analysis::CodeRelationship>
+{
     /// Find all functions that call a given function
     fn find_callers(&self, function_id: NodeId) -> Vec<NodeId>;
 
@@ -294,7 +307,10 @@ pub trait CodeGraphOperations: GraphOperations<crate::analysis::CodeNode, crate:
     fn find_import_clusters(&self) -> Vec<Vec<NodeId>>;
 
     /// Analyze control flow complexity
-    fn analyze_control_flow(&self, function_id: NodeId) -> FastContextResult<crate::analysis::code_graph::ControlFlowAnalysis>;
+    fn analyze_control_flow(
+        &self,
+        function_id: NodeId,
+    ) -> FastContextResult<crate::analysis::code_graph::ControlFlowAnalysis>;
 }
 
 /// Helper trait for converting between different graph node types
@@ -334,7 +350,7 @@ mod tests {
     fn test_graph_direction_variants() {
         let incoming = GraphDirection::Incoming;
         let outgoing = GraphDirection::Outgoing;
-        
+
         assert_ne!(incoming, outgoing);
         assert_eq!(incoming, GraphDirection::Incoming);
         assert_eq!(outgoing, GraphDirection::Outgoing);

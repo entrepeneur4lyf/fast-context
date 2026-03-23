@@ -166,7 +166,7 @@ impl Default for CacheConfig {
             cache_dir: default_cache_dir(),
             enable_l1_cache: true,
             enable_l2_cache: true,
-                        symbol_ttl: Duration::from_secs(3600),    // 1 hour
+            symbol_ttl: Duration::from_secs(3600),    // 1 hour
             ast_ttl: Duration::from_secs(1800),       // 30 minutes
             graph_ttl: Duration::from_secs(21600),    // 6 hours
             analysis_ttl: Duration::from_secs(86400), // 24 hours
@@ -264,7 +264,7 @@ impl CacheConfig {
             CachePolicyType::Persistent => {
                 // Optimize for large codebases with persistence
                 self.enable_l2_cache = true;
-                                self.compression_enabled = true;
+                self.compression_enabled = true;
                 self.background_warming_threads = 3;
 
                 // Longer TTLs for stability
@@ -280,7 +280,7 @@ impl CacheConfig {
 
             CachePolicyType::Enterprise => {
                 // Future: Enterprise features for massive codebases
-                                self.compression_enabled = true;
+                self.compression_enabled = true;
                 self.streaming_enabled = true;
                 self.background_warming_threads = 4;
 
@@ -401,7 +401,6 @@ impl CacheConfig {
             return Err(ConfigValidationError::L1CacheRequired);
         }
 
-        
         if self.enable_cache_warming && self.background_warming_threads == 0 {
             self.background_warming_threads = 1;
         }
@@ -584,7 +583,7 @@ mod tests {
 
         assert!(config.enable_l1_cache);
         assert!(config.enable_l2_cache);
-                assert_eq!(config.policy_type, CachePolicyType::Balanced);
+        assert_eq!(config.policy_type, CachePolicyType::Balanced);
         assert!(config.memory_limit_mb > 0);
         assert!(config.l1_capacity > 0);
     }
@@ -619,7 +618,7 @@ mod tests {
                 assert_eq!(config.policy_type, CachePolicyType::Minimal);
                 // Note: Minimal policy disables these features in apply_policy_optimizations
                 assert!(!config.enable_l2_cache);
-                                assert!(!config.enable_predictive_caching);
+                assert!(!config.enable_predictive_caching);
             }
             Err(e) => {
                 // If no files found, create a simple test

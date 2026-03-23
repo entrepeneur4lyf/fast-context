@@ -29,11 +29,10 @@ use std::fs;
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, RwLock, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::fs as async_fs;
 use tokio::sync::RwLock as TokioRwLock;
-
 
 /// Cache key for identifying cached items
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -139,16 +138,14 @@ struct AccessPattern {
     pattern_type: AccessPatternType,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum AccessPatternType {
     Random,
     Temporal,  // Time-based locality
-    Frequency,  // Frequency-based locality
+    Frequency, // Frequency-based locality
     #[default]
     Unknown,
 }
-
 
 impl AccessPattern {
     /// Analyze access patterns to optimize caching strategy
@@ -159,7 +156,7 @@ impl AccessPattern {
 
         let mut time_gaps = Vec::new();
         let mut key_frequencies = HashMap::new();
-        
+
         // Calculate time gaps between consecutive accesses
         let accesses: Vec<_> = self.recent_accesses.iter().collect();
         for window in accesses.windows(2) {
@@ -168,19 +165,21 @@ impl AccessPattern {
                 time_gaps.push(gap);
             }
         }
-        
+
         // Count key frequencies
         for (key, _) in &self.recent_accesses {
             *key_frequencies.entry(key).or_insert(0) += 1;
         }
-        
+
         // Analyze patterns
         if !time_gaps.is_empty() {
             let avg_gap = time_gaps.iter().sum::<u128>() / time_gaps.len() as u128;
-            let variance = time_gaps.iter()
+            let variance = time_gaps
+                .iter()
                 .map(|gap| (*gap as i64 - avg_gap as i64).pow(2))
-                .sum::<i64>() / time_gaps.len() as i64;
-            
+                .sum::<i64>()
+                / time_gaps.len() as i64;
+
             // Determine pattern type
             self.pattern_type = if variance < (avg_gap / 4).pow(2) as i64 {
                 AccessPatternType::Temporal // Regular time intervals
@@ -191,13 +190,15 @@ impl AccessPattern {
             };
         }
     }
-    
+
     /// Get predicted hot keys for prefetching
     fn get_hot_keys(&self, limit: usize) -> Vec<CacheKey> {
-        let mut keys: Vec<_> = self.hot_keys.iter()
+        let mut keys: Vec<_> = self
+            .hot_keys
+            .iter()
             .map(|(key, count)| (key.clone(), *count))
             .collect();
-        
+
         keys.sort_by(|a, b| b.1.cmp(&a.1));
         keys.into_iter().take(limit).map(|(key, _)| key).collect()
     }
@@ -208,9 +209,7 @@ impl<T: Clone> L1Cache<T> {
         let validated_capacity = NonZeroUsize::new(capacity)
             .unwrap_or_else(|| NonZeroUsize::new(1).expect("Capacity should be at least 1"));
         Self {
-            cache: Arc::new(RwLock::new(LruCache::new(
-                validated_capacity,
-            ))),
+            cache: Arc::new(RwLock::new(LruCache::new(validated_capacity))),
             max_size: capacity,
             hit_count: Arc::new(AtomicU64::new(0)),
             miss_count: Arc::new(AtomicU64::new(0)),
@@ -228,20 +227,20 @@ impl<T: Clone> L1Cache<T> {
                 return None;
             }
         };
-        
+
         if let Some(entry) = cache.peek(key) {
             // Update hit counter atomically
             self.hit_count.fetch_add(1, Ordering::Relaxed);
-            
+
             // Update access pattern (brief write lock)
             self.update_access_pattern(key, true);
-            
+
             // Clone the data while still holding read lock
             let data = entry.data.clone();
-            
+
             // Drop read lock before updating last_accessed to minimize lock contention
             drop(cache);
-            
+
             // Update access time with write lock (brief operation)
             if let Ok(mut cache) = self.cache.write() {
                 if let Some(entry) = cache.get_mut(key) {
@@ -251,7 +250,7 @@ impl<T: Clone> L1Cache<T> {
             } else {
                 eprintln!("Warning: Failed to acquire write lock for cache access time update");
             }
-            
+
             Some(data)
         } else {
             // Update miss counter atomically
@@ -265,18 +264,20 @@ impl<T: Clone> L1Cache<T> {
     fn update_access_pattern(&self, key: &CacheKey, _is_hit: bool) {
         if let Ok(mut pattern) = self.access_pattern.write() {
             pattern.total_accesses += 1;
-            
+
             // Track recent accesses for pattern analysis
-            pattern.recent_accesses.push_back((key.clone(), std::time::Instant::now()));
-            
+            pattern
+                .recent_accesses
+                .push_back((key.clone(), std::time::Instant::now()));
+
             // Keep only recent accesses (last 1000)
             while pattern.recent_accesses.len() > 1000 {
                 pattern.recent_accesses.pop_front();
             }
-            
+
             // Track hot keys
             *pattern.hot_keys.entry(key.clone()).or_insert(0) += 1;
-            
+
             // Analyze access pattern every 100 accesses
             if pattern.total_accesses % 100 == 0 {
                 pattern.analyze_pattern();
@@ -290,41 +291,40 @@ impl<T: Clone> L1Cache<T> {
     pub fn put(&self, key: CacheKey, data: T, file_size: u64, dependencies: Vec<String>) {
         if let Ok(mut cache) = self.cache.write() {
             let entry = CacheEntry::new(data, file_size, dependencies);
-            
+
             // Check if we're at capacity and need intelligent eviction
             if cache.len() >= self.max_size {
                 self.intelligent_eviction(&mut cache);
             }
-            
+
             cache.put(key, entry);
         } else {
             eprintln!("Warning: Failed to acquire write lock for cache put operation");
         }
     }
-    
+
     /// Intelligent eviction based on access patterns rather than simple LRU
     fn intelligent_eviction(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
         if let Ok(pattern) = self.access_pattern.read() {
-        
-        match pattern.pattern_type {
-            AccessPatternType::Frequency => {
-                // For frequency-based access, evict least frequently used
-                self.evict_lfu(cache);
+            match pattern.pattern_type {
+                AccessPatternType::Frequency => {
+                    // For frequency-based access, evict least frequently used
+                    self.evict_lfu(cache);
+                }
+                AccessPatternType::Temporal => {
+                    // For temporal patterns, evict oldest but keep recently accessed
+                    self.evict_temporal(cache);
+                }
+                _ => {
+                    // Default to LRU for unknown or random patterns
+                    // The LruCache already handles this efficiently
+                }
             }
-            AccessPatternType::Temporal => {
-                // For temporal patterns, evict oldest but keep recently accessed
-                self.evict_temporal(cache);
-            }
-            _ => {
-                // Default to LRU for unknown or random patterns
-                // The LruCache already handles this efficiently
-            }
-        }
         } else {
             eprintln!("Warning: Failed to acquire read lock for access pattern during eviction");
         }
     }
-    
+
     /// Evict least frequently used items
     fn evict_lfu(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
         // For LFU, we need to find and remove the least frequently used
@@ -335,15 +335,16 @@ impl<T: Clone> L1Cache<T> {
             cache.pop(&key_to_remove);
         }
     }
-    
+
     /// Evict based on temporal patterns
     fn evict_temporal(&self, cache: &mut LruCache<CacheKey, CacheEntry<T>>) {
         let now = get_current_timestamp();
-        
+
         // Find entries that haven't been accessed recently
         if let Some((lru_key, entry)) = cache.peek_lru() {
             let age = now.saturating_sub(entry.last_accessed);
-            if age > 3600 { // 1 hour threshold
+            if age > 3600 {
+                // 1 hour threshold
                 let key_to_remove = lru_key.clone();
                 cache.pop(&key_to_remove);
             }
@@ -374,7 +375,7 @@ impl<T: Clone> L1Cache<T> {
             eprintln!("Warning: Failed to acquire read lock for cache stats");
             0
         };
-        
+
         CacheStats {
             hits,
             misses,
@@ -411,7 +412,7 @@ impl<T: Clone> L1Cache<T> {
             eprintln!("Warning: Failed to acquire write lock for cache clear");
             return;
         }
-        
+
         // Reset access pattern tracking
         if let Ok(mut pattern) = self.access_pattern.write() {
             pattern.recent_accesses.clear();
@@ -491,7 +492,7 @@ impl L2Cache {
             // Check if file exists and read it
             if metadata.file_path.exists() {
                 if let Ok(content) = fs::read(&metadata.file_path) {
-                    if let Ok(entry) = bincode::deserialize::<CacheEntry<T>>(&content) {
+                    if let Ok(entry) = serde_json::from_slice::<CacheEntry<T>>(&content) {
                         // Update access time in index
                         drop(index);
                         self.update_access_time(key).await;
@@ -514,7 +515,7 @@ impl L2Cache {
         T: Serialize,
     {
         let entry = CacheEntry::new(data, 0, dependencies); // file_size will be calculated
-        let serialized = bincode::serialize(&entry)?;
+        let serialized = serde_json::to_vec(&entry)?;
         let file_size = serialized.len() as u64;
 
         // Generate file path
@@ -538,7 +539,8 @@ impl L2Cache {
 
         let mut index = self.index.write().await;
         index.insert(key, metadata);
-        self.current_size_bytes.fetch_add(file_size, Ordering::Relaxed);
+        self.current_size_bytes
+            .fetch_add(file_size, Ordering::Relaxed);
 
         Ok(())
     }
@@ -549,7 +551,8 @@ impl L2Cache {
         if let Some(metadata) = index.remove(key) {
             if metadata.file_path.exists() {
                 let _ = fs::remove_file(&metadata.file_path);
-                self.current_size_bytes.fetch_sub(metadata.file_size, Ordering::Relaxed);
+                self.current_size_bytes
+                    .fetch_sub(metadata.file_size, Ordering::Relaxed);
                 return true;
             }
         }
@@ -591,7 +594,7 @@ impl L2Cache {
 
     fn hash_key(&self, key: &CacheKey) -> String {
         let mut hasher = Sha256::new();
-        match bincode::serialize(key) {
+        match serde_json::to_vec(key) {
             Ok(serialized) => hasher.update(serialized),
             Err(_e) => {
                 // Fallback to string-based hashing if serialization fails
@@ -664,7 +667,7 @@ impl L2Cache {
 
             if self.remove(&key).await {
                 freed_bytes += removed_size;
-                
+
                 // Update eviction cache
                 if let Ok(mut cache) = self.eviction_cache.write() {
                     cache.retain(|(k, _)| k != &key);
@@ -682,13 +685,13 @@ impl L2Cache {
         let compaction_task = {
             let index = self.index.clone();
             let cache_dir = self.cache_dir.clone();
-            
+
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(300)); // Every 5 minutes
-                
+
                 loop {
                     interval.tick().await;
-                    
+
                     // Perform background cleanup
                     if let Err(e) = Self::background_compaction(&index, &cache_dir).await {
                         eprintln!("Background compaction error: {}", e);
@@ -696,7 +699,7 @@ impl L2Cache {
                 }
             })
         };
-        
+
         if let Ok(mut task) = self.compaction_task.lock() {
             *task = Some(compaction_task);
         } else {
@@ -710,7 +713,7 @@ impl L2Cache {
         cache_dir: &PathBuf,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let index_guard = index.read().await;
-        let valid_files: std::collections::HashSet<PathBuf> = 
+        let valid_files: std::collections::HashSet<PathBuf> =
             index_guard.values().map(|m| m.file_path.clone()).collect();
         drop(index_guard);
 
@@ -720,17 +723,22 @@ impl L2Cache {
 
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
-            
-            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("cache")
-                && !valid_files.contains(&path) {
-                    // Orphaned file, remove it
-                    tokio::fs::remove_file(&path).await?;
-                    removed_count += 1;
-                }
+
+            if path.is_file()
+                && path.extension().and_then(|s| s.to_str()) == Some("cache")
+                && !valid_files.contains(&path)
+            {
+                // Orphaned file, remove it
+                tokio::fs::remove_file(&path).await?;
+                removed_count += 1;
+            }
         }
 
         if removed_count > 0 {
-            eprintln!("Background compaction removed {} orphaned cache files", removed_count);
+            eprintln!(
+                "Background compaction removed {} orphaned cache files",
+                removed_count
+            );
         }
 
         Ok(())
@@ -743,7 +751,9 @@ impl L2Cache {
             metadata.last_accessed = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_else(|_| {
-                    eprintln!("Warning: System clock appears to be before UNIX epoch in cache update");
+                    eprintln!(
+                        "Warning: System clock appears to be before UNIX epoch in cache update"
+                    );
                     Duration::from_secs(0)
                 })
                 .as_secs();
@@ -851,7 +861,7 @@ where
     pub async fn invalidate(&self, key: &CacheKey) {
         self.l1.remove(key);
         self.l2.remove(key).await;
-      }
+    }
 
     pub async fn invalidate_dependencies(&self, changed_file: &str) {
         // For L1 cache, track and invalidate file-specific dependencies
@@ -896,7 +906,7 @@ where
         // Extract dependencies from L2 cache index based on file analysis
         let index = self.l2.index.read().await;
         let mut dependencies = Vec::new();
-        
+
         // Find all entries that depend on this file (reverse dependency lookup)
         for (key, metadata) in index.iter() {
             if metadata.dependencies.contains(&file.to_string()) {
@@ -904,7 +914,7 @@ where
                 dependencies.push(key.file_path.clone());
             }
         }
-        
+
         // Also check if this file has stored dependency information
         if let Some(entry_key) = self.find_cache_key_for_file(file).await {
             if let Some(metadata) = index.get(&entry_key) {
@@ -916,7 +926,7 @@ where
                 }
             }
         }
-        
+
         // Extract language-specific dependencies using symbol analysis
         let lang_deps = self.extract_language_dependencies(file).await;
         for dep in lang_deps {
@@ -924,7 +934,7 @@ where
                 dependencies.push(dep);
             }
         }
-        
+
         if dependencies.is_empty() {
             None
         } else {
@@ -935,24 +945,27 @@ where
     /// Find cache key for a specific file
     async fn find_cache_key_for_file(&self, file: &str) -> Option<CacheKey> {
         let index = self.l2.index.read().await;
-        
+
         for (key, _) in index.iter() {
             if key.file_path == file {
                 return Some(key.clone());
             }
         }
-        
+
         None
     }
 
     /// Extract language-specific dependencies using import/require analysis
     async fn extract_language_dependencies(&self, file: &str) -> Vec<String> {
         let mut dependencies = Vec::new();
-        
+
         // Determine file type based on extension
         let file_path = Path::new(file);
-        let extension = file_path.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-        
+        let extension = file_path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
+
         match extension {
             "rs" => {
                 // Rust dependencies: use, mod, extern crate
@@ -972,14 +985,14 @@ where
             }
             _ => {}
         }
-        
+
         dependencies
     }
 
     /// Extract Rust import dependencies
     async fn extract_rust_dependencies(&self, file: &str) -> Vec<String> {
         let mut deps = Vec::new();
-        
+
         // This would typically use the Rust extractor to analyze the file
         // For now, implement a simple file-based approach
         if let Ok(content) = async_fs::read_to_string(file).await {
@@ -998,7 +1011,7 @@ where
                     return Vec::new();
                 }
             };
-            
+
             for cap in use_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
                     let import = matched.as_str().trim();
@@ -1007,21 +1020,21 @@ where
                     deps.push(file_path);
                 }
             }
-            
+
             for cap in mod_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
                     deps.push(format!("{}.rs", matched.as_str().trim()));
                 }
             }
         }
-        
+
         deps
     }
 
     /// Extract Python import dependencies
     async fn extract_python_dependencies(&self, file: &str) -> Vec<String> {
         let mut deps = Vec::new();
-        
+
         if let Ok(content) = async_fs::read_to_string(file).await {
             let import_re = match Regex::new(r"import\s+([^#\n]+)") {
                 Ok(regex) => regex,
@@ -1037,32 +1050,39 @@ where
                     return Vec::new();
                 }
             };
-            
+
             for cap in import_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
-                    let import = matched.as_str().trim().split(',').next().unwrap_or("").trim();
+                    let import = matched
+                        .as_str()
+                        .trim()
+                        .split(',')
+                        .next()
+                        .unwrap_or("")
+                        .trim();
                     if !import.is_empty() {
                         deps.push(import.to_string());
                     }
                 }
             }
-            
+
             for cap in from_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
                     deps.push(matched.as_str().to_string());
                 }
             }
         }
-        
+
         deps
     }
 
     /// Extract JavaScript/TypeScript dependencies
     async fn extract_javascript_dependencies(&self, file: &str) -> Vec<String> {
         let mut deps = Vec::new();
-        
+
         if let Ok(content) = async_fs::read_to_string(file).await {
-            let require_re = match Regex::new(r#"(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)"#) {
+            let require_re = match Regex::new(r#"(?:require|import)\s*\(\s*["']([^"']+)["']\s*\)"#)
+            {
                 Ok(regex) => regex,
                 Err(e) => {
                     eprintln!("Warning: Failed to compile JavaScript require regex: {}", e);
@@ -1076,27 +1096,27 @@ where
                     return Vec::new();
                 }
             };
-            
+
             for cap in require_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
                     deps.push(matched.as_str().to_string());
                 }
             }
-            
+
             for cap in import_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
                     deps.push(matched.as_str().to_string());
                 }
             }
         }
-        
+
         deps
     }
 
     /// Extract C++ include dependencies
     async fn extract_cpp_dependencies(&self, file: &str) -> Vec<String> {
         let mut deps = Vec::new();
-        
+
         if let Ok(content) = async_fs::read_to_string(file).await {
             let include_re = match Regex::new(r#"#include\s*[<"]([^>"]+)[>"]"#) {
                 Ok(regex) => regex,
@@ -1105,14 +1125,14 @@ where
                     return Vec::new();
                 }
             };
-            
+
             for cap in include_re.captures_iter(&content) {
                 if let Some(matched) = cap.get(1) {
                     deps.push(matched.as_str().to_string());
                 }
             }
         }
-        
+
         deps
     }
 
@@ -1203,7 +1223,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_l2_cache() {
-        let temp_dir = TempDir::new().expect("Failed to create temporary directory for L2 cache test");
+        let temp_dir =
+            TempDir::new().expect("Failed to create temporary directory for L2 cache test");
         let cache = L2Cache::new(temp_dir.path().to_path_buf(), 10)
             .expect("Failed to create L2 cache for test");
 

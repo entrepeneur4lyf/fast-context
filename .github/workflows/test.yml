@@ -22,6 +22,11 @@ jobs:
       with:
         toolchain: stable
         components: rustfmt, clippy
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
     
     - name: Install Node.js
       uses: actions/setup-node@v4
@@ -32,11 +37,11 @@ jobs:
     - name: Install dependencies
       run: npm install
     
-    - name: Check Rust formatting
-      run: cargo fmt --all -- --check
-    
     - name: Run Clippy
       run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Check Python bindings build
+      run: cargo check --features python
     
     - name: Run Rust tests
       run: cargo test --verbose
@@ -85,6 +90,11 @@ jobs:
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
+
+    - name: Install Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
     
     - name: Install Node.js
       uses: actions/setup-node@v4

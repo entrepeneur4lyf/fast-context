@@ -150,7 +150,7 @@ where
                 config_changes: vec![
                     format!("L1 capacity: {}", config.l1_capacity),
                     format!("L2 enabled: {}", config.enable_l2_cache),
-                                    ],
+                ],
             }],
         };
 
@@ -240,13 +240,19 @@ where
 
             // Calculate efficiency score
             if !metrics.hit_rate_samples.is_empty() {
-                let recent_hit_rate = metrics.hit_rate_samples.iter().sum::<f64>() / metrics.hit_rate_samples.len() as f64;
+                let recent_hit_rate = metrics.hit_rate_samples.iter().sum::<f64>()
+                    / metrics.hit_rate_samples.len() as f64;
                 let avg_latency = if !metrics.access_times.is_empty() {
-                    metrics.access_times.iter().sum::<Duration>() / metrics.access_times.len() as u32
+                    metrics.access_times.iter().sum::<Duration>()
+                        / metrics.access_times.len() as u32
                 } else {
                     Duration::from_millis(0)
                 };
-                let latency_score = if avg_latency < Duration::from_millis(10) { 1.0 } else { 0.5 };
+                let latency_score = if avg_latency < Duration::from_millis(10) {
+                    1.0
+                } else {
+                    0.5
+                };
                 metrics.efficiency_score = recent_hit_rate * 100.0 * latency_score;
             }
         }
@@ -320,7 +326,7 @@ where
             new_config.policy_type != current_config.policy_type
                 || new_config.memory_limit_mb != current_config.memory_limit_mb
                 || new_config.enable_l2_cache != current_config.enable_l2_cache
-                        };
+        };
 
         if config_changed {
             // Apply new configuration
@@ -558,20 +564,20 @@ where
         let prewarming_task = {
             let project_root = self.project_root.clone();
             let metrics = self.metrics_collector.clone();
-            
+
             tokio::spawn(async move {
                 let mut interval = tokio::time::interval(Duration::from_secs(300)); // Every 5 minutes
-                
+
                 loop {
                     interval.tick().await;
-                    
+
                     // Check if pre-warming is beneficial based on metrics
                     let should_prewarm = {
                         let metrics_guard = metrics.read().await;
-                        !metrics_guard.access_times.is_empty() && 
-                        metrics_guard.efficiency_score > 70.0
+                        !metrics_guard.access_times.is_empty()
+                            && metrics_guard.efficiency_score > 70.0
                     };
-                    
+
                     if should_prewarm {
                         if let Err(e) = Self::analyze_project_structure(&project_root).await {
                             eprintln!("Project analysis error: {}", e);
@@ -580,42 +586,46 @@ where
                 }
             })
         };
-        
+
         *self.prewarming_task.lock().unwrap() = Some(prewarming_task);
     }
 
     /// Analyze project structure to inform cache optimization strategies
     async fn analyze_project_structure(project_root: &PathBuf) -> Result<(), AdaptiveCacheError> {
         use std::collections::HashMap;
-        
+
         let mut file_counts = HashMap::new();
         let mut total_size = 0;
-        
+
         // Scan project directory to understand structure
         if let Ok(_entries) = tokio::fs::read_dir(project_root).await {
             let mut scan_stack = vec![project_root.clone()];
-            
+
             while let Some(current_dir) = scan_stack.pop() {
                 if let Ok(mut dir_entries) = tokio::fs::read_dir(&current_dir).await {
                     while let Ok(Some(entry)) = dir_entries.next_entry().await {
                         let path = entry.path();
-                        
+
                         if let Ok(metadata) = tokio::fs::metadata(&path).await {
                             if metadata.is_file() {
                                 // Count file extensions
                                 if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
                                     *file_counts.entry(ext.to_string()).or_insert(0) += 1;
                                 }
-                                
+
                                 // Get file size
                                 total_size += metadata.len();
                             } else if metadata.is_dir() {
                                 // Skip hidden directories and common build directories
                                 let file_name = entry.file_name();
                                 let file_name_str = file_name.to_string_lossy();
-                                
-                                if !file_name_str.starts_with('.') && 
-                                   !matches!(file_name_str.as_ref(), "target" | "node_modules" | "build" | "dist") {
+
+                                if !file_name_str.starts_with('.')
+                                    && !matches!(
+                                        file_name_str.as_ref(),
+                                        "target" | "node_modules" | "build" | "dist"
+                                    )
+                                {
                                     scan_stack.push(path);
                                 }
                             }
@@ -624,23 +634,25 @@ where
                 }
             }
         }
-        
+
         // Log analysis results for cache optimization
         eprintln!("Project analysis completed:");
-        eprintln!("  Total files analyzed: {}", file_counts.values().sum::<i32>());
+        eprintln!(
+            "  Total files analyzed: {}",
+            file_counts.values().sum::<i32>()
+        );
         eprintln!("  Total size: {} bytes", total_size);
         eprintln!("  File types: {:?}", file_counts);
-        
+
         // This analysis could be used to:
         // 1. Adjust cache sizes based on project complexity
         // 2. Identify frequently accessed file types
         // 3. Optimize eviction strategies for specific languages
         // 4. Pre-warm language-specific parsers
-        
+
         Ok(())
     }
 
-    
     /// Get performance metrics for monitoring
     pub async fn performance_metrics(&self) -> PerformanceMetrics {
         self.metrics_collector.read().await.clone()
@@ -707,7 +719,7 @@ mod tests {
             cache_dir: temp_path.join(".cache"),
             enable_l1_cache: true,
             enable_l2_cache: false,
-                        symbol_ttl: std::time::Duration::from_secs(24 * 3600),
+            symbol_ttl: std::time::Duration::from_secs(24 * 3600),
             ast_ttl: std::time::Duration::from_secs(12 * 3600),
             graph_ttl: std::time::Duration::from_secs(6 * 3600),
             analysis_ttl: std::time::Duration::from_secs(3600),
@@ -729,7 +741,7 @@ mod tests {
         // Should start with minimal policy for tiny project
         assert_eq!(config.policy_type, CachePolicyType::Minimal);
         assert!(!config.enable_l2_cache);
-            }
+    }
 
     #[tokio::test]
     async fn test_cache_operations() {
@@ -758,7 +770,7 @@ mod tests {
             cache_dir: temp_path.join(".cache"),
             enable_l1_cache: true,
             enable_l2_cache: false,
-                        symbol_ttl: std::time::Duration::from_secs(24 * 3600),
+            symbol_ttl: std::time::Duration::from_secs(24 * 3600),
             ast_ttl: std::time::Duration::from_secs(12 * 3600),
             graph_ttl: std::time::Duration::from_secs(6 * 3600),
             analysis_ttl: std::time::Duration::from_secs(3600),
@@ -824,7 +836,7 @@ mod tests {
             cache_dir: temp_path.join(".cache"),
             enable_l1_cache: true,
             enable_l2_cache: false,
-                        symbol_ttl: std::time::Duration::from_secs(24 * 3600),
+            symbol_ttl: std::time::Duration::from_secs(24 * 3600),
             ast_ttl: std::time::Duration::from_secs(12 * 3600),
             graph_ttl: std::time::Duration::from_secs(6 * 3600),
             analysis_ttl: std::time::Duration::from_secs(3600),

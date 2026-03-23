@@ -664,30 +664,33 @@ mod tests {
                 signature: None,
             },
         ];
-        
+
         // Test filtering by symbol kind
-        let functions_only: Vec<Symbol> = symbols.iter()
+        let functions_only: Vec<Symbol> = symbols
+            .iter()
             .filter(|s| s.kind == SymbolKind::Function)
             .cloned()
             .collect();
-        
+
         assert_eq!(functions_only.len(), 1);
         assert_eq!(functions_only[0].name, "test_function");
-        
+
         // Test filtering by name pattern
-        let test_symbols: Vec<Symbol> = symbols.iter()
+        let test_symbols: Vec<Symbol> = symbols
+            .iter()
             .filter(|s| s.name.to_lowercase().contains("test"))
             .cloned()
             .collect();
-        
+
         assert_eq!(test_symbols.len(), 2);
-        
+
         // Test excluding private symbols (by convention)
-        let public_symbols: Vec<Symbol> = symbols.iter()
+        let public_symbols: Vec<Symbol> = symbols
+            .iter()
             .filter(|s| !s.name.to_uppercase().starts_with("PRIVATE"))
             .cloned()
             .collect();
-        
+
         assert_eq!(public_symbols.len(), 2);
         assert!(!public_symbols.iter().any(|s| s.name == "PRIVATE_VAR"));
     }

@@ -20,6 +20,8 @@ import hashlib
 import hmac
 import time
 import logging
+import inspect
+import json
 from pathlib import Path
 from typing import Optional, List, Set, Dict, Any, Union
 from dataclasses import dataclass, field
@@ -305,68 +307,96 @@ class SecurityValidator:
 
 def require_auth(func):
     """Decorator to require authentication for MCP tools."""
+    def _authorize(args, kwargs):
+        if not args or not hasattr(args[0], 'security_validator'):
+            return None
+
+        validator = args[0].security_validator
+        api_key = kwargs.get('api_key') or kwargs.get('authorization')
+
+        if not validator.validate_api_key(api_key or ''):
+            return json.dumps({
+                "error": "Authentication required",
+                "code": "AUTH_REQUIRED"
+            })
+
+        client_id = kwargs.get('client_id') or api_key or 'anonymous'
+        if not validator.check_rate_limit(client_id):
+            return json.dumps({
+                "error": "Rate limit exceeded",
+                "code": "RATE_LIMIT_EXCEEDED"
+            })
+
+        validator.log_audit_event(
+            "tool_call",
+            client_id,
+            {"tool": func.__name__, "args": kwargs}
+        )
+        return None
+
+    if inspect.iscoroutinefunction(func):
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            auth_result = _authorize(args, kwargs)
+            if auth_result is not None:
+                return auth_result
+            return await func(*args, **kwargs)
+
+        return async_wrapper
+
     @wraps(func)
-    async def wrapper(*args, **kwargs):
-        # Get security validator from first argument (self)
-        if hasattr(args[0], 'security_validator'):
-            validator = args[0].security_validator
-            
-            # Extract API key from kwargs (FastMCP passes it as a parameter)
-            api_key = kwargs.get('api_key') or kwargs.get('authorization')
-            
-            if not validator.validate_api_key(api_key or ''):
-                return json.dumps({
-                    "error": "Authentication required",
-                    "code": "AUTH_REQUIRED"
-                })
-            
-            # Check rate limiting
-            client_id = kwargs.get('client_id') or api_key or 'anonymous'
-            if not validator.check_rate_limit(client_id):
-                return json.dumps({
-                    "error": "Rate limit exceeded",
-                    "code": "RATE_LIMIT_EXCEEDED"
-                })
-            
-            # Log audit event
-            validator.log_audit_event(
-                "tool_call",
-                client_id,
-                {"tool": func.__name__, "args": kwargs}
-            )
-        
-        return await func(*args, **kwargs)
-    
-    return wrapper
+    def sync_wrapper(*args, **kwargs):
+        auth_result = _authorize(args, kwargs)
+        if auth_result is not None:
+            return auth_result
+        return func(*args, **kwargs)
+
+    return sync_wrapper
 
 
 def require_resource_limits(operation: str):
     """Decorator to enforce resource limits for MCP tools."""
     def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            if hasattr(args[0], 'security_validator'):
-                validator = args[0].security_validator
-                
-                # Check resource limits
-                if not validator.check_resource_limits(operation, **kwargs):
-                    return json.dumps({
-                        "error": "Resource limit exceeded",
-                        "code": "RESOURCE_LIMIT_EXCEEDED"
-                    })
-                
-                # Start request tracking
-                validator.start_request()
-                
+        def _enter_limit_scope(args, kwargs):
+            if not args or not hasattr(args[0], 'security_validator'):
+                return None
+
+            validator = args[0].security_validator
+            if not validator.check_resource_limits(operation, **kwargs):
+                return validator, json.dumps({
+                    "error": "Resource limit exceeded",
+                    "code": "RESOURCE_LIMIT_EXCEEDED"
+                })
+
+            validator.start_request()
+            return validator, None
+
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                validator, error = _enter_limit_scope(args, kwargs) or (None, None)
+                if error is not None:
+                    return error
                 try:
                     return await func(*args, **kwargs)
                 finally:
-                    # End request tracking
+                    if validator is not None:
+                        validator.end_request()
+
+            return async_wrapper
+
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            validator, error = _enter_limit_scope(args, kwargs) or (None, None)
+            if error is not None:
+                return error
+            try:
+                return func(*args, **kwargs)
+            finally:
+                if validator is not None:
                     validator.end_request()
-            
-            return await func(*args, **kwargs)
-        
-        return wrapper
+
+        return sync_wrapper
     return decorator
 
 

@@ -60,9 +60,9 @@ pub use ruby_extractor::RubyExtractor;
 pub use rust_extractor::RustExtractor;
 pub use scala_extractor::ScalaExtractor;
 pub use swift_extractor::SwiftExtractor;
+pub use typescript_extractor::TypeScriptExtractor;
 pub use xml_extractor::XmlExtractor;
 pub use yaml_extractor::YamlExtractor;
-pub use typescript_extractor::TypeScriptExtractor;
 pub use zig_extractor::ZigExtractor;
 
 /// Thread-safe symbol extractor factory
@@ -72,7 +72,8 @@ pub struct SymbolExtractorFactory {
 
 impl SymbolExtractorFactory {
     pub fn new() -> Self {
-        let mut extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>> = HashMap::new();
+        let mut extractors: HashMap<LanguageId, Box<dyn SymbolExtractor + Send + Sync>> =
+            HashMap::new();
 
         // Register language extractors
         extractors.insert(LanguageId::Rust, Box::new(RustExtractor));
@@ -100,7 +101,9 @@ impl SymbolExtractorFactory {
         extractors.insert(LanguageId::Markdown, Box::new(MarkdownExtractor));
         extractors.insert(LanguageId::YAML, Box::new(YamlExtractor));
 
-        Self { extractors: Arc::new(Mutex::new(extractors)) }
+        Self {
+            extractors: Arc::new(Mutex::new(extractors)),
+        }
     }
 
     pub fn extract_symbols(

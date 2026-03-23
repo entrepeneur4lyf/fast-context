@@ -94,13 +94,13 @@ mod symbol_extraction_tests {
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(rust_file.to_string_lossy().to_string());
-        
+
         assert!(result.is_ok());
         let symbols = result.unwrap();
-        
+
         // Should find the major top-level symbols in the fixture.
         assert!(symbols.len() >= 4);
-        
+
         // Check for specific symbol types
         let symbol_strings: Vec<String> = symbols.iter().map(|s| s.to_lowercase()).collect();
         assert!(symbol_strings.iter().any(|s| s.contains("user")));
@@ -195,17 +195,23 @@ mod symbol_extraction_tests {
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(js_file.to_string_lossy().to_string());
-        
+
         assert!(result.is_ok());
         let symbols = result.unwrap();
-        
+
         // Should find multiple symbols
         assert!(symbols.len() >= 8);
-        
+
         let symbol_strings: Vec<String> = symbols.iter().map(|s| s.to_lowercase()).collect();
-        assert!(symbol_strings.iter().any(|s| s.contains("fetchuser") || s.contains("fetch_user")));
-        assert!(symbol_strings.iter().any(|s| s.contains("usermanager") || s.contains("user_manager")));
-        assert!(symbol_strings.iter().any(|s| s.contains("createuser") || s.contains("create_user")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("fetchuser") || s.contains("fetch_user")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("usermanager") || s.contains("user_manager")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("createuser") || s.contains("create_user")));
     }
 
     #[test]
@@ -338,15 +344,17 @@ mod symbol_extraction_tests {
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(python_file.to_string_lossy().to_string());
-        
+
         assert!(result.is_ok());
         let symbols = result.unwrap();
-        
+
         // Should find many symbols
         assert!(symbols.len() >= 15);
-        
+
         let symbol_strings: Vec<String> = symbols.iter().map(|s| s.to_lowercase()).collect();
-        assert!(symbol_strings.iter().any(|s| s.contains("databasemanager") || s.contains("database_manager")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("databasemanager") || s.contains("database_manager")));
         assert!(symbol_strings.iter().any(|s| s.contains("user")));
         assert!(symbol_strings.iter().any(|s| s.contains("connect")));
         assert!(symbol_strings.iter().any(|s| s.contains("fetch")));
@@ -472,16 +480,18 @@ mod symbol_extraction_tests {
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(ts_file.to_string_lossy().to_string());
-        
+
         assert!(result.is_ok());
         let symbols = result.unwrap();
-        
+
         // Should find many symbols including interfaces, classes, functions
         assert!(symbols.len() >= 10);
-        
+
         let symbol_strings: Vec<String> = symbols.iter().map(|s| s.to_lowercase()).collect();
         assert!(symbol_strings.iter().any(|s| s.contains("user")));
-        assert!(symbol_strings.iter().any(|s| s.contains("userservice") || s.contains("user_service")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("userservice") || s.contains("user_service")));
         assert!(symbol_strings.iter().any(|s| s.contains("status")));
     }
 
@@ -632,18 +642,24 @@ mod symbol_extraction_tests {
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(java_file.to_string_lossy().to_string());
-        
+
         assert!(result.is_ok());
         let symbols = result.unwrap();
-        
+
         // Should find many symbols including classes, methods, enums
         assert!(symbols.len() >= 15);
-        
+
         let symbol_strings: Vec<String> = symbols.iter().map(|s| s.to_lowercase()).collect();
         assert!(symbol_strings.iter().any(|s| s.contains("user")));
-        assert!(symbol_strings.iter().any(|s| s.contains("userrole") || s.contains("user_role")));
-        assert!(symbol_strings.iter().any(|s| s.contains("userservice") || s.contains("user_service")));
-        assert!(symbol_strings.iter().any(|s| s.contains("userrepository") || s.contains("user_repository")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("userrole") || s.contains("user_role")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("userservice") || s.contains("user_service")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("userrepository") || s.contains("user_repository")));
     }
 
     #[test]
@@ -715,15 +731,17 @@ mod symbol_extraction_tests {
 
         let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
         let result = analyzer.find_symbols_in_file(edge_case_file.to_string_lossy().to_string());
-        
+
         assert!(result.is_ok());
         let symbols = result.unwrap();
-        
+
         // Should handle edge cases gracefully and find symbols
         assert!(symbols.len() >= 5);
-        
+
         // Should find the long function name
         let symbol_strings: Vec<String> = symbols.iter().map(|s| s.to_lowercase()).collect();
-        assert!(symbol_strings.iter().any(|s| s.contains("very_long_function") || s.contains("long")));
+        assert!(symbol_strings
+            .iter()
+            .any(|s| s.contains("very_long_function") || s.contains("long")));
     }
 }
