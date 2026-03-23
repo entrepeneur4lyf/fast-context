@@ -345,12 +345,22 @@ mod tests {
 
             match expected {
                 Some(expected_lang) => {
+                    let detected_id = detected_id.unwrap_or_else(|| {
+                        panic!("ID detection failed for {}", file_path)
+                    });
                     #[cfg(feature = "nodejs")]
-                    assert_eq!(detected_string, Some(expected_lang.to_string()),
-                              "String detection failed for {}", file_path);
-                    assert!(detected_id.is_some(), "ID detection failed for {}", file_path);
-                    assert_eq!(detected_id.unwrap().to_lowercase_string(), expected_lang,
-                              "ID->string conversion failed for {}", file_path);
+                    assert_eq!(
+                        detected_string,
+                        Some(detected_id.to_string()),
+                        "String detection failed for {}",
+                        file_path
+                    );
+                    assert_eq!(
+                        detected_id.to_lowercase_string(),
+                        expected_lang,
+                        "ID->string conversion failed for {}",
+                        file_path
+                    );
                 }
                 None => {
                     #[cfg(feature = "nodejs")]

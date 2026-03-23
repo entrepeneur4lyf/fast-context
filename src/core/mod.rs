@@ -38,6 +38,41 @@ struct FileAnalysisResult {
 }
 
 impl CoreAnalyzer {
+    fn default_languages() -> Vec<String> {
+        use crate::parsers::LanguageId;
+
+        [
+            LanguageId::Rust,
+            LanguageId::Python,
+            LanguageId::JavaScript,
+            LanguageId::TypeScript,
+            LanguageId::Java,
+            LanguageId::Go,
+            LanguageId::CSharp,
+            LanguageId::Cpp,
+            LanguageId::Swift,
+            LanguageId::ObjectiveC,
+            LanguageId::PHP,
+            LanguageId::Ruby,
+            LanguageId::Scala,
+            LanguageId::Zig,
+            LanguageId::Dart,
+            LanguageId::Lua,
+            LanguageId::Bash,
+            LanguageId::CSS,
+            LanguageId::HTML,
+            LanguageId::XML,
+            LanguageId::JSON,
+            LanguageId::YAML,
+            LanguageId::Markdown,
+            LanguageId::JSDoc,
+            LanguageId::Regex,
+        ]
+        .into_iter()
+        .map(|language| language.to_lowercase_string())
+        .collect()
+    }
+
     pub fn new(project_root: String, languages: Option<Vec<String>>, ignore_patterns: Option<Vec<String>>) -> Self {
         // Validate project root path
         let validated_root = crate::validation::validate_directory_path(&project_root)
@@ -51,11 +86,9 @@ impl CoreAnalyzer {
             .map(|langs| crate::validation::validate_languages(&langs)
                 .unwrap_or_else(|e| {
                     eprintln!("Warning: Invalid languages configuration: {}", e);
-                    vec!["rust".to_string(), "javascript".to_string(), "typescript".to_string(), "python".to_string()]
+                    Self::default_languages()
                 }))
-            .unwrap_or_else(|| vec![
-                "rust".to_string(), "javascript".to_string(), "typescript".to_string(), "python".to_string()
-            ]);
+            .unwrap_or_else(Self::default_languages);
         
         // Validate ignore patterns
         let validated_ignore_patterns = ignore_patterns
@@ -232,7 +265,7 @@ impl CoreAnalyzer {
 
         for entry in self.walk_project_files() {
             let path_str = entry.path().to_string_lossy();
-            if let Ok(content) = crate::validation::secure_read_file(&entry.path()) {
+            if let Ok(content) = crate::validation::secure_read_file(entry.path()) {
                 let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
                 if let Some(parse) = scoped_factory.parse_file(&content, path_str.as_ref()) {
                     let syms = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
@@ -270,7 +303,7 @@ impl CoreAnalyzer {
         use crate::symbols::{SymbolExtractorFactory, SymbolKind};
         
         // Use secure file reading with path validation
-        let content = crate::validation::secure_read_file(&std::path::Path::new(&file_path))
+        let content = crate::validation::secure_read_file(std::path::Path::new(&file_path))
             .map_err(|e| format!("Invalid file path '{}': {}", file_path, e))?;
         let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
         if let Some(parse) = scoped_factory.parse_file(&content, &file_path) {
@@ -311,7 +344,7 @@ impl CoreAnalyzer {
 
         for entry in self.walk_project_files() {
             let path_str = entry.path().to_string_lossy();
-            if let Ok(content) = crate::validation::secure_read_file(&entry.path()) {
+            if let Ok(content) = crate::validation::secure_read_file(entry.path()) {
                 let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
                 if let Some(parse) = scoped_factory.parse_file(&content, path_str.as_ref()) {
                     let symbols = extractor_factory.extract_symbols(&parse.tree, &parse.source, path_str.as_ref(), parse.language);
@@ -337,7 +370,7 @@ impl CoreAnalyzer {
 
         for entry in self.walk_project_files() {
             let path_str = entry.path().to_string_lossy();
-            if let Ok(content) = crate::validation::secure_read_file(&entry.path()) {
+            if let Ok(content) = crate::validation::secure_read_file(entry.path()) {
                 let mut scoped_factory = crate::parsers::ScopedParserFactory::new();
                 if let Some(parse) = scoped_factory.parse_file(&content, path_str.as_ref()) {
                     // naive complexity: number of control-flow tokens in file + function count
