@@ -62,6 +62,8 @@ pub mod cache; // Intelligent caching system
                // error_tracking is now part of the errors module
 pub mod core;
 pub mod export; // Export & serialization system
+#[cfg(feature = "mcp")]
+pub mod mcp_server;
 pub mod parsers; // Tree-sitter language parsers
 pub mod query; // Query interface for AI assistants
 pub mod symbols; // Symbol extraction and management

@@ -294,5 +294,4 @@ Apache-2.0 - see [LICENSE](../../LICENSE) for details.
 ## 🔗 Related Packages
 
 - [`@fast-context/cli`](../cli/) - Command-line interface
-- [`@fast-context/mcp-server`](../mcp-server/) - MCP server for AI integration
 - [`@fast-context/dev-tools`](../dev-tools/) - Developer utilities
