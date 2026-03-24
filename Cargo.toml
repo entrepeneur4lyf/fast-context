@@ -41,6 +41,7 @@ rustworkx-core = "0.16.0"
 # Core domain dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 ts-rs = "12.0"
 thiserror = "2.0"
 uuid = { version = "1.0", features = ["v4"] }
@@ -90,6 +91,7 @@ sha2 = "0.10"
 dirs = "6.0"
 encoding_rs = "0.8"
 rmcp = { version = "1.2.0", features = ["server", "transport-io", "client"], optional = true }
+clap = { version = "4.5", features = ["derive"] }
 
 # Python bindings (optional)
 pyo3 = { version = "0.24.2", features = ["extension-module"], optional = true }
@@ -154,6 +156,10 @@ path = "tests/rust/graph_bindings_tests.rs"
 [[test]]
 name = "integration_tests"
 path = "tests/rust/integration_tests.rs"
+
+[[test]]
+name = "cli_tests"
+path = "tests/rust/cli_tests.rs"
 
 [[test]]
 name = "nodejs_api_tests"
