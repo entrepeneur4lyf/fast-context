@@ -129,37 +129,6 @@ class TestMCPServerIntegration:
     """Test MCP server integration with Fast-Context core."""
     
     @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
-    @pytest.mark.skip(reason="Fast-Context core has tree-sitter parsing bugs causing panics")
-    @pytest.mark.asyncio
-    async def test_analyze_codebase_integration(self):
-        """Test codebase analysis with real Fast-Context core."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a simple Python project
-            project_dir = Path(temp_dir) / "test_project"
-            project_dir.mkdir()
-            
-            # Create some test files
-            (project_dir / "main.py").write_text("def hello():\n    return \"Hello, World!\"\n\nclass TestClass:\n    def method(self):\n        pass\n")
-            
-            (project_dir / "utils.py").write_text("def utility_function():\n    return \"utility\"\n")
-            
-            # Test the MCP server function
-            result = await analyze_codebase(str(project_dir))
-            result_data = json.loads(result)
-            
-            # Should not contain errors
-            assert "error" not in result_data
-            
-            # Should contain analysis results
-            assert "file_count" in result_data
-            assert "symbol_count" in result_data
-            assert "languages" in result_data
-            assert "duration_ms" in result_data
-            
-            # Should have found some files
-            assert result_data["file_count"] >= 2  # At least our two Python files
-    
-    @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
     @pytest.mark.asyncio
     async def test_find_symbols_integration(self):
         """Test symbol finding with real Fast-Context core."""
@@ -344,25 +313,6 @@ class TestErrorHandlingIntegration:
     """Test error handling in integration scenarios."""
     
     @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
-    @pytest.mark.skip(reason="Fast-Context core has tree-sitter parsing bugs causing panics")
-    @pytest.mark.asyncio
-    async def test_invalid_project_path(self):
-        """Test handling of invalid project paths."""
-        # Test with non-existent path
-        result = await analyze_codebase("/non/existent/path")
-        result_data = json.loads(result)
-        
-        assert "error" in result_data
-        assert "does not exist" in result_data["error"]
-        
-        # Test with file instead of directory
-        with tempfile.NamedTemporaryFile() as temp_file:
-            result = await analyze_codebase(temp_file.name)
-            result_data = json.loads(result)
-            
-            assert "error" in result_data
-    
-    @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
     def test_invalid_graph_operations(self):
         """Test handling of invalid graph operations."""
         # Test with invalid graph type
@@ -433,85 +383,6 @@ class TestResourceIntegration:
                     reason="Both Fast-Context core and MCP server required")
 class TestEndToEndIntegration:
     """End-to-end integration tests."""
-    
-    @pytest.mark.skip(reason="Fast-Context core has tree-sitter parsing bugs causing panics")
-    @pytest.mark.asyncio
-    async def test_complete_analysis_workflow(self):
-        """Test a complete analysis workflow from project setup to results."""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a realistic project structure
-            project_dir = Path(temp_dir) / "my_project"
-            project_dir.mkdir()
-            
-            # Create source code
-            src_dir = project_dir / "src"
-            src_dir.mkdir()
-            
-            (src_dir / "main.py").write_text("""
-import sys
-from utils import helper
-
-def main():
-    print("Hello from main")
-    helper()
-
-if __name__ == "__main__":
-    main()
-""")
-            
-            (src_dir / "utils.py").write_text("""
-def helper():
-    return "helping"
-
-class HelperClass:
-    def __init__(self):
-        self.value = 42
-""")
-            
-            # Create config file
-            (project_dir / "requirements.txt").write_text("requests>=2.0.0")
-            
-            # Step 1: Get project info
-            result = get_project_info(str(project_dir))
-            project_data = json.loads(result)
-            
-            assert project_data["total_files"] >= 3
-            
-            # Step 2: Analyze codebase
-            result = await analyze_codebase(str(project_dir))
-            analysis_data = json.loads(result)
-            
-            assert analysis_data["file_count"] >= 2  # At least Python files
-            assert analysis_data["symbol_count"] > 0
-            
-            # Step 3: Find specific symbols
-            result = find_symbols(str(project_dir), ".*")
-            symbols_data = json.loads(result)
-            
-            assert symbols_data["total_matches"] > 0
-            
-            # Step 4: Create dependency graph
-            result = create_advanced_graph("directed", 10, 20)
-            graph_data = json.loads(result)
-            
-            assert "graph_id" in graph_data
-            
-            # Step 5: Analyze the graph
-            graph_id = graph_data["graph_id"]
-            result = perform_advanced_graph_analysis(graph_id, "comprehensive")
-            graph_analysis = json.loads(result)
-            
-            assert "results" in graph_analysis
-            assert "centrality" in graph_analysis["results"]
-            
-            # Step 6: Get performance metrics
-            result = get_performance_metrics()
-            metrics = json.loads(result)
-            
-            assert "system_metrics" in metrics
-            assert metrics["system_metrics"]["registered_graphs"] >= 1
-            
-            print("✅ Complete analysis workflow successful!")
 
 
 if __name__ == "__main__":

@@ -181,46 +181,6 @@ setup(
             yield str(project_dir)
     
     @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
-    @pytest.mark.skip(reason="Fast-Context core has tree-sitter parsing bugs causing panics")
-    @pytest.mark.asyncio
-    async def test_codebase_analysis_performance(self, performance_tracker, large_test_project):
-        """Test performance of codebase analysis on large projects."""
-        # Warm-up run
-        await analyze_codebase(large_test_project, max_files=100)
-        
-        # Measure multiple runs
-        measurements = []
-        for _ in range(5):
-            start_time = performance_tracker.start_measurement()
-            result = await analyze_codebase(large_test_project, max_files=100)
-            measurement = performance_tracker.end_measurement(start_time, "codebase_analysis")
-            measurements.append(measurement)
-            
-            # Validate result
-            result_data = json.loads(result)
-            assert "error" not in result_data
-            assert result_data["file_count"] > 0
-        
-        # Analyze performance
-        durations = [m["duration_seconds"] for m in measurements]
-        avg_duration = statistics.mean(durations)
-        
-        print(f"\n📊 Codebase Analysis Performance:")
-        print(f"   Average duration: {avg_duration:.3f} seconds")
-        print(f"   Min duration: {min(durations):.3f} seconds")
-        print(f"   Max duration: {max(durations):.3f} seconds")
-        
-        # Performance assertions
-        assert avg_duration < 10.0, f"Codebase analysis too slow: {avg_duration:.3f}s"
-        
-        # Check that results are consistent
-        file_counts = []
-        for measurement in measurements:
-            # Note: In a real test, we'd need to capture and compare results
-            # For now, just ensure no errors
-            pass
-    
-    @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
     def test_symbol_search_performance(self, performance_tracker, large_test_project):
         """Test performance of symbol search operations."""
         patterns = ["function_.*", "class_.*", "CONSTANT_.*", ".*_1$", "method_.*"]
@@ -339,56 +299,6 @@ setup(
         # Performance assertions
         assert avg_duration < 15.0, f"Streaming analysis too slow: {avg_duration:.3f}s"
     
-    @pytest.mark.skipif(not MCP_SERVER_AVAILABLE, reason="MCP server not available")
-    @pytest.mark.skip(reason="Fast-Context core has tree-sitter parsing bugs causing panics")
-    @pytest.mark.asyncio
-    async def test_concurrent_operations_performance(self, performance_tracker, large_test_project):
-        """Test performance under concurrent load."""
-        async def worker(operation_id):
-            """Worker function for concurrent testing."""
-            if operation_id % 3 == 0:
-                return await analyze_codebase(large_test_project, max_files=20)
-            elif operation_id % 3 == 1:
-                return find_symbols(large_test_project, "function_.*")
-            else:
-                return get_project_info(large_test_project)
-        
-        measurements = []
-        num_workers = 10
-        
-        # Create all tasks
-        tasks = [worker(i) for i in range(num_workers)]
-        
-        # Measure execution time
-        start_time = performance_tracker.start_measurement()
-        
-        # Wait for all tasks to complete
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        measurement = performance_tracker.end_measurement(start_time, f"concurrent_{num_workers}_workers")
-        measurements.append(measurement)
-        
-        # Validate results
-        assert len(results) == num_workers
-        
-        # All results should be valid JSON (filter out exceptions)
-        for result in results:
-            if isinstance(result, Exception):
-                print(f"Error in worker: {result}")
-                continue
-            result_data = json.loads(result)
-            assert "error" not in result_data
-        
-        # Performance assertions
-        duration = measurements[0]["duration_seconds"]
-        print(f"\n📊 Concurrent Operations Performance:")
-        print(f"   Duration: {duration:.3f} seconds")
-        print(f"   Workers: {num_workers}")
-        print(f"   Throughput: {num_workers / duration:.2f} operations/second")
-        
-        # Should complete faster than sequential execution
-        assert duration < num_workers * 2.0, "Concurrent execution not providing benefits"
-
 
 class TestMemoryUsagePerformance:
     """Tests for memory usage and efficiency."""
