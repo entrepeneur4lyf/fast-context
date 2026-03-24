@@ -1,57 +1,35 @@
 # Fast-Context Documentation
 
-Welcome to the Fast-Context documentation! This directory contains comprehensive guides for using and deploying Fast-Context.
+This directory contains the maintained project documentation.
 
-For the current validation/support status, start with the repository [README](https://github.com/entrepeneur4lyf/fast-context#readme). The workflow files in [`.github/workflows`](https://github.com/entrepeneur4lyf/fast-context/tree/main/.github/workflows) are the source of truth for the actively tested platform matrix.
+## Start Here
 
-## 📚 Documentation Index
+- [Repository README](/C:/Users/shawn/workspace/fast-context/README.md)
+- [API reference](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
+- [Deployment guide](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
 
-### **Core Documentation**
-- **[API Reference](./API_REFERENCE.md)** - Complete API documentation with examples
-- **[Deployment Guide](./DEPLOYMENT_GUIDE.md)** - Production deployment and scaling guide
+## What Is Here
 
-### **Quick Links**
-- **[Main README](../README.md)** - Project overview and quick start
-- **[Examples](../examples/)** - Code examples and usage patterns
-- **[Tests](../tests/)** - Integration tests and benchmarks
+### [API_REFERENCE.md](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
 
-## 🚀 Getting Started
+Current Node.js API surface, utility exports, graph classes, and return types.
 
-1. **Installation**: See the main [README](../README.md#installation)
-2. **API Usage**: Check the [API Reference](./API_REFERENCE.md)
-3. **Production Deployment**: Follow the [Deployment Guide](./DEPLOYMENT_GUIDE.md)
+### [DEPLOYMENT_GUIDE.md](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
 
-## 📖 Documentation Overview
+Operational guidance for packaging and deployment.
 
-### API Reference
-Complete documentation of all Fast-Context APIs including:
-- FastContextAnalyzer class methods
-- Configuration options
-- Return types and error handling
-- Usage examples for each API
+## Source of Truth
 
-### Deployment Guide
-Production deployment documentation covering:
-- System requirements
-- Environment configuration
-- Docker and Kubernetes deployment
-- Performance tuning
-- Monitoring and troubleshooting
+When documentation and generated files disagree, prefer:
 
-## 🔗 External Resources
+1. the Rust source in [src](/C:/Users/shawn/workspace/fast-context/src)
+2. the generated Node typings in [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts)
+3. the active GitHub Actions workflows in [/.github/workflows](/C:/Users/shawn/workspace/fast-context/.github/workflows)
 
-- **[GitHub Repository](https://github.com/entrepeneur4lyf/fast-context)**
-- **[NPM Package](https://www.npmjs.com/package/fast-context)**
-- **[Issues & Support](https://github.com/entrepeneur4lyf/fast-context/issues)**
+## Maintenance Notes
 
-## 📝 Contributing
+- Archived material has been removed from the repository.
+- Reference copies of external SDKs have been removed.
+- The removed Go SDK is not part of the supported surface.
 
-For information about contributing to Fast-Context documentation:
-1. Check the main repository for contribution guidelines
-2. Follow the existing documentation style
-3. Include examples for new features
-4. Test all code examples before submitting
-
----
-
-**Fast-Context** - Empowering the next generation of coding assistants with intelligent codebase analysis.
+Keep this directory focused on the current project rather than plans, experiments, or imported third-party material.

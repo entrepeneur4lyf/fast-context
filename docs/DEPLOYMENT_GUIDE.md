@@ -1,494 +1,133 @@
-# Fast-Context Production Deployment Guide
+# Fast-Context Deployment Guide
 
-## Overview
+## Scope
 
-This guide covers deploying Fast-Context in production environments, including configuration, monitoring, scaling, and troubleshooting.
+This guide covers the deployment surfaces that actually exist in this repository:
 
-## Table of Contents
+- the Node.js package
+- the Python package
+- the GitHub Actions release workflows
 
-- [System Requirements](#system-requirements)
-- [Installation](#installation)
-- [Production Configuration](#production-configuration)
-- [Environment Variables](#environment-variables)
-- [Performance Tuning](#performance-tuning)
-- [Monitoring and Logging](#monitoring-and-logging)
-- [Scaling Strategies](#scaling-strategies)
-- [Security Considerations](#security-considerations)
-- [Troubleshooting](#troubleshooting)
+This project is a library, not a standalone web service. If you embed it in an API server or worker, that operational setup belongs to your application, not to Fast-Context itself.
 
-## System Requirements
+## Node.js Package
 
-### Minimum Requirements
-
-- **CPU**: 2 cores, 2.0 GHz
-- **Memory**: 4GB RAM
-- **Storage**: 1GB available space
-- **OS**: Linux, macOS, or Windows
-- **Node.js**: 18.x or higher
-
-### Recommended for Production
-
-- **CPU**: 4+ cores, 3.0+ GHz
-- **Memory**: 8GB+ RAM
-- **Storage**: 10GB+ SSD storage
-- **OS**: Linux (Ubuntu 22.04 LTS)
-- **Node.js**: 18.x LTS or 20.x LTS
-
-### Large Scale Deployments
-
-- **CPU**: 8+ cores, 3.5+ GHz
-- **Memory**: 16GB+ RAM
-- **Storage**: 50GB+ NVMe SSD
-- **Network**: 1Gbps+ bandwidth
-- **Load Balancer**: For horizontal scaling
-
-## Installation
-
-### NPM Installation
+### Local Build
 
 ```bash
-npm install fast-context
-```
-
-### From Source
-
-```bash
-git clone https://github.com/entrepeneur4lyf/fast-context.git
-cd fast-context
 npm install
+npm run build:debug
+npm test
+```
+
+### Release Build
+
+```bash
 npm run build
+npm pack
 ```
 
-### Docker Deployment
+Recommended checks before publishing:
 
-```dockerfile
-FROM node:18-alpine
+- [README.md](/C:/Users/shawn/workspace/fast-context/README.md) quick-start examples still match the package
+- [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) matches the actual addon surface
+- `npm pack` succeeds
+- install the produced tarball into a clean temp project and run a smoke test
 
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
+### Native Artifacts
 
-COPY . .
-RUN npm run build
+The Node package depends on native binaries built through the release workflow. Treat GitHub Actions as the source of truth for supported targets and release artifacts.
 
-EXPOSE 3000
-CMD ["npm", "start"]
-```
+Relevant files:
 
-## Production Configuration
+- [package.json](/C:/Users/shawn/workspace/fast-context/package.json)
+- [release.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
 
-### Basic Production Config
+## Python Package
 
-```typescript
-const config = {
-  projectRoot: process.env.PROJECT_ROOT || "/app/codebase",
-  languages: ["rust", "javascript", "typescript", "python"],
-  ignorePatterns: [
-    "target/**", "node_modules/**", "dist/**",
-    "build/**", ".git/**", "**/*.test.*"
-  ],
-  enableCaching: true,
-  enableWatching: false,
-  maxFiles: 5000,
-  parallelProcessing: true
-};
-```
+### Local Validation
 
-### High-Performance Config
-
-```typescript
-const highPerfConfig = {
-  // ... base config
-  analysis_timeout_seconds: 300,
-  cache_ttl_seconds: 3600, // 1 hour
-  max_cache_size: 10000,
-  enable_incremental: true,
-  
-  // Performance optimizations
-  max_file_size: 10 * 1024 * 1024, // 10MB
-  parallel_analysis: true,
-  memory_limit_mb: 2048,
-  
-  language_config: {
-    rust: { 
-      max_complexity_threshold: 20,
-      enable_macro_analysis: true,
-      cargo_features: ["default"]
-    },
-    javascript: { 
-      max_complexity_threshold: 15,
-      enable_jsx: true,
-      babel_presets: ["@babel/preset-env"]
-    }
-  }
-};
-```
-
-## Environment Variables
-
-### Core Configuration
+Use the Python version exercised during local qualification:
 
 ```bash
-# Project settings
-PROJECT_ROOT=/path/to/codebase
-MAX_FILE_SIZE=5242880  # 5MB in bytes
-ANALYSIS_TIMEOUT=120   # seconds
-
-# Caching
-ENABLE_CACHING=true
-CACHE_TTL=1800        # 30 minutes
-MAX_CACHE_SIZE=5000
-
-# Performance
-MEMORY_LIMIT_MB=2048
-PARALLEL_ANALYSIS=true
-MAX_WORKERS=4
-
-# Security
-ENABLE_SECURITY_CHECKS=true
-BLOCK_PATH_TRAVERSAL=true
-SANITIZE_INPUT=true
+python -m pytest tests/python
+cargo check --features python
 ```
 
-### Monitoring and Logging
+On this repo, Python 3.11 has been the most reliable local validation target.
+
+### Wheel Build
 
 ```bash
-# Logging
-LOG_LEVEL=info        # debug, info, warn, error
-LOG_FORMAT=json       # json, text
-LOG_FILE=/var/log/fast-context.log
-
-# Metrics
-ENABLE_METRICS=true
-METRICS_PORT=9090
-METRICS_PATH=/metrics
-
-# Health checks
-HEALTH_CHECK_PORT=8080
-HEALTH_CHECK_PATH=/health
+python -m maturin build --features python
 ```
 
-### Database and Storage
+Relevant files:
+
+- [pyproject.toml](/C:/Users/shawn/workspace/fast-context/pyproject.toml)
+- [build-wheels.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/build-wheels.yml)
+
+## Release Workflows
+
+The active release automation lives in:
+
+- [test.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/test.yml)
+- [release.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
+- [build-wheels.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/build-wheels.yml)
+
+Practical rule:
+
+- trust hosted CI over a single local machine for cross-platform release status
+
+## Publish Checklist
+
+### Node
+
+Run:
 
 ```bash
-# Cache storage
-CACHE_BACKEND=redis   # memory, redis, file
-REDIS_URL=redis://localhost:6379
-CACHE_PREFIX=fast-context:
-
-# Persistent storage
-STORAGE_BACKEND=file  # file, s3, gcs
-STORAGE_PATH=/var/lib/fast-context
+cargo check
+cargo clippy --all-targets --all-features -- -D warnings
+npm run build
+npm test
+npm pack
 ```
 
-## Performance Tuning
+Then:
 
-### Memory Optimization
+- test the tarball in a clean project
+- verify the package contents are minimal and intentional
 
-```typescript
-// Memory-efficient configuration
-const memoryOptimizedConfig = {
-  max_file_size: 2 * 1024 * 1024, // 2MB
-  max_cache_size: 1000,
-  enable_incremental: true,
-  memory_limit_mb: 1024,
-  
-  // Aggressive garbage collection
-  gc_interval_seconds: 300,
-  max_memory_usage_percent: 80,
-  
-  // Streaming analysis for large files
-  enable_streaming: true,
-  stream_chunk_size: 64 * 1024 // 64KB
-};
-```
+### Python
 
-### CPU Optimization
-
-```typescript
-// CPU-optimized configuration
-const cpuOptimizedConfig = {
-  parallel_analysis: true,
-  max_workers: Math.min(8, require('os').cpus().length),
-  worker_timeout_seconds: 60,
-  
-  // Analysis optimizations
-  enable_fast_mode: true,
-  skip_complex_analysis: false,
-  complexity_threshold: 50,
-  
-  // Caching for CPU-intensive operations
-  cache_complexity_analysis: true,
-  cache_dependency_graphs: true
-};
-```
-
-### I/O Optimization
-
-```typescript
-// I/O optimized configuration
-const ioOptimizedConfig = {
-  // File system optimizations
-  use_memory_mapped_files: true,
-  read_buffer_size: 256 * 1024, // 256KB
-  max_concurrent_files: 50,
-  
-  // Network optimizations
-  connection_pool_size: 20,
-  request_timeout_ms: 30000,
-  retry_attempts: 3,
-  
-  // Storage optimizations
-  compress_cache: true,
-  cache_compression_level: 6
-};
-```
-
-## Monitoring and Logging
-
-### Health Check Endpoint
-
-```typescript
-// Health check implementation
-app.get('/health', (req, res) => {
-  const health = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version,
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    cache: {
-      size: analyzer.getCacheSize(),
-      hit_rate: analyzer.getCacheHitRate()
-    }
-  };
-  
-  res.json(health);
-});
-```
-
-### Metrics Collection
-
-```typescript
-// Prometheus metrics
-const prometheus = require('prom-client');
-
-const analysisCounter = new prometheus.Counter({
-  name: 'fast_context_analysis_total',
-  help: 'Total number of analysis operations',
-  labelNames: ['operation', 'status']
-});
-
-const analysisDuration = new prometheus.Histogram({
-  name: 'fast_context_analysis_duration_seconds',
-  help: 'Duration of analysis operations',
-  labelNames: ['operation']
-});
-
-const cacheHitRate = new prometheus.Gauge({
-  name: 'fast_context_cache_hit_rate',
-  help: 'Cache hit rate percentage'
-});
-```
-
-### Structured Logging
-
-```typescript
-const winston = require('winston');
-
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({ 
-      filename: '/var/log/fast-context-error.log', 
-      level: 'error' 
-    }),
-    new winston.transports.File({ 
-      filename: '/var/log/fast-context.log' 
-    })
-  ]
-});
-```
-
-## Scaling Strategies
-
-### Horizontal Scaling
-
-```yaml
-# Kubernetes deployment
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: fast-context
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: fast-context
-  template:
-    metadata:
-      labels:
-        app: fast-context
-    spec:
-      containers:
-      - name: fast-context
-        image: fast-context:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: CACHE_BACKEND
-          value: "redis"
-        - name: REDIS_URL
-          value: "redis://redis-service:6379"
-        resources:
-          requests:
-            memory: "1Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "1000m"
-```
-
-### Load Balancing
-
-```nginx
-# Nginx load balancer configuration
-upstream fast_context {
-    least_conn;
-    server app1:3000 max_fails=3 fail_timeout=30s;
-    server app2:3000 max_fails=3 fail_timeout=30s;
-    server app3:3000 max_fails=3 fail_timeout=30s;
-}
-
-server {
-    listen 80;
-    server_name api.example.com;
-    
-    location / {
-        proxy_pass http://fast_context;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_timeout 300s;
-    }
-    
-    location /health {
-        access_log off;
-        proxy_pass http://fast_context;
-    }
-}
-```
-
-## Security Considerations
-
-### Input Validation
-
-- All user inputs are validated and sanitized
-- Path traversal attacks are blocked
-- SQL injection and XSS attempts are prevented
-- File size limits are enforced
-
-### Access Control
-
-```typescript
-// API key authentication
-const authenticateApiKey = (req, res, next) => {
-  const apiKey = req.headers['x-api-key'];
-  if (!apiKey || !isValidApiKey(apiKey)) {
-    return res.status(401).json({ error: 'Invalid API key' });
-  }
-  next();
-};
-
-// Rate limiting
-const rateLimit = require('express-rate-limit');
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP'
-});
-```
-
-### Network Security
-
-- Use HTTPS in production
-- Implement proper CORS policies
-- Use secure headers (helmet.js)
-- Regular security updates
-
-## Troubleshooting
-
-### Common Issues
-
-#### High Memory Usage
+Run:
 
 ```bash
-# Check memory usage
-ps aux | grep fast-context
-free -h
-
-# Solutions:
-# 1. Reduce cache size
-# 2. Lower max_file_size
-# 3. Enable streaming mode
-# 4. Increase memory limits
+cargo check --features python
+python -m pytest tests/python
+python -m maturin build --features python
 ```
 
-#### Slow Analysis Performance
+Then:
 
-```bash
-# Check CPU usage
-top -p $(pgrep fast-context)
+- inspect the built wheel
+- install it in a clean environment and run a smoke test
 
-# Solutions:
-# 1. Enable parallel analysis
-# 2. Increase worker count
-# 3. Optimize include/exclude patterns
-# 4. Enable incremental mode
-```
+## Operational Notes
 
-#### Cache Issues
+- local native builds can rewrite [package.json](/C:/Users/shawn/workspace/fast-context/package.json) during package-prep steps; do not commit that churn unless it is intentional
+- the generated Node typings in [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) should be refreshed when the Node-facing Rust structs change
+- release confidence should come from green CI, a clean tarball smoke test, and a clean wheel smoke test
 
-```bash
-# Check cache status
-curl http://localhost:8080/health
+## What This Guide Does Not Cover
 
-# Solutions:
-# 1. Clear cache: DELETE /cache
-# 2. Restart service
-# 3. Check Redis connectivity
-# 4. Verify cache configuration
-```
+This repository does not currently define or ship:
 
-### Debug Mode
+- a production HTTP server
+- a Kubernetes deployment target
+- Prometheus endpoints
+- Redis cache backends
+- API key middleware
+- load balancer configs
 
-```bash
-# Enable debug logging
-export LOG_LEVEL=debug
-export DEBUG=fast-context:*
-
-# Run with profiling
-node --prof app.js
-
-# Analyze profile
-node --prof-process isolate-*.log > profile.txt
-```
-
-### Performance Monitoring
-
-```bash
-# Monitor key metrics
-curl http://localhost:9090/metrics | grep fast_context
-
-# Check response times
-curl -w "@curl-format.txt" -o /dev/null -s http://localhost:3000/api/symbols
-
-# Monitor resource usage
-iostat -x 1
-vmstat 1
-```
+If you need those, they belong in the integrating application.

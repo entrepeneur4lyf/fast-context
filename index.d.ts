@@ -38,6 +38,19 @@ export interface AnalysisResultJs {
   durationMs: number
   /** Memory usage in MB (optional) */
   memoryUsageMb?: number
+  /** Total number of supported files skipped during analysis */
+  skippedFileCount: number
+  /** Structured diagnostics for skipped files */
+  skippedFiles: Array<SkippedFileInfoJs>
+}
+/** Skipped file information for JavaScript */
+export interface SkippedFileInfoJs {
+  /** File path that was skipped */
+  filePath: string
+  /** Analysis stage that skipped the file (read or parse) */
+  stage: string
+  /** Human-readable reason the file was skipped */
+  reason: string
 }
 /** Query result for Node.js */
 export interface QueryResultJs {
