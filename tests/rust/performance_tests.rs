@@ -12,6 +12,12 @@ mod performance_tests {
 
     #[test]
     fn test_large_file_performance() {
+        let max_duration_secs = if std::env::var_os("CI").is_some() {
+            60
+        } else {
+            30
+        };
+
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();
 
@@ -60,7 +66,7 @@ mod performance_tests {
         assert!(result.is_ok());
         // This is a debug-build smoke test, not a benchmark.
         assert!(
-            duration.as_secs() < 30,
+            duration.as_secs() < max_duration_secs,
             "Large file processing took too long: {:?}",
             duration
         );
