@@ -171,6 +171,7 @@ path = "tests/rust/integration_tests.rs"
 [[test]]
 name = "cli_tests"
 path = "tests/rust/cli_tests.rs"
+required-features = ["cli"]
 
 [[test]]
 name = "nodejs_api_tests"
