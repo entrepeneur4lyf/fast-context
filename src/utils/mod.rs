@@ -272,17 +272,39 @@ pub fn should_ignore_file(path: &str, ignore_patterns: &[String]) -> bool {
     }
 }
 
-/// Check if file should be ignored using default patterns (for testing)
-pub fn should_ignore_file_default(path: &str) -> bool {
-    let default_patterns = vec![
+/// Default ignore patterns that keep analysis focused on real source files.
+pub fn default_ignore_patterns() -> Vec<String> {
+    vec![
         "node_modules/**".to_string(),
         ".git/**".to_string(),
         "target/**".to_string(),
         "dist/**".to_string(),
+        "build/**".to_string(),
         "coverage/**".to_string(),
         ".nyc_output/**".to_string(),
-    ];
-    should_ignore_file(path, &default_patterns)
+        "__pycache__/**".to_string(),
+        "*.pyc".to_string(),
+    ]
+}
+
+/// Merge user-provided ignore patterns with the baseline defaults.
+pub fn merged_ignore_patterns(ignore_patterns: Option<Vec<String>>) -> Vec<String> {
+    let mut merged = default_ignore_patterns();
+
+    if let Some(patterns) = ignore_patterns {
+        for pattern in patterns {
+            if !merged.iter().any(|existing| existing == &pattern) {
+                merged.push(pattern);
+            }
+        }
+    }
+
+    merged
+}
+
+/// Check if file should be ignored using default patterns (for testing)
+pub fn should_ignore_file_default(path: &str) -> bool {
+    should_ignore_file(path, &default_ignore_patterns())
 }
 
 /// Format file size in human readable format

@@ -1185,13 +1185,7 @@ pub fn analyze_project(
         ]
     });
 
-    let ignore_patterns = ignore_patterns.unwrap_or_else(|| {
-        vec![
-            "node_modules/**".to_string(),
-            "target/**".to_string(),
-            ".git/**".to_string(),
-        ]
-    });
+    let ignore_patterns = crate::utils::merged_ignore_patterns(ignore_patterns);
 
     let mut file_count = 0;
     let mut symbol_count = 0;
@@ -1572,15 +1566,8 @@ impl AnalyzerConfig {
                     "typescript".to_string(),
                 ]
             }),
-            ignore_patterns: ignore_patterns.unwrap_or_else(|| {
-                vec![
-                    "node_modules/**".to_string(),
-                    "target/**".to_string(),
-                    ".git/**".to_string(),
-                    "__pycache__/**".to_string(),
-                    "*.pyc".to_string(),
-                ]
-            }),
+            ignore_patterns: ignore_patterns
+                .unwrap_or_else(|| crate::utils::default_ignore_patterns()),
             enable_caching,
             enable_watching,
             max_files,

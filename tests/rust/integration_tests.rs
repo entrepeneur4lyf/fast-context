@@ -80,6 +80,42 @@ mod integration_tests {
     }
 
     #[test]
+    fn test_default_analysis_ignores_generated_outputs_and_declarations() {
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        fs::create_dir_all(temp_path.join("src").join("bin")).unwrap();
+        fs::create_dir_all(temp_path.join("dist")).unwrap();
+
+        fs::write(
+            temp_path.join("src").join("main.ts"),
+            "export const app = 1;",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("src").join("bin").join("cli.ts"),
+            "export function run() { return 1; }",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("types.d.ts"),
+            "export interface User { id: string }",
+        )
+        .unwrap();
+        fs::write(
+            temp_path.join("dist").join("bundle.js"),
+            "function bundled() {}",
+        )
+        .unwrap();
+
+        let analyzer = CoreAnalyzer::new(temp_path.to_string_lossy().to_string(), None, None);
+        let result = analyzer.analyze().unwrap();
+
+        assert_eq!(result.file_count, 2);
+        assert!(result.skipped_files.is_empty());
+    }
+
+    #[test]
     fn test_max_files_limit_is_enforced() {
         let temp_dir = TempDir::new().unwrap();
         let temp_path = temp_dir.path();

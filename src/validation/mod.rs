@@ -330,11 +330,8 @@ pub fn secure_read_file(path: &Path) -> ValidationResult<String> {
         .to_string_lossy()
         .replace('\\', "/")
         .to_lowercase();
-    let sensitive_patterns = [
-        "/etc/passwd",
-        "/etc/shadow",
-        "/etc/hosts",
-        "/etc/hostname",
+    let sensitive_files = ["/etc/passwd", "/etc/shadow", "/etc/hosts", "/etc/hostname"];
+    let sensitive_prefixes = [
         "/proc/",
         "/sys/",
         "/dev/",
@@ -344,13 +341,15 @@ pub fn secure_read_file(path: &Path) -> ValidationResult<String> {
         "/windows/system32/config/",
     ];
 
-    for pattern in &sensitive_patterns {
-        if path_str.contains(pattern) {
-            return Err(ValidationError::PathTraversal(format!(
-                "Access to sensitive file blocked: {}",
-                path_str
-            )));
-        }
+    if sensitive_files.contains(&path_str.as_str())
+        || sensitive_prefixes
+            .iter()
+            .any(|pattern| path_str.starts_with(pattern))
+    {
+        return Err(ValidationError::PathTraversal(format!(
+            "Access to sensitive file blocked: {}",
+            path_str
+        )));
     }
 
     // Check file size to prevent memory exhaustion (max 10MB)
@@ -1321,6 +1320,17 @@ mod tests {
 
         let content = secure_read_file(&file_path).unwrap();
         assert!(content.contains("apiKey"));
+    }
+
+    #[test]
+    fn test_secure_read_file_allows_project_bin_source_files() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("src").join("bin").join("cli.ts");
+        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        std::fs::write(&file_path, "export function main() { return 1; }").unwrap();
+
+        let content = secure_read_file(&file_path).unwrap();
+        assert!(content.contains("main"));
     }
 
     #[test]

@@ -70,6 +70,18 @@ enum FileAnalysisOutcome {
 }
 
 impl CoreAnalyzer {
+    fn is_excluded_source_artifact(path: &std::path::Path) -> bool {
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+
+        file_name.ends_with(".d.ts")
+            || file_name.ends_with(".d.mts")
+            || file_name.ends_with(".d.cts")
+    }
+
     fn default_languages() -> Vec<String> {
         use crate::parsers::LanguageId;
 
@@ -145,24 +157,14 @@ impl CoreAnalyzer {
             .unwrap_or_else(Self::default_languages);
 
         // Validate ignore patterns
-        let validated_ignore_patterns = ignore_patterns
-            .map(|patterns| {
-                crate::validation::validate_ignore_patterns(&patterns).unwrap_or_else(|e| {
-                    eprintln!("Warning: Invalid ignore patterns: {}", e);
-                    vec![
-                        "node_modules/**".to_string(),
-                        "target/**".to_string(),
-                        ".git/**".to_string(),
-                    ]
-                })
+        let validated_ignore_patterns = ignore_patterns.map(|patterns| {
+            crate::validation::validate_ignore_patterns(&patterns).unwrap_or_else(|e| {
+                eprintln!("Warning: Invalid ignore patterns: {}", e);
+                crate::utils::default_ignore_patterns()
             })
-            .unwrap_or_else(|| {
-                vec![
-                    "node_modules/**".to_string(),
-                    "target/**".to_string(),
-                    ".git/**".to_string(),
-                ]
-            });
+        });
+        let validated_ignore_patterns =
+            crate::utils::merged_ignore_patterns(validated_ignore_patterns);
 
         Self {
             project_root: validated_root.to_string_lossy().to_string(),
@@ -334,6 +336,7 @@ impl CoreAnalyzer {
                     let path_str = entry.path().to_string_lossy();
                     !crate::utils::should_ignore_file(path_str.as_ref(), &self.ignore_patterns)
                 })
+                .filter(|entry| !Self::is_excluded_source_artifact(entry.path()))
                 .filter(|entry| {
                     if self.languages.is_empty() {
                         return true;

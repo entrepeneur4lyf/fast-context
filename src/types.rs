@@ -1,6 +1,6 @@
 use std::io;
 #[cfg(feature = "nodejs")]
-use ts_rs::TS;
+use ts_rs::{Config, TS};
 
 // Re-export main structs for type generation
 #[cfg(feature = "nodejs")]
@@ -20,13 +20,14 @@ pub enum TypeExportError {
 pub fn export_types() -> Result<(), TypeExportError> {
     // Create bindings directory with proper error handling
     std::fs::create_dir_all("bindings").map_err(TypeExportError::DirectoryCreation)?;
+    let config = Config::default();
 
     // Export RustworkxGraph types with error handling
-    RustworkxGraph::export()
+    RustworkxGraph::export(&config)
         .map_err(|e| TypeExportError::TypeExport(format!("RustworkxGraph export failed: {e}")))?;
 
     // Export RustworkxDiGraph types with error handling
-    RustworkxDiGraph::export()
+    RustworkxDiGraph::export(&config)
         .map_err(|e| TypeExportError::TypeExport(format!("RustworkxDiGraph export failed: {e}")))?;
 
     Ok(())
