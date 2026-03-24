@@ -6,7 +6,7 @@ That is the recommended path if you want direct control over publish order and c
 
 ## Recommended Host
 
-Use WSL for local release work when possible.
+Use WSL or Linux for local release work when possible.
 
 Reason:
 
@@ -14,16 +14,26 @@ Reason:
 - the Python wheel and native addon paths are closer to CI
 - Windows-specific linker and environment issues are less likely to block the release
 
-Windows PowerShell still works, but WSL should be treated as the preferred release host.
+Windows PowerShell still works, but WSL/Linux should be treated as the preferred release host.
 
 ## Required Tokens
 
-Set these in the shell session before publishing:
+Set these in the shell session before publishing.
+
+### PowerShell
 
 ```powershell
 $env:CARGO_REGISTRY_TOKEN = "..."
 $env:NPM_TOKEN = "..."
 $env:PYPI_API_TOKEN = "..."
+```
+
+### Bash / WSL
+
+```bash
+export CARGO_REGISTRY_TOKEN="..."
+export NPM_TOKEN="..."
+export PYPI_API_TOKEN="..."
 ```
 
 ## Version Rule
@@ -38,7 +48,10 @@ The local release script will fail fast if these do not match.
 
 ## Release Script
 
-Use [scripts/release.ps1](../scripts/release.ps1).
+Use either:
+
+- [scripts/release.ps1](../scripts/release.ps1) for PowerShell
+- [scripts/release.sh](../scripts/release.sh) for WSL/Linux
 
 Default behavior:
 
@@ -53,10 +66,18 @@ Default behavior:
 .\scripts\release.ps1 -TagAfterPublish
 ```
 
+```bash
+./scripts/release.sh --tag-after-publish
+```
+
 ### Validation Only
 
 ```powershell
 .\scripts\release.ps1 -SkipPublish
+```
+
+```bash
+./scripts/release.sh --skip-publish
 ```
 
 ### Build Only
@@ -65,10 +86,18 @@ Default behavior:
 .\scripts\release.ps1 -SkipPublish -SkipValidation
 ```
 
+```bash
+./scripts/release.sh --skip-publish --skip-validation
+```
+
 ### Use A Specific Python Interpreter
 
 ```powershell
 .\scripts\release.ps1 -PythonExe "E:\models\bin\conda\envs\fast-context-py311\python.exe" -TagAfterPublish
+```
+
+```bash
+./scripts/release.sh --python-exe /usr/bin/python3 --tag-after-publish
 ```
 
 ## What The Script Runs
@@ -107,7 +136,7 @@ Tagging:
 
 ## Practical Release Order
 
-The local script publishes first and tags last.
+The local scripts publish first and tag last.
 
 That avoids creating a public tag for a release that only partially published.
 

@@ -134,7 +134,7 @@ Practical rule:
 - trust hosted CI over a single local machine for cross-platform release status
 - treat the tag-driven release pipeline as one release train, not separate ad hoc publishes
 
-If you do not want GitHub Actions to be the publishing source, use the local release flow from [LOCAL_RELEASE.md](LOCAL_RELEASE.md) and keep Actions as validation only.
+If you do not want GitHub Actions to be the publishing source, use the local release flow from [LOCAL_RELEASE.md](LOCAL_RELEASE.md) and keep Actions as validation only. The repository now includes both PowerShell and Bash release scripts for that path.
 
 ## Publish Checklist
 
