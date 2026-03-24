@@ -8,7 +8,7 @@
 
 use std::env;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 /// Validation error types
 #[derive(Debug, thiserror::Error)]
@@ -62,12 +62,19 @@ pub fn validate_file_path(path: &str) -> ValidationResult<PathBuf> {
         )));
     }
 
-    // Check for path traversal attempts
-    if path.contains("..") || path.contains("~/") {
+    let path_buf = PathBuf::from(path);
+
+    // Check for path traversal attempts using path components rather than substring matching.
+    if path_buf
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
         return Err(ValidationError::PathTraversal(path.to_string()));
     }
 
-    let path_buf = PathBuf::from(path);
+    if path == "~" || path.starts_with("~/") || path.starts_with("~\\") {
+        return Err(ValidationError::PathTraversal(path.to_string()));
+    }
 
     // Check if path exists
     if !path_buf.exists() {
@@ -226,10 +233,20 @@ pub fn validate_ignore_patterns(patterns: &[String]) -> ValidationResult<Vec<Str
         let validated_pattern = validate_string(pattern, 200, "ignore_pattern")?;
 
         // Check for potentially dangerous patterns
-        let dangerous_patterns = ["**/*", "*", "/**", "../", "..\\"];
+        let dangerous_patterns = ["**/*", "*", "/**"];
         if dangerous_patterns.contains(&validated_pattern.as_str()) {
             return Err(ValidationError::InvalidPath(format!(
                 "Potentially dangerous ignore pattern: {}",
+                validated_pattern
+            )));
+        }
+
+        if Path::new(&validated_pattern)
+            .components()
+            .any(|component| matches!(component, Component::ParentDir))
+        {
+            return Err(ValidationError::InvalidPath(format!(
+                "Ignore pattern must not contain parent-directory traversal: {}",
                 validated_pattern
             )));
         }
@@ -1056,6 +1073,24 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_file_path_allows_double_dots_inside_path_component() {
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("my..folder").join("data..csv");
+        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        std::fs::write(&file_path, "ok").unwrap();
+
+        assert!(validate_file_path(&file_path.to_string_lossy()).is_ok());
+    }
+
+    #[test]
+    fn test_validate_file_path_blocks_windows_style_tilde_prefix() {
+        assert!(matches!(
+            validate_file_path("~\\secrets.txt"),
+            Err(ValidationError::PathTraversal(_))
+        ));
+    }
+
+    #[test]
     fn test_validate_string() {
         // Valid string
         assert_eq!(validate_string("test", 10, "field").unwrap(), "test");
@@ -1331,6 +1366,15 @@ mod tests {
 
         let content = secure_read_file(&file_path).unwrap();
         assert!(content.contains("main"));
+    }
+
+    #[test]
+    fn test_validate_ignore_patterns_blocks_parent_traversal_segments() {
+        let patterns = vec!["**/../../sensitive/**".to_string()];
+        assert!(matches!(
+            validate_ignore_patterns(&patterns),
+            Err(ValidationError::InvalidPath(_))
+        ));
     }
 
     #[test]

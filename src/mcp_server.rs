@@ -1,5 +1,5 @@
 use crate::core::{CoreAnalysisSummary, CoreAnalyzer, CoreAnalyzerOptions};
-use crate::validation::{validate_directory_path, validate_file_path};
+use crate::validation::{safe_resolve_path, validate_directory_path, validate_file_path};
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
@@ -10,6 +10,8 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::sync::Semaphore;
 
 #[derive(Debug, Clone, Deserialize, JsonSchema)]
 pub struct AnalyzerRequestOptions {
@@ -54,15 +56,17 @@ struct SkippedFileView {
     reason: String,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct FastContextMcpServer {
     tool_router: ToolRouter<Self>,
+    analysis_semaphore: Arc<Semaphore>,
 }
 
 impl FastContextMcpServer {
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
+            analysis_semaphore: Arc::new(Semaphore::new(2)),
         }
     }
 
@@ -81,11 +85,26 @@ impl FastContextMcpServer {
         ))
     }
 
-    fn validate_project_file(&self, project_path: &str, file_path: &str) -> Result<(), ErrorData> {
-        let resolved = PathBuf::from(project_path).join(file_path);
+    fn validate_project_file(
+        &self,
+        project_path: &str,
+        file_path: &str,
+    ) -> Result<PathBuf, ErrorData> {
+        let project_root = validate_directory_path(project_path)
+            .map_err(|err| ErrorData::invalid_params(err.to_string(), None))?;
+        let resolved = safe_resolve_path(&project_root, file_path)
+            .map_err(|err| ErrorData::invalid_params(err.to_string(), None))?;
         validate_file_path(&resolved.to_string_lossy())
             .map_err(|err| ErrorData::invalid_params(err.to_string(), None))?;
-        Ok(())
+        Ok(resolved)
+    }
+
+    async fn acquire_analysis_slot(&self) -> Result<tokio::sync::OwnedSemaphorePermit, ErrorData> {
+        self.analysis_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|err| ErrorData::internal_error(err.to_string(), None))
     }
 
     fn serialize_summary(
@@ -117,6 +136,12 @@ impl FastContextMcpServer {
     }
 }
 
+impl Default for FastContextMcpServer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[tool_router]
 impl FastContextMcpServer {
     #[tool(
@@ -127,6 +152,7 @@ impl FastContextMcpServer {
         &self,
         Parameters(request): Parameters<AnalyzeCodebaseRequest>,
     ) -> Result<String, ErrorData> {
+        let _permit = self.acquire_analysis_slot().await?;
         let analyzer = self.build_analyzer(&request.options)?;
         let summary = analyzer
             .analyze_summary()
@@ -142,6 +168,7 @@ impl FastContextMcpServer {
         &self,
         Parameters(request): Parameters<FindSymbolsByKindRequest>,
     ) -> Result<String, ErrorData> {
+        let _permit = self.acquire_analysis_slot().await?;
         let analyzer = self.build_analyzer(&request.options)?;
         let symbols = analyzer
             .find_symbols_by_kind(request.symbol_kind.clone())
@@ -164,11 +191,13 @@ impl FastContextMcpServer {
         &self,
         Parameters(request): Parameters<FindSymbolsInFileRequest>,
     ) -> Result<String, ErrorData> {
-        self.validate_project_file(&request.options.project_path, &request.file_path)?;
+        let _permit = self.acquire_analysis_slot().await?;
+        let resolved_file =
+            self.validate_project_file(&request.options.project_path, &request.file_path)?;
 
         let analyzer = self.build_analyzer(&request.options)?;
         let symbols = analyzer
-            .find_symbols_in_file(request.file_path.clone())
+            .find_symbols_in_file(resolved_file.to_string_lossy().to_string())
             .map_err(|err| ErrorData::internal_error(err.to_string(), None))?;
 
         serde_json::to_string_pretty(&json!({
@@ -188,6 +217,7 @@ impl FastContextMcpServer {
         &self,
         Parameters(request): Parameters<FindDependenciesRequest>,
     ) -> Result<String, ErrorData> {
+        let _permit = self.acquire_analysis_slot().await?;
         let analyzer = self.build_analyzer(&request.options)?;
         let dependencies = analyzer
             .find_dependencies(request.symbol_name.clone())
@@ -340,5 +370,32 @@ mod tests {
 
         client.cancel().await.expect("cancel client");
         server_task.await.expect("join server task");
+    }
+
+    #[tokio::test]
+    async fn find_symbols_in_file_rejects_absolute_paths_outside_project() {
+        let project_dir = tempdir().expect("create project dir");
+        fs::write(project_dir.path().join("main.rs"), "fn main() {}\n").expect("write source");
+
+        let outside_dir = tempdir().expect("create outside dir");
+        let outside_file = outside_dir.path().join("outside.rs");
+        fs::write(&outside_file, "fn outside() {}\n").expect("write outside source");
+
+        let server = FastContextMcpServer::new();
+        let err = server
+            .find_symbols_in_file(Parameters(FindSymbolsInFileRequest {
+                options: AnalyzerRequestOptions {
+                    project_path: project_dir.path().to_string_lossy().to_string(),
+                    languages: Some(vec!["rust".to_string()]),
+                    ignore_patterns: None,
+                    max_files: None,
+                    parallel_processing: Some(false),
+                },
+                file_path: outside_file.to_string_lossy().to_string(),
+            }))
+            .await
+            .expect_err("absolute path outside project must be rejected");
+
+        assert!(err.message.contains("Path traversal") || err.message.contains("Absolute path"));
     }
 }

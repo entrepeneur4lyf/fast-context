@@ -9,9 +9,6 @@
 use pyo3::prelude::*;
 
 #[cfg(feature = "python")]
-use std::fs;
-
-#[cfg(feature = "python")]
 use crate::core::{CoreAnalyzer, CoreAnalyzerOptions};
 #[cfg(feature = "python")]
 use crate::python_bindings_cache::{
@@ -35,8 +32,38 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 #[cfg(feature = "python")]
 use std::sync::{Arc, Mutex};
+
 #[cfg(feature = "python")]
-use walkdir::WalkDir;
+fn escape_dot_string(input: &str) -> String {
+    input
+        .chars()
+        .flat_map(|ch| match ch {
+            '\\' => "\\\\".chars().collect::<Vec<_>>(),
+            '"' => "\\\"".chars().collect(),
+            '\n' => "\\n".chars().collect(),
+            '\r' => "\\r".chars().collect(),
+            '\t' => "\\t".chars().collect(),
+            _ => vec![ch],
+        })
+        .collect()
+}
+
+#[cfg(feature = "python")]
+fn mermaid_node_id(index: usize) -> String {
+    format!("n{index}")
+}
+
+#[cfg(feature = "python")]
+fn escape_mermaid_label(input: &str) -> String {
+    input
+        .chars()
+        .map(|ch| match ch {
+            '"' => '\'',
+            '\n' | '\r' | '\t' => ' ',
+            _ => ch,
+        })
+        .collect()
+}
 
 #[cfg(feature = "python")]
 
@@ -752,7 +779,7 @@ impl FastContextAnalyzer {
                     for dep in &result.relationships {
                         for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
                             if seen_nodes.insert(symbol_name.clone()) {
-                                let escaped_name = symbol_name.replace("\"", "\\\"");
+                                let escaped_name = escape_dot_string(symbol_name);
                                 dot_output.push_str(&format!(
                                     "  \"{}\" [label=\"{}\"];\n",
                                     escaped_name, escaped_name
@@ -762,11 +789,12 @@ impl FastContextAnalyzer {
                     }
 
                     for dep in &result.relationships {
-                        let from_escaped = dep.from_symbol.replace("\"", "\\\"");
-                        let to_escaped = dep.to_symbol.replace("\"", "\\\"");
+                        let from_escaped = escape_dot_string(&dep.from_symbol);
+                        let to_escaped = escape_dot_string(&dep.to_symbol);
+                        let label = escape_dot_string(&dep.relationship_type);
                         dot_output.push_str(&format!(
                             "  \"{}\" -> \"{}\" [label=\"{}\"];\n",
-                            from_escaped, to_escaped, dep.relationship_type
+                            from_escaped, to_escaped, label
                         ));
                     }
 
@@ -814,25 +842,28 @@ impl FastContextAnalyzer {
                 }
                 "mermaid" => {
                     let mut mermaid_output = String::from("graph TD\n");
-                    let mut seen_nodes = std::collections::HashSet::new();
+                    let mut node_ids: std::collections::HashMap<String, String> =
+                        std::collections::HashMap::new();
 
                     for dep in &result.relationships {
                         for symbol_name in [&dep.from_symbol, &dep.to_symbol] {
-                            if seen_nodes.insert(symbol_name.clone()) {
-                                let safe_name = symbol_name.replace(" ", "_").replace("-", "_");
-                                mermaid_output
-                                    .push_str(&format!("  {}[\"{}\"]\n", safe_name, symbol_name));
+                            if !node_ids.contains_key(symbol_name) {
+                                let id = mermaid_node_id(node_ids.len());
+                                let label = escape_mermaid_label(symbol_name);
+                                node_ids.insert(symbol_name.clone(), id.clone());
+                                mermaid_output.push_str(&format!("  {}[\"{}\"]\n", id, label));
                             }
                         }
                     }
 
                     for dep in &result.relationships {
-                        let from_safe = dep.from_symbol.replace(" ", "_").replace("-", "_");
-                        let to_safe = dep.to_symbol.replace(" ", "_").replace("-", "_");
-                        mermaid_output.push_str(&format!(
-                            "  {} -->|{}| {}\n",
-                            from_safe, dep.relationship_type, to_safe
-                        ));
+                        if let (Some(from_id), Some(to_id)) =
+                            (node_ids.get(&dep.from_symbol), node_ids.get(&dep.to_symbol))
+                        {
+                            let label = escape_mermaid_label(&dep.relationship_type);
+                            mermaid_output
+                                .push_str(&format!("  {} -->|{}| {}\n", from_id, label, to_id));
+                        }
                     }
 
                     Ok(mermaid_output)
@@ -1023,79 +1054,19 @@ pub fn analyze_project(
 ) -> PyResult<AnalysisResult> {
     let start_time = std::time::Instant::now();
 
-    let supported_languages = languages.unwrap_or_else(|| {
-        vec![
-            "rust".to_string(),
-            "javascript".to_string(),
-            "typescript".to_string(),
-            "python".to_string(),
-        ]
-    });
-
-    let ignore_patterns = crate::utils::merged_ignore_patterns(ignore_patterns);
-
-    let mut file_count = 0;
-    let mut symbol_count = 0;
-    let mut detected_languages = std::collections::HashSet::new();
-
-    // Walk through project files
-    for entry in WalkDir::new(&project_root)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(|e| e.ok())
-    {
-        if entry.file_type().is_file() {
-            if let Some(path_str) = entry.path().to_str() {
-                // Skip ignored patterns
-                if should_ignore_file(path_str, &ignore_patterns) {
-                    continue;
-                }
-
-                if let Some(language) = crate::utils::detect_language_id(path_str) {
-                    if supported_languages
-                        .iter()
-                        .any(|l| language.to_lowercase_string().contains(&l.to_lowercase()))
-                    {
-                        file_count += 1;
-                        detected_languages.insert(language);
-
-                        // Count symbols by reading file content
-                        if let Ok(content) = fs::read_to_string(entry.path()) {
-                            symbol_count +=
-                                count_symbols_in_content(&content, &language.to_lowercase_string());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
+    let core = CoreAnalyzer::new(project_root, languages, ignore_patterns);
+    let analysis_result = core
+        .analyze()
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
     let duration = start_time.elapsed();
 
-    // Extract actual relationships using the CoreAnalyzer
-    let core = CoreAnalyzer::new(
-        project_root.clone(),
-        Some(supported_languages.clone()),
-        Some(ignore_patterns.clone()),
-    );
-    let (relationships, skipped_files) = match core.analyze() {
-        Ok(analysis_result) => (analysis_result.relationships, analysis_result.skipped_files),
-        Err(_) => {
-            // If analysis fails, return empty relationships vector
-            (Vec::new(), Vec::new())
-        }
-    };
-
     Ok(AnalysisResult {
-        file_count,
-        symbol_count,
-        languages: detected_languages
-            .into_iter()
-            .map(|lang| lang.to_lowercase_string())
-            .collect(),
+        file_count: analysis_result.file_count,
+        symbol_count: analysis_result.symbol_count,
+        languages: analysis_result.languages,
         duration_ms: duration.as_millis() as u32,
-        relationships,
-        skipped_files,
+        relationships: analysis_result.relationships,
+        skipped_files: analysis_result.skipped_files,
     })
 }
 
@@ -1301,63 +1272,6 @@ fn fast_context(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
-#[cfg(feature = "python")]
-pub(crate) fn should_ignore_file(path: &str, ignore_patterns: &[String]) -> bool {
-    for pattern in ignore_patterns {
-        if pattern.ends_with('/') {
-            if path.contains(pattern) {
-                return true;
-            }
-        } else if let Some(ext) = pattern.strip_prefix("*.") {
-            if path.ends_with(ext) {
-                return true;
-            }
-        } else if path.contains(pattern) {
-            return true;
-        }
-    }
-    false
-}
-
-#[cfg(feature = "python")]
-pub(crate) fn count_symbols_in_content(content: &str, language: &str) -> u32 {
-    let mut count = 0;
-    match language {
-        "Rust" => {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("fn ")
-                    || trimmed.starts_with("pub fn ")
-                    || trimmed.starts_with("struct ")
-                    || trimmed.starts_with("pub struct ")
-                    || trimmed.starts_with("enum ")
-                    || trimmed.starts_with("pub enum ")
-                {
-                    count += 1;
-                }
-            }
-        }
-        "JavaScript" => {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.contains("function ") || trimmed.starts_with("class ") {
-                    count += 1;
-                }
-            }
-        }
-        "Python" => {
-            for line in content.lines() {
-                let trimmed = line.trim();
-                if trimmed.starts_with("def ") || trimmed.starts_with("class ") {
-                    count += 1;
-                }
-            }
-        }
-        _ => {}
-    }
-    count
-}
-
 // ============================================================================
 // PHASE 2: Thread-Safe Class-Based Python API - Configuration
 // ============================================================================
@@ -1419,5 +1333,28 @@ impl AnalyzerConfig {
             max_files,
             parallel_processing,
         }
+    }
+}
+
+#[cfg(all(test, feature = "python"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dot_escape_handles_control_characters() {
+        let escaped = escape_dot_string("name\\\"line\nnext\tend");
+        assert_eq!(escaped, "name\\\\\\\"line\\nnext\\tend");
+    }
+
+    #[test]
+    fn mermaid_labels_strip_control_characters_from_labels() {
+        let escaped = escape_mermaid_label("node\"\nnext\tvalue");
+        assert_eq!(escaped, "node' next value");
+    }
+
+    #[test]
+    fn mermaid_node_ids_are_stable_and_safe() {
+        assert_eq!(mermaid_node_id(0), "n0");
+        assert_eq!(mermaid_node_id(42), "n42");
     }
 }

@@ -23,6 +23,7 @@ pub struct CoreAnalyzer {
     languages: Vec<String>,
     ignore_patterns: Vec<String>,
     options: CoreAnalyzerOptions,
+    root_validation_error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -136,14 +137,11 @@ impl CoreAnalyzer {
         options: CoreAnalyzerOptions,
     ) -> Self {
         // Validate project root path
-        let validated_root = crate::validation::validate_directory_path(&project_root)
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "Warning: Invalid project root path '{}': {}",
-                    project_root, e
-                );
-                PathBuf::from(".") // Fallback to current directory
-            });
+        let (validated_root, root_validation_error) =
+            match crate::validation::validate_directory_path(&project_root) {
+                Ok(root) => (root, None),
+                Err(e) => (PathBuf::from(project_root.clone()), Some(e.to_string())),
+            };
 
         // Validate languages
         let validated_languages = languages
@@ -173,7 +171,16 @@ impl CoreAnalyzer {
                 max_files: options.max_files.filter(|max_files| *max_files > 0),
                 parallel_processing: options.parallel_processing,
             },
+            root_validation_error,
         }
+    }
+
+    fn ensure_valid_project_root(&self) -> FastContextResult<()> {
+        if let Some(error) = &self.root_validation_error {
+            return Err(format!("Invalid project root '{}': {}", self.project_root, error).into());
+        }
+
+        Ok(())
     }
 
     fn analyze_file(file_path: &std::path::Path) -> FileAnalysisOutcome {
@@ -272,6 +279,8 @@ impl CoreAnalyzer {
         use rayon::prelude::*;
         use std::time::Instant;
 
+        self.ensure_valid_project_root()?;
+
         let _start_time = Instant::now();
 
         let max_files = self.options.max_files.unwrap_or(usize::MAX);
@@ -328,6 +337,7 @@ impl CoreAnalyzer {
 
         Box::new(
             WalkDir::new(&self.project_root)
+                .follow_links(false)
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter(|entry| entry.file_type().is_file())
@@ -400,6 +410,8 @@ impl CoreAnalyzer {
         use crate::symbols::SymbolExtractorFactory;
         use crate::symbols::SymbolKind;
 
+        self.ensure_valid_project_root()?;
+
         let extractor_factory = SymbolExtractorFactory::new();
         let mut results = Vec::new();
 
@@ -451,6 +463,8 @@ impl CoreAnalyzer {
     pub fn find_symbols_in_file(&self, file_path: String) -> FastContextResult<Vec<String>> {
         use crate::symbols::{SymbolExtractorFactory, SymbolKind};
 
+        self.ensure_valid_project_root()?;
+
         // Use secure file reading with path validation
         let content = crate::validation::secure_read_file(std::path::Path::new(&file_path))
             .map_err(|e| format!("Invalid file path '{}': {}", file_path, e))?;
@@ -491,6 +505,8 @@ impl CoreAnalyzer {
     pub fn find_dependencies(&self, symbol_name: String) -> FastContextResult<Vec<String>> {
         use crate::symbols::dependency_extractor::DependencyExtractorFactory;
         use crate::symbols::SymbolExtractorFactory;
+
+        self.ensure_valid_project_root()?;
 
         let extractor_factory = SymbolExtractorFactory::new();
         let dep_factory = DependencyExtractorFactory::new();
@@ -538,6 +554,8 @@ impl CoreAnalyzer {
     pub fn find_complex_symbols(&self, threshold: u32) -> FastContextResult<Vec<String>> {
         use crate::symbols::SymbolExtractorFactory;
         use crate::symbols::SymbolKind;
+
+        self.ensure_valid_project_root()?;
 
         let extractor_factory = SymbolExtractorFactory::new();
         let mut complex: Vec<String> = Vec::new();

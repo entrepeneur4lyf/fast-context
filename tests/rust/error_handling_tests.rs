@@ -59,9 +59,11 @@ fn test_nonexistent_project_root() {
         None,
         None,
     );
-    // Should not panic when analyzing with invalid fallback path
-    let _analysis_result = analyzer.analyze();
-    // Should handle gracefully (may succeed or fail depending on what's in current dir)
+    let analysis_result = analyzer.analyze();
+    assert!(
+        analysis_result.is_err(),
+        "Invalid project roots should fail closed instead of falling back to the current directory"
+    );
 }
 
 #[test]
@@ -82,7 +84,8 @@ fn test_permission_denied_scenarios() {
     }
 
     // Test analyzer creation with restricted directory
-    let _result = CoreAnalyzer::new(restricted_dir.to_string_lossy().to_string(), None, None);
+    let result = CoreAnalyzer::new(restricted_dir.to_string_lossy().to_string(), None, None);
+    let _ = result.analyze();
     // Should handle gracefully, not panic
 }
 
@@ -251,6 +254,21 @@ fn test_path_traversal_attempts() {
     for malicious_path in malicious_paths {
         let _result = CoreAnalyzer::new(malicious_path.clone(), None, None);
     }
+}
+
+#[test]
+fn test_invalid_project_root_does_not_answer_queries_from_cwd() {
+    let analyzer = CoreAnalyzer::new(
+        "/nonexistent/path/that/does/not/exist".to_string(),
+        None,
+        None,
+    );
+
+    assert!(analyzer
+        .find_symbols_by_kind("function".to_string())
+        .is_err());
+    assert!(analyzer.find_dependencies("main".to_string()).is_err());
+    assert!(analyzer.find_complex_symbols(1).is_err());
 }
 
 #[test]
