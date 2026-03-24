@@ -1566,8 +1566,7 @@ impl AnalyzerConfig {
                     "typescript".to_string(),
                 ]
             }),
-            ignore_patterns: ignore_patterns
-                .unwrap_or_else(|| crate::utils::default_ignore_patterns()),
+            ignore_patterns: ignore_patterns.unwrap_or_else(crate::utils::default_ignore_patterns),
             enable_caching,
             enable_watching,
             max_files,

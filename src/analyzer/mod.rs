@@ -162,7 +162,7 @@ impl FastContextAnalyzer {
         let core = self.core_analyzer();
         let start_time = std::time::Instant::now();
         let summary = core
-            .analyze()
+            .analyze_summary()
             .map_err(|e| napi::Error::from_reason(e.to_string()))?;
         let duration = start_time.elapsed();
 

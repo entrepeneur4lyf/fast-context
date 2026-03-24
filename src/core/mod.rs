@@ -25,7 +25,6 @@ pub struct CoreAnalyzer {
     options: CoreAnalyzerOptions,
 }
 
-#[cfg(not(feature = "python"))]
 #[derive(Debug, Clone)]
 pub struct CoreAnalysisSummary {
     pub file_count: u32,
@@ -357,30 +356,7 @@ impl CoreAnalyzer {
         )
     }
 
-    #[cfg(feature = "python")]
-    pub fn analyze(&self) -> FastContextResult<crate::python_bindings::AnalysisResult> {
-        let internal_result = self.analyze_internal()?;
-
-        Ok(crate::python_bindings::AnalysisResult {
-            file_count: internal_result.file_count,
-            symbol_count: internal_result.symbol_count,
-            languages: internal_result.languages,
-            duration_ms: 0,
-            relationships: internal_result
-                .relationships
-                .into_iter()
-                .map(crate::python_bindings::PyDependency::from)
-                .collect(),
-            skipped_files: internal_result
-                .skipped_files
-                .into_iter()
-                .map(crate::python_bindings::PySkippedFile::from)
-                .collect(),
-        })
-    }
-
-    #[cfg(not(feature = "python"))]
-    pub fn analyze(&self) -> FastContextResult<CoreAnalysisSummary> {
+    pub fn analyze_summary(&self) -> FastContextResult<CoreAnalysisSummary> {
         let internal_result = self.analyze_internal()?;
 
         Ok(CoreAnalysisSummary {
@@ -391,6 +367,33 @@ impl CoreAnalyzer {
             relationships: internal_result.relationships,
             skipped_files: internal_result.skipped_files,
         })
+    }
+
+    #[cfg(feature = "python")]
+    pub fn analyze(&self) -> FastContextResult<crate::python_bindings::AnalysisResult> {
+        let summary = self.analyze_summary()?;
+
+        Ok(crate::python_bindings::AnalysisResult {
+            file_count: summary.file_count,
+            symbol_count: summary.symbol_count,
+            languages: summary.languages,
+            duration_ms: summary.duration_ms,
+            relationships: summary
+                .relationships
+                .into_iter()
+                .map(crate::python_bindings::PyDependency::from)
+                .collect(),
+            skipped_files: summary
+                .skipped_files
+                .into_iter()
+                .map(crate::python_bindings::PySkippedFile::from)
+                .collect(),
+        })
+    }
+
+    #[cfg(not(feature = "python"))]
+    pub fn analyze(&self) -> FastContextResult<CoreAnalysisSummary> {
+        self.analyze_summary()
     }
 
     pub fn find_symbols_by_kind(&self, symbol_kind: String) -> FastContextResult<Vec<String>> {
