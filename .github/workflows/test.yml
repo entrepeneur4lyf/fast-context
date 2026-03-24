@@ -55,12 +55,12 @@ jobs:
       run: cargo test --verbose
 
     - name: Run Rust CLI tests
-      run: cargo test --test cli_tests
+      run: cargo test --test cli_tests --features cli
 
     - name: Smoke test Rust CLI
       run: |
-        cargo run --quiet --bin fast-context -- --format json analyze . > cli-analysis.json
-        cargo run --quiet --bin fast-context -- --format json doctor > cli-doctor.json
+        cargo run --quiet --bin fast-context --features cli -- --format json analyze . > cli-analysis.json
+        cargo run --quiet --bin fast-context --features cli -- --format json doctor > cli-doctor.json
         python - <<'PY'
         import json
         with open("cli-analysis.json", "r", encoding="utf-8") as fh:
@@ -137,7 +137,7 @@ jobs:
 
     - name: Build Rust CLI binaries
       run: |
-        cargo build --release --bin fast-context
+        cargo build --release --bin fast-context --features cli
         cargo build --release --bin fast-context-mcp --features mcp
     
     - name: Test release build

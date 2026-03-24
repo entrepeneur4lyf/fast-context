@@ -54,8 +54,8 @@
     "test:packages": "npm run test --workspace=packages/core",
     "publish:packages": "npm run build:packages && npm publish --workspace=packages/core",
     "publish:dry-run": "npm run build:packages && npm publish --dry-run --workspace=packages/core",
-    "cli:build": "cargo build --bin fast-context",
-    "cli:run": "cargo run --bin fast-context --",
+    "cli:build": "cargo build --bin fast-context --features cli",
+    "cli:run": "cargo run --bin fast-context --features cli --",
     "mcp:build": "cargo build --bin fast-context-mcp --features mcp",
     "mcp:stdio": "cargo run --bin fast-context-mcp --features mcp"
   },

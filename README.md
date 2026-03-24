@@ -146,6 +146,7 @@ Fast-Context includes parsers for:
 cargo check
 cargo test
 cargo clippy --all-targets --all-features -- -D warnings
+cargo run --bin fast-context --features cli -- --help
 ```
 
 ### Node.js

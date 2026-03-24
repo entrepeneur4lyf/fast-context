@@ -41,7 +41,7 @@ Rust outputs:
 Primary Rust install path:
 
 ```bash
-cargo install fast-context
+cargo install fast-context --features cli
 ```
 
 Rust users should not need npm or Python to consume the project.

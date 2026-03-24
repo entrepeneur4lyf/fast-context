@@ -140,7 +140,7 @@ jobs:
           image: ${{ matrix.settings.docker }}
           options: '--user 0:0 -v ${{ github.workspace }}/.cargo-cache:/root/.cargo/registry/cache -v ${{ github.workspace }}/.cargo/registry/index:/root/.cargo/registry/index -v ${{ github.workspace }}:/build -w /build'
           run: |
-            cargo build --release --target ${{ matrix.settings.target }} --bin fast-context
+            cargo build --release --target ${{ matrix.settings.target }} --bin fast-context --features cli
             cargo build --release --target ${{ matrix.settings.target }} --bin fast-context-mcp --features mcp
       - name: Build
         run: ${{ matrix.settings.build }}
@@ -149,7 +149,7 @@ jobs:
       - name: Build Rust binaries
         if: ${{ !matrix.settings.docker }}
         run: |
-          cargo build --release --target ${{ matrix.settings.target }} --bin fast-context
+          cargo build --release --target ${{ matrix.settings.target }} --bin fast-context --features cli
           cargo build --release --target ${{ matrix.settings.target }} --bin fast-context-mcp --features mcp
         shell: bash
       - name: Package Rust binaries

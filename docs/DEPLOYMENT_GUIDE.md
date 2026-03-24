@@ -44,7 +44,7 @@ cargo clippy --all-targets --all-features -- -D warnings
 ### Binary Validation
 
 ```bash
-cargo run --bin fast-context -- --help
+cargo run --bin fast-context --features cli -- --help
 cargo run --bin fast-context-mcp --features mcp
 ```
 
@@ -176,7 +176,7 @@ Then:
 Run:
 
 ```bash
-cargo build --release --bin fast-context
+cargo build --release --bin fast-context --features cli
 cargo build --release --bin fast-context-mcp --features mcp
 ```
 

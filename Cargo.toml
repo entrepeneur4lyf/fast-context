@@ -13,6 +13,7 @@ crate-type = ["cdylib", "lib"]
 
 [features]
 default = []
+cli = []
 nodejs = ["napi", "napi-derive"]
 python = ["pyo3", "pyo3-async-runtimes/tokio-runtime"]
 full = ["nodejs", "python"]
@@ -140,6 +141,16 @@ codegen-units = 1
 [[bench]]
 name = "performance_benchmarks"
 harness = false
+
+[[bin]]
+name = "fast-context"
+path = "src/bin/fast-context.rs"
+required-features = ["cli"]
+
+[[bin]]
+name = "fast-context-mcp"
+path = "src/bin/fast-context-mcp.rs"
+required-features = ["mcp"]
 
 [[test]]
 name = "api_integration_tests"
