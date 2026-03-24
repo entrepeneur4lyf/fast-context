@@ -291,7 +291,6 @@ See the [examples](./examples/) directory for comprehensive usage examples:
 
 Apache-2.0 - see [LICENSE](../../LICENSE) for details.
 
-## 🔗 Related Packages
+## 🔗 Related Components
 
-- [`@fast-context/cli`](../cli/) - Command-line interface
-- [`@fast-context/dev-tools`](../dev-tools/) - Developer utilities
+- Root `fast-context` crate - Rust library, Node bindings, CLI, and MCP server
