@@ -2,6 +2,8 @@
 
 This directory contains the maintained project documentation.
 
+> Coming soon: public package release documentation is still being finalized. The project has not yet published its first npm, PyPI, or crates.io release.
+
 ## Start Here
 
 - [Repository README](../README.md)

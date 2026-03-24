@@ -8,6 +8,8 @@ Fast-Context is a Rust codebase analysis library with Node.js and Python binding
 
 It is built around Tree-sitter parsing, symbol extraction, dependency analysis, and graph operations. The project is meant for code search, indexing, editor tooling, and assistant-style codebase analysis.
 
+> Coming soon: the npm, PyPI, and crates.io packages have not been published yet. The repository and release flow are being finalized before the first public package release.
+
 ## What It Does
 
 - analyzes multi-language repositories
@@ -28,6 +30,8 @@ The actively maintained surfaces are:
 - Claude plugin skeleton
 
 ## Installation
+
+The commands below describe the intended package install surface after the first public release.
 
 ### Node.js
 
