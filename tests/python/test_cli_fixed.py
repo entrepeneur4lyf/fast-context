@@ -2,9 +2,11 @@
 Tests for fast_context CLI functionality.
 """
 
+import re
+from unittest.mock import patch, MagicMock
+
 import pytest
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock
 
 def test_cli_import():
     """Test that CLI can be imported."""
@@ -73,7 +75,8 @@ def test_cli_help():
     
     runner = CliRunner()
     result = runner.invoke(app, ['--help'])
+    clean_output = re.sub(r"\x1b\[[0-9;]*m", "", result.output)
     
     assert result.exit_code == 0
-    assert "fast-context" in result.output
-    assert "--help" in result.output
+    assert "fast-context" in clean_output
+    assert "--help" in clean_output
