@@ -77,10 +77,6 @@ app.add_typer(extract_app, name="extract")
 create_app = typer.Typer(help="Legacy creation operations")
 app.add_typer(create_app, name="create")
 
-# MCP subcommand
-mcp_app = typer.Typer(help="MCP server management")
-app.add_typer(mcp_app, name="mcp")
-
 # Config subcommand
 config_app = typer.Typer(help="Configuration management")
 app.add_typer(config_app, name="config")
@@ -385,28 +381,6 @@ def analyze_graph_file(
         console.print(f"Graph analysis failed: {e}", style="red")
         raise typer.Exit(1)
 
-@mcp_app.command("start")
-def start_mcp_server(
-    transport: str = typer.Option("stdio", "--transport", "-t", help="Transport type (stdio, sse)"),
-    port: int = typer.Option(8000, "--port", "-p", help="Port for SSE transport")
-):
-    """Start the MCP server"""
-    try:
-        from fast_context.mcp_server import run_mcp_server
-        
-        console.print(f"Starting MCP server with {transport} transport")
-        
-        if transport == "sse":
-            console.print(f"SSE server will run on port {port}")
-            console.print("   Access at: http://localhost:{port}")
-        
-        # Run the server
-        run_mcp_server()
-        
-    except Exception as e:
-        console.print(f"Failed to start MCP server: {e}", style="red")
-        raise typer.Exit(1)
-
 @config_app.command("show")
 def show_config(
     config_path: Optional[str] = typer.Argument(None, help="Optional configuration file path")
@@ -577,5 +551,3 @@ analyze_dependencies = analyze_codebase
 graph_create = create_graph_file
 graph_analyze = analyze_graph_file
 graph_visualize = create_graph_file
-mcp_serve = start_mcp_server
-mcp_info = info

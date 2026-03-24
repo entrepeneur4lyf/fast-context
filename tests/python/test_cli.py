@@ -64,12 +64,3 @@ def test_cli_graph_commands_exist():
     assert graph_analyze is not None
     assert graph_visualize is not None
 
-def test_cli_mcp_commands_exist():
-    """Test that CLI MCP commands exist."""
-    from fast_context.cli import (
-        mcp_serve,
-        mcp_info
-    )
-    
-    assert mcp_serve is not None
-    assert mcp_info is not None

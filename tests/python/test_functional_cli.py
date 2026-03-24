@@ -358,44 +358,6 @@ class UserService:
     except Exception as e:
         pytest.fail(f"CLI create graph test failed: {e}")
 
-def test_cli_mcp_start_functional():
-    """Test CLI MCP server start functionality."""
-    try:
-        # Start MCP server in background
-        process = subprocess.Popen(
-            ["python", "-m", "fast_context.cli", "mcp", "start"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        
-        try:
-            # Wait a bit for startup
-            time.sleep(2)
-            
-            # Check if process is still running (should be for server)
-            if process.poll() is None:
-                print("✅ CLI MCP server started successfully")
-                # Kill the process
-                process.terminate()
-                process.wait(timeout=5)
-            else:
-                # Process exited, check if it was successful
-                stdout, stderr = process.communicate()
-                if process.returncode == 0:
-                    print("✅ CLI MCP server started and exited cleanly")
-                else:
-                    print(f"⚠️ CLI MCP server exited with code {process.returncode}: {stderr}")
-                    
-        except subprocess.TimeoutExpired:
-            process.kill()
-            pytest.fail("CLI MCP server cleanup timed out")
-            
-    except FileNotFoundError:
-        pytest.skip("CLI module not found")
-    except Exception as e:
-        pytest.fail(f"CLI MCP server test failed: {e}")
-
 def test_cli_performance_functional():
     """Test CLI performance with medium-sized project."""
     try:

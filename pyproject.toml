@@ -54,15 +54,11 @@ dev = [
     "anyio>=3.7.0",
     "black>=23.0",
     "click>=8.0.0",
-    "fastmcp>=0.1.0",
-    "mcp>=1.14.1",
     "mypy>=1.0",
     "psutil>=5.9",
     "rich>=14.1.0",
     "ruff>=0.1",
-    "starlette>=0.27.0",
     "typer>=0.17.4",
-    "uvicorn>=0.24.0",
 ]
 config = [
     "pytomlpp>=1.0.0",

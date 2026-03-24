@@ -20,7 +20,7 @@ For local source builds, Python 3.11 is the safest supported path today.
 - 20+ language grammars via Tree-sitter
 - Rust-backed analysis with Python bindings
 - Compatibility wrapper for the existing Python API surface
-- MCP and CLI helpers for local tooling integrations
+- CLI helpers for local tooling integrations
 - Graph bindings and dependency analysis helpers
 
 ## Installation
@@ -32,9 +32,6 @@ pip install fast-context
 ### Optional Dependencies
 
 ```bash
-# For CLI tools
-pip install fast-context[cli]
-
 # For configuration management
 pip install fast-context[config]
 
@@ -99,47 +96,10 @@ async def main():
 asyncio.run(main())
 ```
 
-## Command Line Interface
+## Command-Line Tooling
 
-Fast-Context includes a CLI:
-
-```bash
-# Analyze current directory
-fast-context analyze
-
-# Analyze specific directory
-fast-context analyze /path/to/project
-
-# Show current configuration
-fast-context config show
-```
-
-## AI Assistant Integration
-
-Fast-Context includes an MCP server for AI assistant integration:
-
-```bash
-# Start MCP server
-fast-context-mcp
-
-# Or run as module
-python -m fast_context.mcp_server
-```
-
-### Claude Desktop Integration
-
-Add to your Claude Desktop configuration:
-
-```json
-{
-  "mcpServers": {
-    "fast-context": {
-      "command": "fast-context-mcp",
-      "args": ["--project-root", "/path/to/your/project"]
-    }
-  }
-}
-```
+The official CLI and MCP server are Rust binaries documented in the root project docs.
+This Python package focuses on the Python bindings and compatibility helpers.
 
 ## Supported Languages
 

@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "fast-context": {
-      "command": "python",
-      "args": ["-m", "fast_context.mcp_server"],
-      "env": {}
-    }
-  }
-}

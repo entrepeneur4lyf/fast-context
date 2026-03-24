@@ -39,11 +39,6 @@ def test_cli_config_app_exists():
     from fast_context.cli import config_app
     assert config_app is not None
 
-def test_cli_mcp_app_exists():
-    """Test that mcp_app exists."""
-    from fast_context.cli import mcp_app
-    assert mcp_app is not None
-
 def test_cli_init_config_function():
     """Test that init_config function exists."""
     from fast_context.cli import init_config
@@ -58,11 +53,6 @@ def test_cli_validate_config_function():
     """Test that validate_config function exists."""
     from fast_context.cli import validate_config
     assert callable(validate_config)
-
-def test_cli_start_mcp_server_function():
-    """Test that start_mcp_server function exists."""
-    from fast_context.cli import start_mcp_server
-    assert callable(start_mcp_server)
 
 def test_cli_analyze_codebase_function():
     """Test that analyze_codebase function exists."""
@@ -150,11 +140,9 @@ def test_cli_dependencies():
             analysis_app,
             graph_app,
             config_app,
-            mcp_app,
             init_config,
             show_config,
             validate_config,
-            start_mcp_server,
             analyze_codebase,
             analyze_graph_file,
             extract_symbols_cmd,
@@ -190,7 +178,6 @@ def test_cli_all_commands_callable():
         init_config,
         show_config,
         validate_config,
-        start_mcp_server,
         analyze_codebase,
         analyze_graph_file,
         extract_symbols_cmd,
@@ -203,7 +190,6 @@ def test_cli_all_commands_callable():
         init_config,
         show_config,
         validate_config,
-        start_mcp_server,
         analyze_codebase,
         analyze_graph_file,
         extract_symbols_cmd,
