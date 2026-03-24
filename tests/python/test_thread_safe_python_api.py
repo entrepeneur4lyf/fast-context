@@ -235,7 +235,7 @@ def test_thread_safety():
         # Check results
         if errors:
             print(f"❌ Thread safety test failed with errors: {errors}")
-            return False
+            raise AssertionError(f"Thread safety test failed with errors: {errors}")
         
         print(f"✅ All {len(threads)} threads completed successfully")
         print(f"📊 Total results collected: {len(results)}")
@@ -248,8 +248,11 @@ def test_thread_safety():
             print("✅ Thread safety verified - consistent results across threads")
         else:
             print(f"⚠️  Results varied across threads: functions={function_counts}, symbols={symbol_counts}")
-        
-        return True
+
+        assert not errors
+        assert len(results) == len(threads) * 2
+        assert len(set(function_counts)) == 1
+        assert len(set(symbol_counts)) == 1
         
     finally:
         import shutil
@@ -264,7 +267,7 @@ def test_error_handling():
         config = AnalyzerConfig(project_root="/nonexistent/path")
         analyzer = FastContextAnalyzer(config)
         print("❌ Should have failed with invalid project root")
-        return False
+        raise AssertionError("Should have failed with invalid project root")
     except Exception as e:
         print(f"✅ Correctly handled invalid project root: {type(e).__name__}")
     
@@ -277,11 +280,11 @@ def test_error_handling():
         try:
             symbols = analyzer.find_symbols_in_file("nonexistent.rs")
             print("❌ Should have failed with nonexistent file")
-            return False
+            raise AssertionError("Should have failed with nonexistent file")
         except Exception as e:
             print(f"✅ Correctly handled nonexistent file: {type(e).__name__}")
-        
-        return True
+
+        assert analyzer is not None
         
     finally:
         import shutil
