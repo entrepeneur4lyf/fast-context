@@ -168,6 +168,7 @@ If you are building native bindings locally, use the versions and host environme
 
 - [API reference](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
 - [Deployment guide](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
+- [Release architecture](/C:/Users/shawn/workspace/fast-context/docs/RELEASE_ARCHITECTURE.md)
 - [Documentation index](/C:/Users/shawn/workspace/fast-context/docs/README.md)
 
 ## Repository Notes

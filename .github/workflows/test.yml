@@ -42,9 +42,36 @@ jobs:
 
     - name: Check Python bindings build
       run: cargo check --features python
+
+    - name: Install Python package for tests
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e ".[dev]"
+
+    - name: Run Python tests
+      run: python -m pytest tests/python
     
     - name: Run Rust tests
       run: cargo test --verbose
+
+    - name: Run Rust CLI tests
+      run: cargo test --test cli_tests
+
+    - name: Smoke test Rust CLI
+      run: |
+        cargo run --quiet --bin fast-context -- --format json analyze . > cli-analysis.json
+        cargo run --quiet --bin fast-context -- --format json doctor > cli-doctor.json
+        python - <<'PY'
+        import json
+        with open("cli-analysis.json", "r", encoding="utf-8") as fh:
+            analysis = json.load(fh)
+        with open("cli-doctor.json", "r", encoding="utf-8") as fh:
+            doctor = json.load(fh)
+        assert analysis["file_count"] > 0
+        assert analysis["symbol_count"] > 0
+        assert doctor["status"] in {"ok", "warning"}
+        print("CLI smoke checks passed")
+        PY
     
     - name: Build TypeScript types
       run: npm run generate-types
@@ -107,6 +134,11 @@ jobs:
     
     - name: Build release
       run: npm run build
+
+    - name: Build Rust CLI binaries
+      run: |
+        cargo build --release --bin fast-context
+        cargo build --release --bin fast-context-mcp --features mcp
     
     - name: Test release build
       run: |
