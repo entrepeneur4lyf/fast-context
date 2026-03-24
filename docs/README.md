@@ -7,6 +7,7 @@ This directory contains the maintained project documentation.
 - [Repository README](/C:/Users/shawn/workspace/fast-context/README.md)
 - [API reference](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
 - [Deployment guide](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
+- [Local release](/C:/Users/shawn/workspace/fast-context/docs/LOCAL_RELEASE.md)
 
 ## What Is Here
 
@@ -17,6 +18,10 @@ Current Node.js API surface, utility exports, graph classes, and return types.
 ### [DEPLOYMENT_GUIDE.md](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
 
 Operational guidance for packaging and deployment.
+
+### [LOCAL_RELEASE.md](/C:/Users/shawn/workspace/fast-context/docs/LOCAL_RELEASE.md)
+
+Step-by-step local publish flow for Cargo, npm, and PyPI.
 
 ## Source of Truth
 

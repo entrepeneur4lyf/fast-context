@@ -1,0 +1,118 @@
+# Fast-Context Local Release
+
+This project can be released locally instead of publishing from GitHub Actions.
+
+That is the recommended path if you want direct control over publish order and credentials.
+
+## Recommended Host
+
+Use WSL for local release work when possible.
+
+Reason:
+
+- the Rust and Node native toolchains are easier to keep stable on Linux
+- the Python wheel and native addon paths are closer to CI
+- Windows-specific linker and environment issues are less likely to block the release
+
+Windows PowerShell still works, but WSL should be treated as the preferred release host.
+
+## Required Tokens
+
+Set these in the shell session before publishing:
+
+```powershell
+$env:CARGO_REGISTRY_TOKEN = "..."
+$env:NPM_TOKEN = "..."
+$env:PYPI_API_TOKEN = "..."
+```
+
+## Version Rule
+
+Before release, keep the version aligned across:
+
+- [Cargo.toml](/C:/Users/shawn/workspace/fast-context/Cargo.toml)
+- [package.json](/C:/Users/shawn/workspace/fast-context/package.json)
+- [pyproject.toml](/C:/Users/shawn/workspace/fast-context/pyproject.toml)
+
+The local release script will fail fast if these do not match.
+
+## Release Script
+
+Use [scripts/release.ps1](/C:/Users/shawn/workspace/fast-context/scripts/release.ps1).
+
+Default behavior:
+
+- validates Rust, Node, and Python surfaces
+- builds release artifacts
+- publishes Cargo, npm, and PyPI in one session
+- optionally tags the repo after publish
+
+### Full Release
+
+```powershell
+.\scripts\release.ps1 -TagAfterPublish
+```
+
+### Validation Only
+
+```powershell
+.\scripts\release.ps1 -SkipPublish
+```
+
+### Build Only
+
+```powershell
+.\scripts\release.ps1 -SkipPublish -SkipValidation
+```
+
+### Use A Specific Python Interpreter
+
+```powershell
+.\scripts\release.ps1 -PythonExe "E:\models\bin\conda\envs\fast-context-py311\python.exe" -TagAfterPublish
+```
+
+## What The Script Runs
+
+Validation:
+
+- `cargo check`
+- `cargo test`
+- `cargo test --test cli_tests --features cli`
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `npm install`
+- `npm run build:debug`
+- `npm test`
+- `python -m pytest tests/python`
+- `cargo audit`
+- `npm audit --audit-level moderate`
+
+Build:
+
+- `cargo build --release --bin fast-context --features cli`
+- `cargo build --release --bin fast-context-mcp --features mcp`
+- `npm run build`
+- `npm pack`
+- `python -m maturin build --release --features python`
+
+Publish:
+
+- `cargo publish --locked`
+- `npm publish`
+- `python -m maturin publish --features python`
+
+Tagging:
+
+- `git tag vX.Y.Z`
+- `git push origin main --tags`
+
+## Practical Release Order
+
+The local script publishes first and tags last.
+
+That avoids creating a public tag for a release that only partially published.
+
+## Notes
+
+- [package.json](/C:/Users/shawn/workspace/fast-context/package.json) may be rewritten by local native build steps; do not commit that churn unless intentional
+- if you move daily development to WSL, keep Windows as an extra smoke-test environment rather than the primary release host
+- GitHub Actions should still be kept green, but local release remains the source of truth for publication
