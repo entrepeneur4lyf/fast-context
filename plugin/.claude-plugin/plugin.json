@@ -1,0 +1,6 @@
+{
+  "name": "fast-context",
+  "version": "0.1.0",
+  "description": "Claude Code plugin for Fast-Context skills and MCP-based codebase analysis",
+  "skills": "./skills/"
+}

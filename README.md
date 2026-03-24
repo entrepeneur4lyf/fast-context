@@ -24,6 +24,8 @@ The actively maintained surfaces are:
 - Rust core library
 - Node.js package
 - Python bindings
+- Codex skills
+- Claude plugin skeleton
 
 Removed from the repository:
 
@@ -169,6 +171,9 @@ If you are building native bindings locally, use the versions and host environme
 
 - [API reference](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
 - [Deployment guide](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
+- [Host setup](/C:/Users/shawn/workspace/fast-context/docs/HOST_SETUP.md)
+- [Host integration spec](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_SPEC.md)
+- [Host integration plan](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_PLAN.md)
 - [Release architecture](/C:/Users/shawn/workspace/fast-context/docs/RELEASE_ARCHITECTURE.md)
 - [Documentation index](/C:/Users/shawn/workspace/fast-context/docs/README.md)
 

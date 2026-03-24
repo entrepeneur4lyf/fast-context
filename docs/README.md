@@ -7,6 +7,9 @@ This directory contains the maintained project documentation.
 - [Repository README](/C:/Users/shawn/workspace/fast-context/README.md)
 - [API reference](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
 - [Deployment guide](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
+- [Host setup](/C:/Users/shawn/workspace/fast-context/docs/HOST_SETUP.md)
+- [Host integration spec](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_SPEC.md)
+- [Host integration plan](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_PLAN.md)
 - [Local release](/C:/Users/shawn/workspace/fast-context/docs/LOCAL_RELEASE.md)
 
 ## What Is Here
@@ -18,6 +21,18 @@ Current Node.js API surface, utility exports, graph classes, and return types.
 ### [DEPLOYMENT_GUIDE.md](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
 
 Operational guidance for packaging and deployment.
+
+### [HOST_SETUP.md](/C:/Users/shawn/workspace/fast-context/docs/HOST_SETUP.md)
+
+Phase-1 setup instructions for Codex skills/MCP and the Claude plugin skeleton.
+
+### [HOST_INTEGRATION_SPEC.md](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_SPEC.md)
+
+Defines how Fast-Context integrates with Codex and Claude Code across skills, MCP, hooks, and plugin packaging.
+
+### [HOST_INTEGRATION_PLAN.md](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_PLAN.md)
+
+Phased implementation plan for Codex skills, Codex MCP setup, and Claude plugin packaging.
 
 ### [LOCAL_RELEASE.md](/C:/Users/shawn/workspace/fast-context/docs/LOCAL_RELEASE.md)
 
