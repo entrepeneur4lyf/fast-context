@@ -453,16 +453,4 @@ except ImportError:
         "get_version",
     ] + __config_all__
 
-# Import MCP server (optional dependencies)
-try:
-    from . import mcp_server
-    
-    __all__.extend([
-        "mcp_server"
-    ])
-    
-except ImportError:
-    # MCP server not available (mcp package not installed)
-    pass
-
 __version__ = get_version()

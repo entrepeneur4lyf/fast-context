@@ -1,7 +1,8 @@
 {
   "name": "@fast-context/core",
   "version": "0.1.0",
-  "description": "Enhanced TypeScript SDK for Fast-Context with streaming analysis and advanced query capabilities",
+  "private": true,
+  "description": "Internal experimental TypeScript workspace package for Fast-Context",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "module": "dist/index.js",
@@ -41,9 +42,9 @@
     "url": "https://x.com/entrepeneur4lyf"
   },
   "license": "Apache-2.0",
-  "homepage": "https://github.com/entrepeneur4lyf/rustworkx-nodejs#readme",
+  "homepage": "https://github.com/entrepeneur4lyf/fast-context#readme",
   "bugs": {
-    "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs/issues"
+    "url": "https://github.com/entrepeneur4lyf/fast-context/issues"
   },
   "dependencies": {
     "events": "^3.3.0",
@@ -65,16 +66,13 @@
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "files": [
     "dist/**/*",
     "README.md"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/entrepeneur4lyf/rustworkx-nodejs.git",
+    "url": "https://github.com/entrepeneur4lyf/fast-context.git",
     "directory": "packages/core"
   }
 }

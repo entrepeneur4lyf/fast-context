@@ -300,33 +300,6 @@ impl From<crate::core::SkippedFileDiagnostic> for PySkippedFile {
     }
 }
 
-#[cfg(feature = "python")]
-fn placeholder_symbol(
-    name: String,
-    file_path: String,
-    language: String,
-    kind: &str,
-    documentation: Option<String>,
-    signature: Option<String>,
-) -> PySymbol {
-    PySymbol {
-        name,
-        kind: kind.to_string(),
-        location: PyLocation {
-            file_path,
-            start_line: 0,
-            start_column: 0,
-            end_line: 0,
-            end_column: 0,
-        },
-        scope_chain: Vec::new(),
-        language,
-        documentation,
-        modifiers: Vec::new(),
-        signature,
-    }
-}
-
 /// Phase 2: Thread-safe class-based analyzer for Python
 #[cfg(feature = "python")]
 #[pyclass]
@@ -703,168 +676,42 @@ impl FastContextAnalyzer {
 
     /// Extract symbols from a specific file with full metadata
     pub fn extract_symbols_from_file(&self, file_path: &str) -> PyResult<PyEnhancedAnalysisResult> {
-        // Use existing methods to extract symbols with full metadata
-        match self.core.find_symbols_in_file(file_path.to_string()) {
-            Ok(symbol_names) => {
-                // Create basic symbols from names (in real implementation, this would use full symbol extraction)
-                let symbols: Vec<PySymbol> = symbol_names
-                    .into_iter()
-                    .map(|name| PySymbol {
-                        name: name.clone(),
-                        kind: "Unknown".to_string(),
-                        location: PyLocation {
-                            file_path: file_path.to_string(),
-                            start_line: 0,
-                            start_column: 0,
-                            end_line: 0,
-                            end_column: 0,
-                        },
-                        scope_chain: Vec::new(),
-                        language: "Unknown".to_string(),
-                        documentation: None,
-                        modifiers: Vec::new(),
-                        signature: None,
-                    })
-                    .collect();
-
-                Ok(PyEnhancedAnalysisResult {
-                    file_path: file_path.to_string(),
-                    symbols,
-                    dependencies: Vec::new(),
-                    language: "Unknown".to_string(),
-                    line_count: 0,
-                    analysis_duration_ms: 0,
-                })
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "Failed to analyze file: {}",
-                e
-            ))),
-        }
+        let _ = file_path;
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "extract_symbols_from_file is not part of the supported Python API yet; use find_symbols_in_file for truthful symbol listings",
+        ))
     }
 
     /// Get symbol relationships and call graph  
     pub fn get_symbol_relationships(&self, symbol_name: &str) -> PyResult<Vec<PyDependency>> {
-        // Use existing find_dependencies method
-        match self.core.find_dependencies(symbol_name.to_string()) {
-            Ok(dependencies) => {
-                // Convert dependency strings to PyDependency objects
-                let py_deps: Vec<PyDependency> = dependencies
-                    .into_iter()
-                    .map(|dep| PyDependency {
-                        from_symbol: symbol_name.to_string(),
-                        to_symbol: dep,
-                        relationship_type: "Calls".to_string(),
-                        location: PyLocation {
-                            file_path: "unknown".to_string(),
-                            start_line: 0,
-                            start_column: 0,
-                            end_line: 0,
-                            end_column: 0,
-                        },
-                        file_path: "unknown".to_string(),
-                        language: "Unknown".to_string(),
-                        context: None,
-                        strength: 1.0,
-                        is_conditional: false,
-                    })
-                    .collect();
-                Ok(py_deps)
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "Failed to get symbol relationships: {}",
-                e
-            ))),
-        }
+        let _ = symbol_name;
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "get_symbol_relationships is not part of the supported Python API yet; use find_dependencies for truthful dependency listings",
+        ))
     }
 
     /// Search for symbols by name pattern across all files
     pub fn search_symbols(
         &self,
-        _pattern: &str,
-        _language: Option<String>,
+        pattern: &str,
+        language: Option<String>,
     ) -> PyResult<Vec<PySymbol>> {
-        // Search across the known relationship graph, which is the stable data
-        // currently exposed by the Python analysis result.
-        match self.core.analyze() {
-            Ok(result) => {
-                let pattern_lower = _pattern.to_lowercase();
-                let language_filter = _language.as_ref().map(|lang| lang.to_lowercase());
-                let mut seen = std::collections::HashSet::new();
-                let mut filtered_symbols = Vec::new();
-
-                for rel in result.relationships {
-                    let rel_language = rel.language.to_lowercase();
-                    if let Some(ref lang_filter) = language_filter {
-                        if !rel_language.contains(lang_filter) {
-                            continue;
-                        }
-                    }
-
-                    for symbol_name in [&rel.from_symbol, &rel.to_symbol] {
-                        if symbol_name.to_lowercase().contains(&pattern_lower) {
-                            let key = format!("{}::{}", rel.file_path, symbol_name);
-                            if seen.insert(key) {
-                                filtered_symbols.push(placeholder_symbol(
-                                    symbol_name.clone(),
-                                    rel.file_path.clone(),
-                                    rel.language.clone(),
-                                    "Unknown",
-                                    rel.context.clone(),
-                                    None,
-                                ));
-                            }
-                        }
-                    }
-                }
-
-                Ok(filtered_symbols)
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "Failed to search symbols: {}",
-                e
-            ))),
-        }
+        let _ = (pattern, language);
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "search_symbols is not part of the supported Python API yet; use find_symbols_by_kind or find_symbols_in_file for truthful results",
+        ))
     }
 
     /// Get symbol documentation and metadata
     pub fn get_symbol_documentation(
         &self,
-        _symbol_name: &str,
-        _file_path: &str,
+        symbol_name: &str,
+        file_path: &str,
     ) -> PyResult<Option<String>> {
-        // Use relationship metadata as a lightweight documentation source until
-        // the richer Python symbol model is reconciled with the Rust core.
-        match self.core.analyze() {
-            Ok(result) => {
-                for rel in result.relationships {
-                    let symbol_matches =
-                        rel.from_symbol == _symbol_name || rel.to_symbol == _symbol_name;
-                    let file_matches =
-                        rel.file_path == _file_path || rel.location.file_path == _file_path;
-                    if symbol_matches && file_matches {
-                        if let Some(context) = rel.context.clone() {
-                            return Ok(Some(context));
-                        }
-
-                        return Ok(Some(format!(
-                            "**{}**\n\nRelationship: {} -> {} ({})\nLocation: {}:{}",
-                            _symbol_name,
-                            rel.from_symbol,
-                            rel.to_symbol,
-                            rel.relationship_type,
-                            rel.file_path,
-                            rel.location.start_line
-                        )));
-                    }
-                }
-                Ok(None)
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(format!(
-                "Failed to get symbol documentation: {}",
-                e
-            ))),
-        }
+        let _ = (symbol_name, file_path);
+        Err(pyo3::exceptions::PyNotImplementedError::new_err(
+            "get_symbol_documentation is not part of the supported Python API yet; the current Python bindings do not expose authoritative documentation metadata",
+        ))
     }
 
     /// Analyze cross-language dependencies
