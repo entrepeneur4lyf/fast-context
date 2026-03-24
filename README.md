@@ -41,6 +41,16 @@ npm install fast-context
 pip install fast-context
 ```
 
+### Hosts and MCP
+
+For host-specific installation and setup, see [docs/HOST_SETUP.md](docs/HOST_SETUP.md).
+
+That document covers:
+
+- Codex skills, MCP setup, and optional hooks
+- Claude plugin installation, bundled skills, plugin MCP, and optional hooks
+- standalone MCP installation for non-Codex/non-Claude clients
+
 ## Quick Start
 
 ### Node.js
@@ -105,7 +115,7 @@ Utility exports:
 - `checkConfiguration(config?)`
 - `getSystemInfo()`
 
-For the current typed contract, see [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) and [docs/API_REFERENCE.md](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md).
+For the current typed contract, see [index.d.ts](index.d.ts) and [docs/API_REFERENCE.md](docs/API_REFERENCE.md).
 
 ## Supported Languages
 
@@ -163,17 +173,17 @@ If you are building native bindings locally, use the versions and host environme
 
 ## Documentation
 
-- [API reference](/C:/Users/shawn/workspace/fast-context/docs/API_REFERENCE.md)
-- [Deployment guide](/C:/Users/shawn/workspace/fast-context/docs/DEPLOYMENT_GUIDE.md)
-- [Host setup](/C:/Users/shawn/workspace/fast-context/docs/HOST_SETUP.md)
-- [Host integration spec](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_SPEC.md)
-- [Host integration plan](/C:/Users/shawn/workspace/fast-context/docs/HOST_INTEGRATION_PLAN.md)
-- [Release architecture](/C:/Users/shawn/workspace/fast-context/docs/RELEASE_ARCHITECTURE.md)
-- [Documentation index](/C:/Users/shawn/workspace/fast-context/docs/README.md)
+- [API reference](docs/API_REFERENCE.md)
+- [Deployment guide](docs/DEPLOYMENT_GUIDE.md)
+- [Host setup](docs/HOST_SETUP.md)
+- [Host integration spec](docs/HOST_INTEGRATION_SPEC.md)
+- [Host integration plan](docs/HOST_INTEGRATION_PLAN.md)
+- [Release architecture](docs/RELEASE_ARCHITECTURE.md)
+- [Documentation index](docs/README.md)
 
 ## Repository Notes
 
-- The generated Node typings live in [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts).
+- The generated Node typings live in [index.d.ts](index.d.ts).
 - The Node package metadata is rewritten during build/publish steps, so local `package.json` churn after native builds is expected.
 - Cross-platform native artifact truth should come from the GitHub Actions workflows, not a single local machine.
 

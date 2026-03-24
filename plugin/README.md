@@ -4,9 +4,9 @@ This directory is a Claude Code plugin skeleton for Fast-Context.
 
 It currently includes:
 
-- plugin metadata in [plugin.json](/C:/Users/shawn/workspace/fast-context/plugin/.claude-plugin/plugin.json)
-- MCP server registration in [.mcp.json](/C:/Users/shawn/workspace/fast-context/plugin/.mcp.json)
-- bundled skills in [skills](/C:/Users/shawn/workspace/fast-context/plugin/skills)
+- plugin metadata in [plugin.json](.claude-plugin/plugin.json)
+- MCP server registration in [.mcp.json](.mcp.json)
+- bundled skills in [skills](skills)
 
 ## Requirement
 

@@ -30,15 +30,15 @@ $env:PYPI_API_TOKEN = "..."
 
 Before release, keep the version aligned across:
 
-- [Cargo.toml](/C:/Users/shawn/workspace/fast-context/Cargo.toml)
-- [package.json](/C:/Users/shawn/workspace/fast-context/package.json)
-- [pyproject.toml](/C:/Users/shawn/workspace/fast-context/pyproject.toml)
+- [Cargo.toml](../Cargo.toml)
+- [package.json](../package.json)
+- [pyproject.toml](../pyproject.toml)
 
 The local release script will fail fast if these do not match.
 
 ## Release Script
 
-Use [scripts/release.ps1](/C:/Users/shawn/workspace/fast-context/scripts/release.ps1).
+Use [scripts/release.ps1](../scripts/release.ps1).
 
 Default behavior:
 
@@ -113,6 +113,6 @@ That avoids creating a public tag for a release that only partially published.
 
 ## Notes
 
-- [package.json](/C:/Users/shawn/workspace/fast-context/package.json) may be rewritten by local native build steps; do not commit that churn unless intentional
+- [package.json](../package.json) may be rewritten by local native build steps; do not commit that churn unless intentional
 - if you move daily development to WSL, keep Windows as an extra smoke-test environment rather than the primary release host
 - GitHub Actions should still be kept green, but local release remains the source of truth for publication

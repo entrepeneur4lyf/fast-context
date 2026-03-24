@@ -6,7 +6,7 @@ This document describes the current public Node.js API exposed by the `fast-cont
 
 The source of truth for the shipped TypeScript surface is:
 
-- [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts)
+- [index.d.ts](../index.d.ts)
 
 ## Package Exports
 
@@ -171,7 +171,7 @@ Shared capabilities include:
 - `predecessors`
 - `successors`
 
-See [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) for the full method list and signatures.
+See [index.d.ts](../index.d.ts) for the full method list and signatures.
 
 ## Usage Example
 
@@ -199,4 +199,4 @@ console.log({
 ## Notes
 
 - The Node.js API returns simple arrays for symbol/dependency queries rather than a rich `QueryResult` object.
-- If you update the Rust/N-API surface, regenerate typings before publishing so this document stays aligned with [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts).
+- If you update the Rust/N-API surface, regenerate typings before publishing so this document stays aligned with [index.d.ts](../index.d.ts).

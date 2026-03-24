@@ -12,9 +12,9 @@ This guide covers the deployment surfaces that actually exist in this repository
 
 This project is a library, not a standalone web service. If you embed it in an API server or worker, that operational setup belongs to your application, not to Fast-Context itself.
 
-The canonical release model is documented in [RELEASE_ARCHITECTURE.md](/C:/Users/shawn/workspace/fast-context/docs/RELEASE_ARCHITECTURE.md). This guide focuses on how to validate and publish that model in practice.
+The canonical release model is documented in [RELEASE_ARCHITECTURE.md](RELEASE_ARCHITECTURE.md). This guide focuses on how to validate and publish that model in practice.
 
-For the preferred operator workflow, see [LOCAL_RELEASE.md](/C:/Users/shawn/workspace/fast-context/docs/LOCAL_RELEASE.md).
+For the preferred operator workflow, see [LOCAL_RELEASE.md](LOCAL_RELEASE.md).
 
 ## Release Model
 
@@ -74,8 +74,8 @@ npm pack
 
 Recommended checks before publishing:
 
-- [README.md](/C:/Users/shawn/workspace/fast-context/README.md) quick-start examples still match the package
-- [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) matches the actual addon surface
+- [README.md](../README.md) quick-start examples still match the package
+- [index.d.ts](../index.d.ts) matches the actual addon surface
 - `npm pack` succeeds
 - install the produced tarball into a clean temp project and run a smoke test
 
@@ -89,8 +89,8 @@ If npm CLI installation is added, it should be a separate thin installer package
 
 Relevant files:
 
-- [package.json](/C:/Users/shawn/workspace/fast-context/package.json)
-- [release.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
+- [package.json](../package.json)
+- [release.yml](../.github/workflows/release.yml)
 
 ## Python Package
 
@@ -118,23 +118,23 @@ Intended distribution:
 
 Relevant files:
 
-- [pyproject.toml](/C:/Users/shawn/workspace/fast-context/pyproject.toml)
-- [build-wheels.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/build-wheels.yml)
+- [pyproject.toml](../pyproject.toml)
+- [build-wheels.yml](../.github/workflows/build-wheels.yml)
 
 ## Release Workflows
 
 The active release automation lives in:
 
-- [test.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/test.yml)
-- [release.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/release.yml)
-- [build-wheels.yml](/C:/Users/shawn/workspace/fast-context/.github/workflows/build-wheels.yml)
+- [test.yml](../.github/workflows/test.yml)
+- [release.yml](../.github/workflows/release.yml)
+- [build-wheels.yml](../.github/workflows/build-wheels.yml)
 
 Practical rule:
 
 - trust hosted CI over a single local machine for cross-platform release status
 - treat the tag-driven release pipeline as one release train, not separate ad hoc publishes
 
-If you do not want GitHub Actions to be the publishing source, use the local release flow from [LOCAL_RELEASE.md](/C:/Users/shawn/workspace/fast-context/docs/LOCAL_RELEASE.md) and keep Actions as validation only.
+If you do not want GitHub Actions to be the publishing source, use the local release flow from [LOCAL_RELEASE.md](LOCAL_RELEASE.md) and keep Actions as validation only.
 
 ## Publish Checklist
 
@@ -191,8 +191,8 @@ Then:
 
 ## Operational Notes
 
-- local native builds can rewrite [package.json](/C:/Users/shawn/workspace/fast-context/package.json) during package-prep steps; do not commit that churn unless it is intentional
-- the generated Node typings in [index.d.ts](/C:/Users/shawn/workspace/fast-context/index.d.ts) should be refreshed when the Node-facing Rust structs change
+- local native builds can rewrite [package.json](../package.json) during package-prep steps; do not commit that churn unless it is intentional
+- the generated Node typings in [index.d.ts](../index.d.ts) should be refreshed when the Node-facing Rust structs change
 - release confidence should come from green CI, a clean tarball smoke test, a clean wheel smoke test, and verified Rust binary artifacts
 
 ## What This Guide Does Not Cover
