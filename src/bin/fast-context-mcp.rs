@@ -2,7 +2,7 @@
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use fast_context::mcp_server::FastContextMcpServer;
-    use rmcp::{ServiceExt, transport::stdio};
+    use rmcp::{transport::stdio, ServiceExt};
 
     FastContextMcpServer::new()
         .serve(stdio())

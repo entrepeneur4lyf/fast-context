@@ -1,12 +1,11 @@
 use crate::core::{CoreAnalysisSummary, CoreAnalyzer, CoreAnalyzerOptions};
 use crate::validation::{validate_directory_path, validate_file_path};
 use rmcp::{
-    ErrorData, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
     schemars,
     schemars::JsonSchema,
-    tool, tool_handler, tool_router,
+    tool, tool_handler, tool_router, ErrorData, ServerHandler,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -82,11 +81,7 @@ impl FastContextMcpServer {
         ))
     }
 
-    fn validate_project_file(
-        &self,
-        project_path: &str,
-        file_path: &str,
-    ) -> Result<(), ErrorData> {
+    fn validate_project_file(&self, project_path: &str, file_path: &str) -> Result<(), ErrorData> {
         let resolved = PathBuf::from(project_path).join(file_path);
         validate_file_path(&resolved.to_string_lossy())
             .map_err(|err| ErrorData::invalid_params(err.to_string(), None))?;
@@ -219,7 +214,10 @@ impl ServerHandler for FastContextMcpServer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rmcp::{ClientHandler, ServiceExt, model::{CallToolRequestParams, ClientInfo}};
+    use rmcp::{
+        model::{CallToolRequestParams, ClientInfo},
+        ClientHandler, ServiceExt,
+    };
     use serde_json::Value;
     use std::fs;
     use tempfile::tempdir;

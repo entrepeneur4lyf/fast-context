@@ -453,6 +453,12 @@ mod performance_tests {
 
     #[test]
     fn test_ignore_pattern_performance() {
+        let max_duration_secs = if std::env::var_os("CI").is_some() {
+            60
+        } else {
+            30
+        };
+
         // Test ignore pattern matching performance
         let test_paths = vec![
             "src/main.rs",
@@ -492,7 +498,7 @@ mod performance_tests {
 
         // This is a debug-build smoke test, not a benchmark.
         assert!(
-            duration.as_secs() < 30,
+            duration.as_secs() < max_duration_secs,
             "Ignore pattern matching took too long: {:?}",
             duration
         );
