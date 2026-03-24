@@ -27,12 +27,6 @@ The actively maintained surfaces are:
 - Codex skills
 - Claude plugin skeleton
 
-Removed from the repository:
-
-- old archive docs
-- bundled third-party reference SDK copies
-- the incomplete Go SDK
-
 ## Installation
 
 ### Node.js

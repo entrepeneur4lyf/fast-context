@@ -48,8 +48,4 @@ When documentation and generated files disagree, prefer:
 
 ## Maintenance Notes
 
-- Archived material has been removed from the repository.
-- Reference copies of external SDKs have been removed.
-- The removed Go SDK is not part of the supported surface.
-
 Keep this directory focused on the current project rather than plans, experiments, or imported third-party material.
