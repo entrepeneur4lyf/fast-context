@@ -49,6 +49,7 @@ struct InternalAnalysisResult {
     file_count: u32,
     symbol_count: u32,
     languages: Vec<String>,
+    duration_ms: u32,
     relationships: Vec<crate::symbols::Dependency>,
     skipped_files: Vec<SkippedFileDiagnostic>,
 }
@@ -281,7 +282,7 @@ impl CoreAnalyzer {
 
         self.ensure_valid_project_root()?;
 
-        let _start_time = Instant::now();
+        let start_time = Instant::now();
 
         let max_files = self.options.max_files.unwrap_or(usize::MAX);
         let file_paths: Vec<std::path::PathBuf> = self
@@ -326,6 +327,7 @@ impl CoreAnalyzer {
             file_count,
             symbol_count,
             languages: languages.into_iter().collect(),
+            duration_ms: start_time.elapsed().as_millis() as u32,
             relationships,
             skipped_files,
         })
@@ -373,7 +375,7 @@ impl CoreAnalyzer {
             file_count: internal_result.file_count,
             symbol_count: internal_result.symbol_count,
             languages: internal_result.languages,
-            duration_ms: 0,
+            duration_ms: internal_result.duration_ms,
             relationships: internal_result.relationships,
             skipped_files: internal_result.skipped_files,
         })
